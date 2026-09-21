@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Exec(git status)",
+      "Exec(git diff)",
+      "Exec(git log)"
+    ],
+    "deny": [
+      "Read(**/.env*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Write(**/.env*)",
+      "Write(**/*.pem)",
+      "Write(**/*.key)",
+      "Exec(rm)",
+      "Exec(sudo)",
+      "Exec(git clean)",
+      "Exec(git reset --hard)",
+      "Exec(git push --force)"
+    ],
+    "ask": [
+      "Write(**)",
+      "exec"
+    ]
+  }
+}
