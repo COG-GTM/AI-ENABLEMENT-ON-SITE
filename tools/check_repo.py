@@ -4,8 +4,10 @@
     python tools/check_repo.py
 
 Checks:
-  1. Every .devin/skills/*/SKILL.md has valid frontmatter (name matches folder, has description).
-  2. Every skill listed in AGENTS.md exists, and every skill is listed in AGENTS.md.
+  1. Every .devin/skills/*/SKILL.md has valid frontmatter (name matches folder, has description,
+     only documented keys).
+  2. Every skill listed in AGENTS.md exists, and every skill is listed in AGENTS.md; every /skill
+     mentioned in README.md, WORKFLOWS.md, WALKTHROUGH.md exists.
   3. Relative links and paths mentioned in Markdown files resolve.
   4. No secrets-looking strings, forbidden words, or non-synthetic identifiers (see FORBIDDEN, SECRET_PATTERNS).
   5. JSON files parse; tracker validates; the example deck builds; what-if runs; research brief validates.
@@ -24,6 +26,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / ".devin" / "skills"
 AGENTS = ROOT / "AGENTS.md"
+ROUTING_DOCS = ["README.md", "WORKFLOWS.md", "WALKTHROUGH.md"]
+# Frontmatter keys documented for Devin Local skills. Anything else is a typo or an unsupported field.
+FRONTMATTER_KEYS = {"name", "description", "argument-hint", "model", "allowed-tools", "permissions", "triggers"}
+MAX_SKILLS = 12
 
 # Words that must never appear (case-insensitive). Add customer/program names here before publishing.
 FORBIDDEN = [
@@ -97,7 +103,11 @@ def check_skills() -> set[str]:
             fail(f"{f}: description missing or too short")
         if not re.fullmatch(r"[a-z0-9-]+", d.name):
             fail(f"{d}: skill folder must be lowercase-kebab")
+        for k in set(fm) - FRONTMATTER_KEYS:
+            fail(f"{f}: unknown frontmatter key {k!r} (allowed: {', '.join(sorted(FRONTMATTER_KEYS))})")
         names.add(d.name)
+    if len(names) > MAX_SKILLS:
+        fail(f"{len(names)} skills; cap is {MAX_SKILLS}. Merge or remove one before adding more")
     return names
 
 
@@ -110,6 +120,13 @@ def check_agents(skill_names: set[str]) -> None:
         fail(f".devin/skills/{s} exists but AGENTS.md does not route to it")
     if len(text.splitlines()) > 80:
         fail("AGENTS.md is over 80 lines; move detail into a skill")
+    for doc in ROUTING_DOCS:
+        p = ROOT / doc
+        if not p.exists():
+            fail(f"{doc} is missing")
+            continue
+        for s in set(re.findall(r"`/([a-z0-9-]+)", p.read_text())) - skill_names:
+            fail(f"{doc} mentions /{s} but .devin/skills/{s}/SKILL.md does not exist")
 
 
 def check_links() -> None:
@@ -164,6 +181,7 @@ def check_tools() -> None:
             except json.JSONDecodeError as e:
                 fail(f"{p.relative_to(ROOT)}: invalid JSON ({e})")
     py = sys.executable
+    run([py, "tools/doctor.py"])
     run([py, "tools/tracker_report.py"])
     run([py, "tools/what_if.py", "--imu", "imu-b"], allowed_codes=frozenset({0, 2}))  # 2 = budget FAIL, a valid result
     run([py, "tools/build_deck.py", "templates/deck-outline-example.json", "outputs/example-deck.html"])

@@ -9,6 +9,7 @@ When the user's request matches a row, invoke that skill (or tell them the slash
 
 | User says something like | Skill |
 | --- | --- |
+| reference this repo, what can you do, tour, show me it works, get started | `/tour` |
 | research, analyze, brief, compare sources, "what do we know about" | `/research-brief` |
 | deck, slides, presentation, executive summary, brief leadership | `/exec-deck` |
 | requirements, ICD, interface, ADR, hazard, FMEA, power budget, design artifact | `/design-artifacts` |
@@ -19,6 +20,9 @@ When the user's request matches a row, invoke that skill (or tell them the slash
 | bugs, defects, capabilities, tracker, status report, burndown | `/track-and-report` |
 | connect to Jira, GitLab, Confluence, GitHub, Azure DevOps; CLI, API, token, PAT | `/connect-tools` |
 | MCP server, add a server by hand, expose a tool, mcp_config | `/mcp-server` |
+
+Multi-step requests ("swap the part and brief leadership") follow the pipelines in `WORKFLOWS.md`: run the
+skills in the listed order and hand each stage's output file to the next.
 
 If nothing matches, read `README.md` and ask one clarifying question.
 
