@@ -18,6 +18,7 @@ Everything else returns JSON-RPC error -32601 (method not found). No network, no
 
 import io
 import json
+import math
 import re
 import subprocess
 import sys
@@ -81,11 +82,15 @@ def schema_errors(schema: dict, value: dict) -> list[str]:
             elif "pattern" in rule and not re.match(rule["pattern"], v):
                 errs.append(f"{key} must match {rule['pattern']}")
         elif rule["type"] == "number":
-            if isinstance(v, bool) or not isinstance(v, (int, float)):
-                errs.append(f"{key} must be a number")
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+                errs.append(f"{key} must be a finite number")
             elif v < rule.get("minimum", float("-inf")) or v > rule.get("maximum", float("inf")):
                 errs.append(f"{key} must be between {rule.get('minimum')} and {rule.get('maximum')}")
     return errs
+
+
+def reject_constant(token: str):
+    raise ValueError(f"{token} is not valid JSON")
 
 
 def run_tool(cmd: list[str]) -> str:
@@ -192,7 +197,7 @@ def serve(inp: io.TextIOBase, out: io.TextIOBase) -> None:
         if not line:
             continue
         try:
-            msg = json.loads(line)
+            msg = json.loads(line, parse_constant=reject_constant)  # NaN/Infinity are not JSON
             if not isinstance(msg, dict):
                 raise ValueError
         except (json.JSONDecodeError, ValueError):
