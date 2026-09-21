@@ -62,6 +62,32 @@ TOOLS = [
 ]
 
 
+def schema_errors(schema: dict, value: dict) -> list[str]:
+    """Check `value` against the small JSON Schema subset used in TOOLS (object with typed properties)."""
+    errs = []
+    props = schema.get("properties", {})
+    for key in schema.get("required", []):
+        if key not in value:
+            errs.append(f"missing required argument: {key}")
+    if schema.get("additionalProperties") is False:
+        errs += [f"unexpected argument: {k}" for k in value if k not in props]
+    for key, rule in props.items():
+        if key not in value:
+            continue
+        v = value[key]
+        if rule["type"] == "string":
+            if not isinstance(v, str):
+                errs.append(f"{key} must be a string")
+            elif "pattern" in rule and not re.match(rule["pattern"], v):
+                errs.append(f"{key} must match {rule['pattern']}")
+        elif rule["type"] == "number":
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                errs.append(f"{key} must be a number")
+            elif v < rule.get("minimum", float("-inf")) or v > rule.get("maximum", float("inf")):
+                errs.append(f"{key} must be between {rule.get('minimum')} and {rule.get('maximum')}")
+    return errs
+
+
 def run_tool(cmd: list[str]) -> str:
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=60)
     if r.returncode not in (0, 2):
@@ -108,6 +134,7 @@ HANDLERS = {
     "get_requirement": tool_get_requirement,
     "what_if_power": tool_what_if_power,
 }
+SCHEMAS = {t["name"]: t["inputSchema"] for t in TOOLS}
 
 
 def handle(msg: dict):
@@ -140,6 +167,9 @@ def handle(msg: dict):
             arguments = {}
         if not isinstance(arguments, dict):
             return err(mid, -32602, "arguments must be an object")
+        bad = schema_errors(SCHEMAS[name], arguments)
+        if bad:
+            return err(mid, -32602, "; ".join(bad))
         try:
             text = fn(arguments)
             return ok(mid, {"content": [{"type": "text", "text": text}], "isError": False})

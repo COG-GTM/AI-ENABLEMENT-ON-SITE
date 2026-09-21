@@ -8,6 +8,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SERVER = HERE / "server.py"
+sys.path.insert(0, str(HERE))
+
+import server  # noqa: E402
 
 
 def rpc(messages: list) -> list[dict]:
@@ -53,8 +56,8 @@ class ReferenceServerTests(unittest.TestCase):
             "{not json",
             "[1, 2]",
         ])
-        self.assertTrue(out[0]["result"]["isError"])
-        self.assertTrue(out[1]["result"]["isError"])
+        self.assertEqual(out[0]["error"]["code"], -32602)  # fails the schema pattern before any file access
+        self.assertTrue(out[1]["result"]["isError"])  # well-formed but no such part: a tool error
         self.assertEqual(out[2]["error"]["code"], -32602)
         self.assertEqual(out[3]["error"]["code"], -32601)
         self.assertEqual(out[4]["error"]["code"], -32700)
@@ -70,17 +73,27 @@ class ReferenceServerTests(unittest.TestCase):
             {"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": ["what_if_power"]}},
             {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"mcu_duty": "0.5"}}},
             {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"mcu_duty": 1.5}}},
-            {"jsonrpc": "2.0", "id": 9, "method": 5},
+            {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "tracker_summary", "arguments": {"unexpected": True}}},
+            {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "get_requirement", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"imu": 7}}},
+            {"jsonrpc": "2.0", "id": 12, "method": 5},
             {"jsonrpc": "2.0", "method": "notifications/progress", "params": [1]},
-            {"jsonrpc": "2.0", "id": 10, "method": "ping"},
+            {"jsonrpc": "2.0", "id": 13, "method": "ping"},
         ])
-        self.assertEqual(len(out), 10)  # the notification gets no reply; the server is still alive for ping
-        for i in range(6):
+        self.assertEqual(len(out), 13)  # the notification gets no reply; the server is still alive for ping
+        for i in range(11):
             self.assertEqual(out[i]["error"]["code"], -32602, out[i])
-        self.assertTrue(out[6]["result"]["isError"])
-        self.assertTrue(out[7]["result"]["isError"])
-        self.assertEqual(out[8]["error"]["code"], -32600)
-        self.assertEqual(out[9], {"jsonrpc": "2.0", "id": 10, "result": {}})
+        self.assertIn("unexpected argument: unexpected", out[8]["error"]["message"])
+        self.assertIn("missing required argument: id", out[9]["error"]["message"])
+        self.assertEqual(out[11]["error"]["code"], -32600)
+        self.assertEqual(out[12], {"jsonrpc": "2.0", "id": 13, "result": {}})
+
+    def test_every_advertised_tool_rejects_undeclared_arguments(self):
+        self.assertEqual(set(server.SCHEMAS), set(server.HANDLERS))
+        for name, schema in server.SCHEMAS.items():
+            self.assertFalse(schema["additionalProperties"], name)
+            self.assertIn("unexpected argument: extra", server.schema_errors(schema, {"extra": 1}), name)
+        self.assertEqual(server.schema_errors(server.SCHEMAS["what_if_power"], {"imu": "imu-b", "mcu_duty": 0.5}), [])
 
 
 if __name__ == "__main__":

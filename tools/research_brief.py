@@ -49,7 +49,14 @@ def valid_date(s) -> bool:
 
 def md_cell(s) -> str:
     """Make free text safe inside a Markdown table cell."""
-    return str(s).replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    return (
+        str(s)
+        .replace("\\", "\\\\")  # first, so a pre-existing backslash cannot neutralise the pipe escape below
+        .replace("|", "\\|")
+        .replace("\r\n", " ")
+        .replace("\n", " ")
+        .replace("\r", " ")
+    )
 
 
 def validate(b: dict) -> list[str]:

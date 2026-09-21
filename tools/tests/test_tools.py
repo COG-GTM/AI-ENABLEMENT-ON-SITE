@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -199,6 +200,14 @@ class ResearchBriefTests(unittest.TestCase):
         self.assertEqual(len(table), 1)
         self.assertEqual(table[0].count("|") - table[0].count("\\|"), 5)  # 4 columns, unescaped pipes only
         self.assertIn("A \\| B second line (x\\|y)", table[0])
+
+    def test_markdown_cell_pipe_stays_escaped_after_a_backslash(self):
+        # a pipe is only escaped when preceded by an odd run of backslashes
+        for raw in ("A \\| B", "C:\\dir|x", "\\\\|"):
+            cell = research_brief.md_cell(raw)
+            for m in re.finditer(r"\|", cell):
+                run = len(cell[:m.start()]) - len(cell[:m.start()].rstrip("\\"))
+                self.assertEqual(run % 2, 1, (raw, cell))
 
 
 if __name__ == "__main__":
