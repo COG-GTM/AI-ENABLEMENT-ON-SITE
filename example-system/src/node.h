@@ -22,10 +22,13 @@ typedef struct {
 
 /* Return false when the IMU does not respond. */
 typedef bool (*imu_read_fn)(void *ctx, imu_sample_t *out);
+/* Re-initialise the IMU after a timeout (SN-REQ-008). May be NULL. */
+typedef void (*imu_reinit_fn)(void *ctx);
 typedef int16_t (*temp_read_fn)(void *ctx);
 
 typedef struct {
     imu_read_fn read_imu;
+    imu_reinit_fn reinit_imu;
     temp_read_fn read_temp;
     void *ctx;
     filter_t filt[4];
@@ -38,7 +41,7 @@ typedef struct {
     imu_sample_t filtered;
 } node_t;
 
-void node_init(node_t *n, imu_read_fn imu, temp_read_fn temp, void *ctx);
+void node_init(node_t *n, imu_read_fn imu, imu_reinit_fn reinit, temp_read_fn temp, void *ctx);
 /* One 10 ms tick. Returns true and fills `out` once per second. */
 bool node_step(node_t *n, uint8_t out[PACKET_LEN]);
 

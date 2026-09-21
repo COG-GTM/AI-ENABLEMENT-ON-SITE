@@ -94,6 +94,8 @@ def tool_what_if_power(a: dict) -> str:
                 raise ValueError(f"invalid {key}")
             cmd += [f"--{key}", v]
     if "mcu_duty" in a:
+        if isinstance(a["mcu_duty"], bool) or not isinstance(a["mcu_duty"], (int, float)):
+            raise ValueError("mcu_duty must be a number")
         d = float(a["mcu_duty"])
         if not 0 <= d <= 1:
             raise ValueError("mcu_duty must be 0..1")
@@ -112,23 +114,34 @@ def handle(msg: dict):
     """Return a response dict, or None for notifications."""
     method = msg.get("method")
     mid = msg.get("id")
-    params = msg.get("params") or {}
+    if not isinstance(method, str):
+        return err(mid, -32600, "method must be a string")
+    if method.startswith("notifications/"):
+        return None
+    params = msg.get("params")
+    if params is None:
+        params = {}
+    if not isinstance(params, dict):
+        return err(mid, -32602, "params must be an object")
 
     if method == "initialize":
         return ok(mid, {"protocolVersion": PROTOCOL_VERSION, "capabilities": {"tools": {}}, "serverInfo": SERVER_INFO})
-    if method == "notifications/initialized" or (method or "").startswith("notifications/"):
-        return None
     if method == "ping":
         return ok(mid, {})
     if method == "tools/list":
         return ok(mid, {"tools": TOOLS})
     if method == "tools/call":
         name = params.get("name")
-        fn = HANDLERS.get(name)
+        fn = HANDLERS.get(name) if isinstance(name, str) else None
         if fn is None:
             return err(mid, -32602, f"unknown tool: {name}")
+        arguments = params.get("arguments")
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return err(mid, -32602, "arguments must be an object")
         try:
-            text = fn(params.get("arguments") or {})
+            text = fn(arguments)
             return ok(mid, {"content": [{"type": "text", "text": text}], "isError": False})
         except (ValueError, KeyError, subprocess.TimeoutExpired, OSError) as e:
             return ok(mid, {"content": [{"type": "text", "text": f"error: {e}"}], "isError": True})

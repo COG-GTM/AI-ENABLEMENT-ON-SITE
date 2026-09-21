@@ -148,10 +148,10 @@ def check_content() -> None:
                 fail(f"{rel}:{line}: looks like a secret or identifier: {m.group(0)[:12]}...")
 
 
-def run(cmd: list[str], cwd: Path = ROOT) -> bool:
+def run(cmd: list[str], cwd: Path = ROOT, allowed_codes: frozenset[int] = frozenset({0})) -> bool:
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
-    if r.returncode not in (0, 2):  # what_if exits 2 on a FAIL budget, which is a valid result
-        fail(f"{' '.join(cmd)} failed:\n{r.stdout[-800:]}{r.stderr[-800:]}")
+    if r.returncode not in allowed_codes:
+        fail(f"{' '.join(cmd)} exited {r.returncode}:\n{r.stdout[-800:]}{r.stderr[-800:]}")
         return False
     return True
 
@@ -165,7 +165,7 @@ def check_tools() -> None:
                 fail(f"{p.relative_to(ROOT)}: invalid JSON ({e})")
     py = sys.executable
     run([py, "tools/tracker_report.py"])
-    run([py, "tools/what_if.py", "--imu", "imu-b"])
+    run([py, "tools/what_if.py", "--imu", "imu-b"], allowed_codes=frozenset({0, 2}))  # 2 = budget FAIL, a valid result
     run([py, "tools/build_deck.py", "templates/deck-outline-example.json", "outputs/example-deck.html"])
     run([py, "tools/research_brief.py", "--check"])
     run([py, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=ROOT / "example-system")
@@ -182,9 +182,9 @@ def check_tools() -> None:
 def main() -> int:
     names = check_skills()
     check_agents(names)
-    check_links()
     check_content()
-    check_tools()
+    check_tools()  # generates outputs/ files first so check_links can see them on a clean checkout
+    check_links()
     if problems:
         print(f"{len(problems)} problem(s):")
         for p in problems:

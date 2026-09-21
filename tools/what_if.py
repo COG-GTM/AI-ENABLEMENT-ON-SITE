@@ -12,6 +12,7 @@ Reads only example-system/parts/*.json. Standard library only.
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -21,6 +22,8 @@ PARTS = ROOT / "example-system" / "parts"
 BATTERY_MAH = 2000
 TARGET_DAYS = 30
 LIMIT_MA = 2.7  # SN-REQ-020
+IMU_RATE_HZ = 100  # SN-REQ-001
+IMU_RATE_TOL = 0.01  # SN-REQ-001: +/- 1 %
 PERIOD_MS = 10.0
 UART_TX_MS_PER_S = 16 * 10 / 115200 * 1000  # 16 bytes, 10 bits each
 
@@ -35,6 +38,8 @@ def load_part(part_id: str) -> dict:
 
 
 def budget(mcu: dict, imu: dict, temp: dict, uplink: dict | None, mcu_active_duty: float) -> list[dict]:
+    if not math.isfinite(mcu_active_duty) or not 0 <= mcu_active_duty <= 1:
+        raise ValueError(f"mcu_active_duty must be between 0 and 1, got {mcu_active_duty!r}")
     rows = []
 
     def add(name, part, active_ma, duty):
@@ -59,8 +64,8 @@ def compatibility(imu: dict, baseline: dict, temp: dict) -> list[str]:
         issues.append(f"Interface changes {baseline['interface'].upper()} -> {imu['interface'].upper()}: ICD section 1-2 pins and driver change.")
         if imu["interface"] == "i2c" and imu.get("i2c_address") == temp.get("i2c_address"):
             issues.append("I2C address collides with the temperature sensor.")
-    if 100 not in imu["odr_hz"] and not any(abs(o - 100) / 100 <= 0.05 for o in imu["odr_hz"]):
-        issues.append(f"No ODR within 5 % of 100 Hz (available: {imu['odr_hz']}); SN-REQ-001 needs a timing waiver or decimation.")
+    if not any(abs(o - IMU_RATE_HZ) / IMU_RATE_HZ <= IMU_RATE_TOL for o in imu["odr_hz"]):
+        issues.append(f"No ODR within {IMU_RATE_TOL * 100:g} % of {IMU_RATE_HZ} Hz (available: {imu['odr_hz']}); SN-REQ-001 needs a timing waiver or decimation.")
     for key, label in (("accel_lsb_per_g", "accelerometer"), ("gyro_lsb_per_dps", "gyro")):
         if imu[key] != baseline[key]:
             issues.append(f"{label} scale factor {baseline[key]} -> {imu[key]} LSB: packet units change (ICD section 4) or firmware must rescale.")
@@ -108,6 +113,8 @@ def main(argv=None) -> int:
     ap.add_argument("--mcu-duty", type=float, default=0.40, help="MCU active duty cycle (0.40 today, 0.25 with sleep)")
     ap.add_argument("--markdown", action="store_true")
     a = ap.parse_args(argv)
+    if not math.isfinite(a.mcu_duty) or not 0 <= a.mcu_duty <= 1:
+        ap.error("--mcu-duty must be a number between 0 and 1")
 
     mcu, imu, temp = load_part(a.mcu), load_part(a.imu), load_part(a.temp)
     uplink = load_part(a.uplink) if a.uplink else None
