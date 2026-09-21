@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tracker item",
+  "description": "One bug, defect, or capability in example-system/tracker.json. tools/tracker_report.py validates against this file.",
+  "type": "object",
+  "required": ["id", "type", "title", "severity", "status", "component", "requirements", "hazards", "opened", "closed", "owner", "notes"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[A-Z]{2,6}-(BUG|CAP)-[0-9]{3}$", "description": "SN-BUG-001 style. BUG for bugs/defects, CAP for capabilities."},
+    "type": {"type": "string", "enum": ["bug", "defect", "capability"]},
+    "title": {"type": "string", "maxLength": 120},
+    "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+    "status": {"type": "string", "enum": ["proposed", "open", "in_review", "closed", "wont_fix"]},
+    "component": {"type": "string", "description": "filter, packet, node, imu, uplink, tools, ..."},
+    "requirements": {"type": "array", "items": {"type": "string", "pattern": "^[A-Z]{2,6}-REQ-[0-9]{3}$"}},
+    "hazards": {"type": "array", "items": {"type": "string", "pattern": "^[A-Z]{2,6}-HAZ-[0-9]{3}$"}},
+    "opened": {"type": "string", "format": "date"},
+    "closed": {"type": ["string", "null"], "format": "date"},
+    "owner": {"type": "string", "description": "A role (firmware, systems, hardware), never a person."},
+    "notes": {"type": "string"}
+  }
+}

@@ -1,12 +1,33 @@
-# Project Rules
+# Project instructions for Devin
 
-- Keep all content reusable, customer-neutral, and free of organization, program, project, participant, and location identifiers.
-- Use only the approved Federal deployment of Devin and separately approved integrations; never claim an unverified service is inside the FedRAMP authorization boundary.
-- Use synthetic or explicitly approved sanitized data. Never add secrets, credentials, tokens, private keys, PII, PHI, PCI data, CUI, classified data, export-controlled data, production data, or proprietary customer artifacts.
-- Never copy files from outside this repository without explicit approval and a data-handling review.
-- Use least privilege. Start in Plan or Normal mode, keep tool access narrow, and request approval before network access, external integrations, writes outside the repository, or real-world side effects.
-- Do not perform destructive operations, production changes, credential changes, deployments, purchases, messages, or external publication as part of a demonstration.
-- Keep examples generic and replace identifying details with clearly synthetic placeholders.
-- Prefer small, reviewable changes and verify the result before declaring completion.
-- Before committing, inspect the complete staged diff for identifiers, sensitive data, secrets, generated artifacts, and unsupported compliance claims.
-- Keep this file concise; put detailed procedures in `docs/` and reusable task material in `templates/` or `use-cases/`.
+This repository is a library of ready-to-run workflows for Devin Desktop (Devin Local agent).
+Procedures live in skills under `.devin/skills/`. Keep this file short; do not add procedures here.
+
+## Pick the right skill
+
+When the user's request matches a row, invoke that skill (or tell them the slash command to run).
+
+| User says something like | Skill |
+| --- | --- |
+| research, analyze, brief, compare sources, "what do we know about" | `/research-brief` |
+| deck, slides, presentation, executive summary, brief leadership | `/exec-deck` |
+| requirements, ICD, interface, ADR, hazard, FMEA, power budget, design artifact | `/design-artifacts` |
+| what if we swap / replace / add a chip, sensor, device, part | `/what-if-part-swap` |
+| spec, specification, plan, tasks, spec-driven, "start a feature" | `/spec-driven` |
+| test first, TDD, red-green, write tests before | `/tdd` |
+| architecture doc, system overview, C4, arc42, document how this works | `/architecture-doc` |
+| bugs, defects, capabilities, tracker, status report, burndown | `/track-and-report` |
+| connect to Jira, GitLab, Confluence, GitHub, Azure DevOps; CLI, API, token, PAT | `/connect-tools` |
+| MCP server, add a server by hand, expose a tool, mcp_config | `/mcp-server` |
+
+If nothing matches, read `README.md` and ask one clarifying question.
+
+## Rules
+
+- Customer-neutral: never add organization, program, project, person, site, or system identifiers. Use the synthetic system in `example-system/`.
+- Synthetic data only. Never add secrets, tokens, keys, PII, CUI, export-controlled, production, or proprietary data. Secrets come from environment variables only.
+- Least privilege: prefer Plan mode for first runs; ask before network access, external integrations, or writes outside this repository.
+- No destructive or real-world side effects during demonstrations (no deletes, deployments, external posts, ticket writes).
+- Do not claim a service is inside a FedRAMP boundary unless the user's administrator confirmed it.
+- Write generated results to `outputs/` unless the skill says otherwise. Keep changes small and show the diff before committing.
+- Verify before declaring done: run `python tools/check_repo.py` after editing skills, templates, or docs.

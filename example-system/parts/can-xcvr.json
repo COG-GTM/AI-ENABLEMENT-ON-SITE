@@ -1,0 +1,12 @@
+{
+  "id": "can-xcvr",
+  "role": "transceiver",
+  "name": "CAN 2.0B transceiver (synthetic)",
+  "interface": "can",
+  "supply_v": [4.5, 5.5],
+  "active_current_ma": 5.0,
+  "standby_current_ma": 0.015,
+  "max_bitrate_kbps": 1000,
+  "package": "SOIC-8",
+  "notes": "Needs 5 V rail (boost converter) - not present on the current board. Referenced by ADR-0002 and SN-CAP-002."
+}
