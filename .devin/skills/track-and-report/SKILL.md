@@ -37,7 +37,7 @@ python tools/tracker_report.py              # console summary
 python tools/tracker_report.py --markdown   # paste into a review doc
 python tools/tracker_report.py --json       # feed to /exec-deck stats slide
 ```
-Report contents: total / open / closed, open by severity and component, top 5 open by severity, oldest
+Report contents: total / open / closed / won't fix, open by severity and component, top 5 open by severity, oldest
 open. For a deck: use the JSON in a `stats` slide and a `table` slide of the top 5; source line
 "tracker.json as of <date>".
 

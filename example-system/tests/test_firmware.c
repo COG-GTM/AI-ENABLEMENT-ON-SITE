@@ -61,7 +61,7 @@ static void test_filter(void) { /* SN-REQ-003 */
 
 /* --- node tests with injected hardware --- */
 typedef struct {
-    int imu_calls, temp_calls, imu_fail_first_n;
+    int imu_calls, temp_calls, imu_fail_first_n, reinit_calls, reinit_at_call;
     const int16_t *temps;
     int ntemps;
 } fake_hw_t;
@@ -74,6 +74,12 @@ static bool fake_imu(void *ctx, imu_sample_t *out) {
     return true;
 }
 
+static void fake_reinit(void *ctx) {
+    fake_hw_t *hw = ctx;
+    hw->reinit_calls++;
+    hw->reinit_at_call = hw->imu_calls;
+}
+
 static int16_t fake_temp(void *ctx) {
     fake_hw_t *hw = ctx;
     int i = hw->temp_calls < hw->ntemps ? hw->temp_calls : hw->ntemps - 1;
@@ -83,9 +89,9 @@ static int16_t fake_temp(void *ctx) {
 
 static void test_timing(void) { /* SN-REQ-001, 002, 004 */
     static const int16_t temps[] = {2500};
-    fake_hw_t hw = {0, 0, 0, temps, 1};
+    fake_hw_t hw = {0, 0, 0, 0, 0, temps, 1};
     node_t n;
-    node_init(&n, fake_imu, fake_temp, &hw);
+    node_init(&n, fake_imu, fake_reinit, fake_temp, &hw);
     uint8_t out[PACKET_LEN];
     int packets = 0;
     uint16_t last_seq = 0;
@@ -104,9 +110,9 @@ static void test_timing(void) { /* SN-REQ-001, 002, 004 */
 
 static void test_temp_fault(void) { /* SN-REQ-007 */
     static const int16_t temps[] = {2500, 9000, 2600};
-    fake_hw_t hw = {0, 0, 0, temps, 3};
+    fake_hw_t hw = {0, 0, 0, 0, 0, temps, 3};
     node_t n;
-    node_init(&n, fake_imu, fake_temp, &hw);
+    node_init(&n, fake_imu, fake_reinit, fake_temp, &hw);
     uint8_t out[PACKET_LEN];
     packet_t p[3];
     int k = 0;
@@ -120,9 +126,9 @@ static void test_temp_fault(void) { /* SN-REQ-007 */
 
 static void test_imu_timeout(void) { /* SN-REQ-008 */
     static const int16_t temps[] = {2500};
-    fake_hw_t hw = {0, 0, IMU_TIMEOUT_SAMPLES, temps, 1};
+    fake_hw_t hw = {0, 0, IMU_TIMEOUT_SAMPLES, 0, 0, temps, 1};
     node_t n;
-    node_init(&n, fake_imu, fake_temp, &hw);
+    node_init(&n, fake_imu, fake_reinit, fake_temp, &hw);
     uint8_t out[PACKET_LEN];
     packet_t p;
     for (int i = 0; i < 100; i++) {
@@ -130,13 +136,24 @@ static void test_imu_timeout(void) { /* SN-REQ-008 */
     }
     CHECK((p.flags & FLAG_FAULT) && (p.flags & FLAG_IMU_REINIT));
     CHECK(n.imu_reinit_count == 1);
+    CHECK(hw.reinit_calls == 1 && hw.reinit_at_call == IMU_TIMEOUT_SAMPLES); /* hardware reinit once, on the 5th miss */
 
-    fake_hw_t hw2 = {0, 0, IMU_TIMEOUT_SAMPLES - 1, temps, 1};
-    node_init(&n, fake_imu, fake_temp, &hw2);
+    fake_hw_t hw2 = {0, 0, IMU_TIMEOUT_SAMPLES - 1, 0, 0, temps, 1};
+    node_init(&n, fake_imu, fake_reinit, fake_temp, &hw2);
     for (int i = 0; i < 100; i++) {
         if (node_step(&n, out)) CHECK(packet_parse(out, PACKET_LEN, &p));
     }
     CHECK(p.flags == 0);
+    CHECK(hw2.reinit_calls == 0);
+
+    fake_hw_t hw3 = {0, 0, 1000, 0, 0, temps, 1}; /* IMU never answers: one reinit per timeout window */
+    node_init(&n, fake_imu, fake_reinit, fake_temp, &hw3);
+    for (int i = 0; i < 3 * IMU_TIMEOUT_SAMPLES; i++) node_step(&n, out);
+    CHECK(hw3.reinit_calls == 3 && n.imu_reinit_count == 3);
+
+    node_init(&n, fake_imu, NULL, fake_temp, &hw3); /* reinit callback is optional */
+    for (int i = 0; i < IMU_TIMEOUT_SAMPLES; i++) node_step(&n, out);
+    CHECK(n.imu_reinit_count == 1);
 }
 
 int main(void) {

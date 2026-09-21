@@ -1,8 +1,9 @@
 """Sensor-node control loop (SN-REQ-001..010). Mirrors src/node.c.
 
-Hardware is abstracted behind two callables so tests can inject faults:
-    read_imu()  -> (acc_x, acc_y, acc_z, gyro_z) or None when the IMU does not respond
-    read_temp() -> temperature in centi-degrees C
+Hardware is abstracted behind callables so tests can inject faults:
+    read_imu()   -> (acc_x, acc_y, acc_z, gyro_z) or None when the IMU does not respond
+    read_temp()  -> temperature in centi-degrees C
+    reinit_imu() -> optional; called once each time the IMU timeout trips (SN-REQ-008)
 """
 
 from dataclasses import dataclass, field
@@ -20,12 +21,14 @@ TEMP_MAX_CC = 8500
 
 ImuReader = Callable[[], Optional[tuple[int, int, int, int]]]
 TempReader = Callable[[], int]
+ImuReinit = Callable[[], None]
 
 
 @dataclass
 class SensorNode:
     read_imu: ImuReader
     read_temp: TempReader
+    reinit_imu: Optional[ImuReinit] = None
     filters: list[MovingAverage] = field(default_factory=lambda: [MovingAverage(4) for _ in range(4)])
     seq: int = 0
     tick: int = 0
@@ -58,6 +61,8 @@ class SensorNode:
                 self.imu_misses = 0
                 for f in self.filters:
                     f.reset()
+                if self.reinit_imu is not None:
+                    self.reinit_imu()
             return
         self.imu_misses = 0
         self.filtered = tuple(f.update(v) for f, v in zip(self.filters, raw))  # type: ignore[assignment]

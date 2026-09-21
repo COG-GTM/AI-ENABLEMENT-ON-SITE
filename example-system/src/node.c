@@ -1,7 +1,8 @@
 #include "node.h"
 
-void node_init(node_t *n, imu_read_fn imu, temp_read_fn temp, void *ctx) {
+void node_init(node_t *n, imu_read_fn imu, imu_reinit_fn reinit, temp_read_fn temp, void *ctx) {
     n->read_imu = imu;
+    n->reinit_imu = reinit;
     n->read_temp = temp;
     n->ctx = ctx;
     for (int i = 0; i < 4; i++) filter_init(&n->filt[i]);
@@ -24,6 +25,7 @@ static void sample_imu(node_t *n) {
             n->imu_reinit_count++;
             n->imu_misses = 0;
             for (int i = 0; i < 4; i++) filter_reset(&n->filt[i]);
+            if (n->reinit_imu) n->reinit_imu(n->ctx);
         }
         return;
     }

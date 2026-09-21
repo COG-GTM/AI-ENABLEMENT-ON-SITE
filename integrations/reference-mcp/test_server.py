@@ -1,5 +1,6 @@
 """Drives server.py over a real stdio pipe. Run: python -m unittest integrations/reference-mcp/test_server.py"""
 
+import io
 import json
 import subprocess
 import sys
@@ -8,6 +9,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SERVER = HERE / "server.py"
+sys.path.insert(0, str(HERE))
+
+import server  # noqa: E402
 
 
 def rpc(messages: list) -> list[dict]:
@@ -52,13 +56,72 @@ class ReferenceServerTests(unittest.TestCase):
             {"jsonrpc": "2.0", "id": 4, "method": "resources/list"},
             "{not json",
             "[1, 2]",
+            '{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"mcu_duty": NaN}}}',
+            '{"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"mcu_duty": -Infinity}}}',
         ])
-        self.assertTrue(out[0]["result"]["isError"])
-        self.assertTrue(out[1]["result"]["isError"])
+        self.assertEqual(out[0]["error"]["code"], -32602)  # fails the schema pattern before any file access
+        self.assertTrue(out[1]["result"]["isError"])  # well-formed but no such part: a tool error
         self.assertEqual(out[2]["error"]["code"], -32602)
         self.assertEqual(out[3]["error"]["code"], -32601)
-        self.assertEqual(out[4]["error"]["code"], -32700)
-        self.assertEqual(out[5]["error"]["code"], -32700)
+        for i in (4, 5, 6, 7):  # not JSON at all, a top-level array, and the non-standard NaN / Infinity tokens
+            self.assertEqual(out[i]["error"]["code"], -32700, out[i])
+
+    def test_malformed_params_and_arguments_get_invalid_params_error(self):
+        out = rpc([
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": [1]},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": "get_requirement"},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": 7},
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "get_requirement", "arguments": ["SN-REQ-001"]}},
+            {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "get_requirement", "arguments": "SN-REQ-001"}},
+            {"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": ["what_if_power"]}},
+            {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"mcu_duty": "0.5"}}},
+            {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"mcu_duty": 1.5}}},
+            {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "tracker_summary", "arguments": {"unexpected": True}}},
+            {"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {"name": "get_requirement", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"imu": 7}}},
+            '{"jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": {"name": "what_if_power", "arguments": {"mcu_duty": 1' + "0" * 400 + '}}}',
+            {"jsonrpc": "2.0", "id": 12, "method": 5},
+            {"jsonrpc": "2.0", "method": "notifications/progress", "params": [1]},
+            {"jsonrpc": "2.0", "id": 13, "method": "ping"},
+        ])
+        self.assertEqual(len(out), 14)  # the notification gets no reply; the server is still alive for ping
+        for i in range(12):
+            self.assertEqual(out[i]["error"]["code"], -32602, out[i])
+        self.assertIn("unexpected argument: unexpected", out[8]["error"]["message"])
+        self.assertIn("missing required argument: id", out[9]["error"]["message"])
+        self.assertIn("between 0 and 1", out[11]["error"]["message"])  # a 400-digit integer overflows float() but must not crash
+        self.assertEqual(out[12]["error"]["code"], -32600)
+        self.assertEqual(out[13], {"jsonrpc": "2.0", "id": 13, "result": {}})
+
+    def test_every_advertised_tool_rejects_undeclared_arguments(self):
+        self.assertEqual(set(server.SCHEMAS), set(server.HANDLERS))
+        for name, schema in server.SCHEMAS.items():
+            self.assertFalse(schema["additionalProperties"], name)
+            self.assertIn("unexpected argument: extra", server.schema_errors(schema, {"extra": 1}), name)
+        self.assertEqual(server.schema_errors(server.SCHEMAS["what_if_power"], {"imu": "imu-b", "mcu_duty": 0.5}), [])
+        for bad in (float("nan"), float("inf"), -0.1, 1.1, True, "0.5", 10**400):
+            self.assertTrue(server.schema_errors(server.SCHEMAS["what_if_power"], {"mcu_duty": bad}), bad)
+
+    def test_unexpected_exception_becomes_internal_error_not_a_crash(self):
+        inp = io.StringIO('{"jsonrpc": "2.0", "id": 1, "method": "ping"}\n{"jsonrpc": "2.0", "id": 2, "method": "ping"}\n')
+        out = io.StringIO()
+        original = server.handle
+        calls = []
+
+        def flaky(msg):
+            calls.append(msg["id"])
+            if msg["id"] == 1:
+                raise RuntimeError("boom")
+            return original(msg)
+
+        server.handle = flaky
+        try:
+            server.serve(inp, out)
+        finally:
+            server.handle = original
+        lines = [json.loads(l) for l in out.getvalue().splitlines()]
+        self.assertEqual(lines[0]["error"]["code"], -32603)
+        self.assertEqual(lines[1], {"jsonrpc": "2.0", "id": 2, "result": {}})
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ Everything else returns JSON-RPC error -32601 (method not found). No network, no
 
 import io
 import json
+import math
 import re
 import subprocess
 import sys
@@ -62,6 +63,36 @@ TOOLS = [
 ]
 
 
+def schema_errors(schema: dict, value: dict) -> list[str]:
+    """Check `value` against the small JSON Schema subset used in TOOLS (object with typed properties)."""
+    errs = []
+    props = schema.get("properties", {})
+    for key in schema.get("required", []):
+        if key not in value:
+            errs.append(f"missing required argument: {key}")
+    if schema.get("additionalProperties") is False:
+        errs += [f"unexpected argument: {k}" for k in value if k not in props]
+    for key, rule in props.items():
+        if key not in value:
+            continue
+        v = value[key]
+        if rule["type"] == "string":
+            if not isinstance(v, str):
+                errs.append(f"{key} must be a string")
+            elif "pattern" in rule and not re.match(rule["pattern"], v):
+                errs.append(f"{key} must match {rule['pattern']}")
+        elif rule["type"] == "number":
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or (isinstance(v, float) and not math.isfinite(v)):
+                errs.append(f"{key} must be a finite number")
+            elif v < rule.get("minimum", float("-inf")) or v > rule.get("maximum", float("inf")):
+                errs.append(f"{key} must be between {rule.get('minimum')} and {rule.get('maximum')}")
+    return errs
+
+
+def reject_constant(token: str):
+    raise ValueError(f"{token} is not valid JSON")
+
+
 def run_tool(cmd: list[str]) -> str:
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=60)
     if r.returncode not in (0, 2):
@@ -94,6 +125,8 @@ def tool_what_if_power(a: dict) -> str:
                 raise ValueError(f"invalid {key}")
             cmd += [f"--{key}", v]
     if "mcu_duty" in a:
+        if isinstance(a["mcu_duty"], bool) or not isinstance(a["mcu_duty"], (int, float)):
+            raise ValueError("mcu_duty must be a number")
         d = float(a["mcu_duty"])
         if not 0 <= d <= 1:
             raise ValueError("mcu_duty must be 0..1")
@@ -106,29 +139,44 @@ HANDLERS = {
     "get_requirement": tool_get_requirement,
     "what_if_power": tool_what_if_power,
 }
+SCHEMAS = {t["name"]: t["inputSchema"] for t in TOOLS}
 
 
 def handle(msg: dict):
     """Return a response dict, or None for notifications."""
     method = msg.get("method")
     mid = msg.get("id")
-    params = msg.get("params") or {}
+    if not isinstance(method, str):
+        return err(mid, -32600, "method must be a string")
+    if method.startswith("notifications/"):
+        return None
+    params = msg.get("params")
+    if params is None:
+        params = {}
+    if not isinstance(params, dict):
+        return err(mid, -32602, "params must be an object")
 
     if method == "initialize":
         return ok(mid, {"protocolVersion": PROTOCOL_VERSION, "capabilities": {"tools": {}}, "serverInfo": SERVER_INFO})
-    if method == "notifications/initialized" or (method or "").startswith("notifications/"):
-        return None
     if method == "ping":
         return ok(mid, {})
     if method == "tools/list":
         return ok(mid, {"tools": TOOLS})
     if method == "tools/call":
         name = params.get("name")
-        fn = HANDLERS.get(name)
+        fn = HANDLERS.get(name) if isinstance(name, str) else None
         if fn is None:
             return err(mid, -32602, f"unknown tool: {name}")
+        arguments = params.get("arguments")
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return err(mid, -32602, "arguments must be an object")
+        bad = schema_errors(SCHEMAS[name], arguments)
+        if bad:
+            return err(mid, -32602, "; ".join(bad))
         try:
-            text = fn(params.get("arguments") or {})
+            text = fn(arguments)
             return ok(mid, {"content": [{"type": "text", "text": text}], "isError": False})
         except (ValueError, KeyError, subprocess.TimeoutExpired, OSError) as e:
             return ok(mid, {"content": [{"type": "text", "text": f"error: {e}"}], "isError": True})
@@ -149,14 +197,17 @@ def serve(inp: io.TextIOBase, out: io.TextIOBase) -> None:
         if not line:
             continue
         try:
-            msg = json.loads(line)
+            msg = json.loads(line, parse_constant=reject_constant)  # NaN/Infinity are not JSON
             if not isinstance(msg, dict):
                 raise ValueError
         except (json.JSONDecodeError, ValueError):
             out.write(json.dumps(err(None, -32700, "parse error")) + "\n")
             out.flush()
             continue
-        resp = handle(msg)
+        try:
+            resp = handle(msg)
+        except Exception as e:  # one bad request must never take the whole server down
+            resp = err(msg.get("id"), -32603, f"internal error: {type(e).__name__}")
         if resp is not None:
             out.write(json.dumps(resp) + "\n")
             out.flush()

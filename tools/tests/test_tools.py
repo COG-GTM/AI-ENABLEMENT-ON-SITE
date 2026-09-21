@@ -2,10 +2,11 @@
 
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,14 +23,26 @@ class TrackerReportTests(unittest.TestCase):
         items = tracker_report.load(tracker_report.DEFAULT)
         s = tracker_report.summarise(items)
         self.assertEqual(s["total"], len(items))
-        self.assertEqual(s["open"] + s["closed"], s["total"])
+        self.assertEqual(s["open"] + s["closed"] + s["wont_fix"], s["total"])
         self.assertLessEqual(len(s["top_open"]), 5)
         self.assertEqual(s["top_open"][0]["severity"], "high")
 
     def test_schema_enums_match_validator(self):
         schema = json.loads(tracker_report.SCHEMA.read_text())
         self.assertEqual(set(tracker_report.SEV_ORDER), set(schema["properties"]["severity"]["enum"]))
-        self.assertTrue(set(tracker_report.OPEN_STATES) < set(schema["properties"]["status"]["enum"]))
+        # every status the schema allows lands in exactly one headline bucket
+        self.assertEqual(set(tracker_report.OPEN_STATES) | {"closed", "wont_fix"}, set(schema["properties"]["status"]["enum"]))
+
+    def test_every_status_is_counted_once(self):
+        items = tracker_report.load(tracker_report.DEFAULT)
+        schema = json.loads(tracker_report.SCHEMA.read_text())
+        for n, status in enumerate(schema["properties"]["status"]["enum"]):
+            items[n]["status"] = status
+        s = tracker_report.summarise(items)
+        self.assertEqual(s["open"] + s["closed"] + s["wont_fix"], s["total"])
+        self.assertEqual(s["wont_fix"], 1)
+        self.assertIn("1 won't fix", tracker_report.render_text(s))
+        self.assertIn("1 won't fix", tracker_report.render_markdown(s))
 
     def test_bad_item_rejected(self):
         bad = {"items": [{"id": "SN-BUG-1", "type": "bug", "title": "x", "severity": "huge", "status": "open",
@@ -73,6 +86,29 @@ class WhatIfTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             self.assertEqual(what_if.main([]), 2)  # baseline fails the budget
             self.assertEqual(what_if.main(["--imu", "imu-b", "--mcu-duty", "0.25"]), 0)
+
+    def test_mcu_duty_must_be_a_fraction(self):
+        parts = (what_if.load_part("mcu-m0"), what_if.load_part("imu-a"), what_if.load_part("temp-x"), None)
+        for bad in (-0.1, 1.5, float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                what_if.budget(*parts, bad)
+            with self.assertRaises(SystemExit), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                what_if.main(["--mcu-duty", str(bad)])
+        what_if.budget(*parts, 0.0)
+        what_if.budget(*parts, 1.0)
+
+    def test_odr_tolerance_matches_srs(self):
+        srs = (ROOT / "example-system" / "docs" / "SRS.md").read_text()
+        row = next(line for line in srs.splitlines() if line.startswith("| SN-REQ-001 "))
+        self.assertIn(f"{what_if.IMU_RATE_HZ} Hz (+/- {what_if.IMU_RATE_TOL * 100:g} %)", row)
+
+    def test_every_part_odr_is_judged_against_srs_tolerance(self):
+        base, temp = what_if.load_part("imu-a"), what_if.load_part("temp-x")
+        self.assertIn(100, base["odr_hz"])  # the baseline part must itself meet SN-REQ-001
+        near_miss = dict(base, odr_hz=[52, 104, 208])  # 4 % off: fine at 5 %, not at 1 %
+        self.assertTrue(any("No ODR within 1 %" in i for i in what_if.compatibility(near_miss, base, temp)))
+        exact = dict(base, odr_hz=[100.5])
+        self.assertFalse(any("ODR" in i for i in what_if.compatibility(exact, base, temp)))
 
 
 class BuildDeckTests(unittest.TestCase):
@@ -142,6 +178,36 @@ class ResearchBriefTests(unittest.TestCase):
         self.assertTrue(any("verified" in e for e in research_brief.validate(b)))
         b["sources"][0]["verified"] = True
         self.assertEqual(research_brief.validate(b), [])
+
+    def test_dates_must_be_real_calendar_dates(self):
+        for bad in ("2026-13-01", "2026-02-30", "2026-2-3", "20260203", "yesterday", 20260203):
+            b = json.loads(research_brief.EXAMPLE.read_text())
+            b["date"] = bad
+            self.assertTrue(any(e.startswith("date must be") for e in research_brief.validate(b)), bad)
+            b = json.loads(research_brief.EXAMPLE.read_text())
+            b["sources"][1]["date"] = bad
+            self.assertTrue(any("S2: date must be" in e for e in research_brief.validate(b)), bad)
+        b = json.loads(research_brief.EXAMPLE.read_text())
+        b["date"] = b["sources"][1]["date"] = "2024-02-29"
+        self.assertEqual(research_brief.validate(b), [])
+
+    def test_markdown_table_cells_survive_pipes_and_newlines(self):
+        b = json.loads(research_brief.EXAMPLE.read_text())
+        b["findings"][0]["claim"] = "A | B\nsecond line"
+        b["findings"][0]["note"] = "x|y"
+        md = research_brief.to_markdown(b)
+        table = [line for line in md.splitlines() if line.startswith("| 1 |")]
+        self.assertEqual(len(table), 1)
+        self.assertEqual(table[0].count("|") - table[0].count("\\|"), 5)  # 4 columns, unescaped pipes only
+        self.assertIn("A \\| B second line (x\\|y)", table[0])
+
+    def test_markdown_cell_pipe_stays_escaped_after_a_backslash(self):
+        # a pipe is only escaped when preceded by an odd run of backslashes
+        for raw in ("A \\| B", "C:\\dir|x", "\\\\|"):
+            cell = research_brief.md_cell(raw)
+            for m in re.finditer(r"\|", cell):
+                run = len(cell[:m.start()]) - len(cell[:m.start()].rstrip("\\"))
+                self.assertEqual(run % 2, 1, (raw, cell))
 
 
 if __name__ == "__main__":

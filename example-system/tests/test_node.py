@@ -46,11 +46,26 @@ class TestFaults(unittest.TestCase):
             misses[0] += 1
             return None if misses[0] <= IMU_TIMEOUT_SAMPLES else steady_imu()
 
-        node = SensorNode(read_imu=flaky_imu, read_temp=lambda: 2500)
+        reinits = []
+        node = SensorNode(read_imu=flaky_imu, read_temp=lambda: 2500, reinit_imu=lambda: reinits.append(misses[0]))
         pkt = next(p for _ in range(100) if (p := node.step()))
         parsed = parse_packet(pkt)
         self.assertTrue(parsed.flags & FLAG_FAULT)
         self.assertTrue(parsed.flags & FLAG_IMU_REINIT)
+        self.assertEqual(node.imu_reinit_count, 1)
+        self.assertEqual(reinits, [IMU_TIMEOUT_SAMPLES])  # hardware reinit called exactly once, on the 5th miss
+
+    def test_reinit_called_once_per_timeout_event(self):  # SN-REQ-008
+        reinits = [0]
+        node = SensorNode(read_imu=lambda: None, read_temp=lambda: 2500, reinit_imu=lambda: reinits.__setitem__(0, reinits[0] + 1))
+        for _ in range(3 * IMU_TIMEOUT_SAMPLES):
+            node.step()
+        self.assertEqual((reinits[0], node.imu_reinit_count), (3, 3))
+
+    def test_reinit_callback_is_optional(self):
+        node = SensorNode(read_imu=lambda: None, read_temp=lambda: 2500)
+        for _ in range(IMU_TIMEOUT_SAMPLES):
+            node.step()
         self.assertEqual(node.imu_reinit_count, 1)
 
     def test_fewer_misses_than_timeout_is_not_a_fault(self):

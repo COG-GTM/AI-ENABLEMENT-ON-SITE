@@ -56,11 +56,13 @@ def load(path: Path):
 def summarise(items):
     open_items = [i for i in items if i["status"] in OPEN_STATES]
     closed = [i for i in items if i["status"] == "closed"]
+    wont_fix = [i for i in items if i["status"] == "wont_fix"]
     top = sorted(open_items, key=lambda i: (SEV_ORDER[i["severity"]], i["opened"]))
     return {
         "total": len(items),
         "open": len(open_items),
         "closed": len(closed),
+        "wont_fix": len(wont_fix),
         "by_type": dict(Counter(i["type"] for i in items)),
         "by_status": dict(Counter(i["status"] for i in items)),
         "open_by_severity": dict(Counter(i["severity"] for i in open_items)),
@@ -73,7 +75,7 @@ def summarise(items):
 
 def render_markdown(s):
     out = ["# Tracker status report", ""]
-    out.append(f"- Items: {s['total']} total, {s['open']} open, {s['closed']} closed")
+    out.append(f"- Items: {s['total']} total, {s['open']} open, {s['closed']} closed, {s['wont_fix']} won't fix")
     out.append("- Open by severity: " + ", ".join(f"{k} {v}" for k, v in sorted(s["open_by_severity"].items(), key=lambda kv: SEV_ORDER[kv[0]])))
     out.append("- Open by component: " + ", ".join(f"{k} {v}" for k, v in sorted(s["open_by_component"].items())))
     out.append("- Hazards with open work: " + (", ".join(s["hazards_with_open_items"]) or "none"))
@@ -88,7 +90,7 @@ def render_markdown(s):
 
 
 def render_text(s):
-    lines = [f"{s['total']} items: {s['open']} open, {s['closed']} closed"]
+    lines = [f"{s['total']} items: {s['open']} open, {s['closed']} closed, {s['wont_fix']} won't fix"]
     lines.append("open by severity: " + json.dumps(s["open_by_severity"]))
     lines.append("open by component: " + json.dumps(s["open_by_component"]))
     lines.append("top open:")

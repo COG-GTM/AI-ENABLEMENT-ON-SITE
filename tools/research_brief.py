@@ -22,6 +22,7 @@ Input format (see templates/research-brief-example.json):
 """
 
 import argparse
+import datetime
 import html
 import json
 import re
@@ -35,6 +36,29 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SOURCE_ID_RE = re.compile(r"^S\d{1,3}$")
 
 
+def valid_date(s) -> bool:
+    """True for a real calendar date written as YYYY-MM-DD."""
+    if not isinstance(s, str) or not DATE_RE.match(s):
+        return False
+    try:
+        datetime.date.fromisoformat(s)
+    except ValueError:
+        return False
+    return True
+
+
+def md_cell(s) -> str:
+    """Make free text safe inside a Markdown table cell."""
+    return (
+        str(s)
+        .replace("\\", "\\\\")  # first, so a pre-existing backslash cannot neutralise the pipe escape below
+        .replace("|", "\\|")
+        .replace("\r\n", " ")
+        .replace("\n", " ")
+        .replace("\r", " ")
+    )
+
+
 def validate(b: dict) -> list[str]:
     errs = []
     for key in ("question", "audience", "date", "author", "sources", "findings", "open_questions", "recommendation", "next_steps"):
@@ -42,8 +66,8 @@ def validate(b: dict) -> list[str]:
             errs.append(f"missing top-level key {key!r}")
     if errs:
         return errs
-    if not DATE_RE.match(b["date"]):
-        errs.append("date must be YYYY-MM-DD")
+    if not valid_date(b["date"]):
+        errs.append("date must be a real calendar date written YYYY-MM-DD")
     ids = set()
     for s in b["sources"]:
         sid = s.get("id", "")
@@ -55,6 +79,8 @@ def validate(b: dict) -> list[str]:
         for k in ("title", "location", "date", "type"):
             if not s.get(k):
                 errs.append(f"source {sid}: missing {k}")
+        if s.get("date") and not valid_date(s["date"]):
+            errs.append(f"source {sid}: date must be a real calendar date written YYYY-MM-DD")
         if s.get("location", "").startswith("http") and not s.get("verified"):
             errs.append(f"source {sid}: URLs must carry \"verified\": true after the page was opened and matched the claim")
     if not b["findings"]:
@@ -80,8 +106,8 @@ def to_markdown(b: dict) -> str:
     out += ["## Bottom line", "", b["recommendation"], "", "## Findings", ""]
     out += ["| # | Finding | Confidence | Sources |", "| --- | --- | --- | --- |"]
     for i, f in enumerate(b["findings"], 1):
-        note = f" ({f['note']})" if f.get("note") else ""
-        out.append(f"| {i} | {f['claim']}{note} | {f['confidence']} | {', '.join(f['sources'])} |")
+        note = f" ({md_cell(f['note'])})" if f.get("note") else ""
+        out.append(f"| {i} | {md_cell(f['claim'])}{note} | {md_cell(f['confidence'])} | {md_cell(', '.join(f['sources']))} |")
     out += ["", "## Open questions", ""] + [f"- {q}" for q in b["open_questions"]] or ["- None"]
     out += ["", "## Next steps", ""] + [f"1. {s}" for s in b["next_steps"]]
     out += ["", "## Sources", ""]
