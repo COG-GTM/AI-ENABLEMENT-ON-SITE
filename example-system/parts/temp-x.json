@@ -1,0 +1,17 @@
+{
+  "id": "temp-x",
+  "role": "temperature",
+  "name": "Temperature sensor X - current part (synthetic)",
+  "interface": "i2c",
+  "i2c_address": "0x48",
+  "supply_v": [1.4, 3.6],
+  "conversion_current_ma": 0.20,
+  "idle_current_ma": 0.001,
+  "conversion_time_ms": 30,
+  "resolution_bits": 12,
+  "lsb_c": 0.0625,
+  "accuracy_c": 0.5,
+  "temp_range_c": [-40, 125],
+  "package": "SOT-563",
+  "notes": "Baseline part referenced by ICD section 3."
+}

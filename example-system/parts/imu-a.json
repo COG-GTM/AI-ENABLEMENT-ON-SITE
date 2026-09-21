@@ -1,0 +1,20 @@
+{
+  "id": "imu-a",
+  "role": "imu",
+  "name": "IMU A - current part (synthetic)",
+  "interface": "spi",
+  "spi_max_hz": 10000000,
+  "supply_v": [1.71, 3.6],
+  "active_current_ma": 0.55,
+  "odr_hz": [12.5, 26, 52, 104, 208, 416],
+  "accel_range_g": 4,
+  "accel_lsb_per_g": 8192,
+  "gyro_range_dps": 500,
+  "gyro_lsb_per_dps": 65.5,
+  "who_am_i": "0x6A",
+  "data_ready_int": true,
+  "read_bytes_per_sample": 8,
+  "package": "LGA-14 2.5x3.0 mm",
+  "temp_range_c": [-40, 85],
+  "notes": "Baseline part referenced by ICD section 2."
+}

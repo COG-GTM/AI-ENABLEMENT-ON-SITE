@@ -1,0 +1,54 @@
+{
+  "title": "Sensor node: design review summary",
+  "subtitle": "Synthetic example generated from example-system/ by /exec-deck",
+  "footer": "Synthetic reference system. No real product or program.",
+  "slides": [
+    {"type": "title"},
+    {"type": "stats", "title": "Where the design stands", "stats": [
+      {"value": "14", "label": "requirements, all with tests or budgets"},
+      {"value": "28.1", "label": "days battery life (target 30)"},
+      {"value": "1 / 6", "label": "hazards with open mitigation"},
+      {"value": "7", "label": "open tracker items"}
+    ], "note": "Sources: docs/SRS.md, docs/POWER-BUDGET.md, docs/HAZARDS.md, tracker.json"},
+    {"type": "bullets", "title": "Requirements highlights", "bullets": [
+      "100 Hz IMU sampling, 1 Hz temperature, one 16-byte packet per second (SN-REQ-001 to 005)",
+      "CRC-16 on every packet; corrupted packets are rejected on the host (SN-REQ-006)",
+      "Fault detection: out-of-range temperature and 5 missed IMU samples (SN-REQ-007, 008)",
+      "30-day battery life at 2.7 mA average (SN-REQ-020)",
+      "Host-buildable firmware with -Wall -Wextra -Werror, no heap after init (SN-REQ-022, 023)"
+    ]},
+    {"type": "table", "title": "Safety: top hazards", "columns": ["ID", "Failure mode", "Risk", "Mitigation", "Status"], "rows": [
+      ["SN-HAZ-001", "IMU stops responding", "9", "Timeout + reinit (SN-REQ-008)", "Mitigated"],
+      ["SN-HAZ-002", "Temperature out of range", "6", "Range check, keep last value", "Mitigated"],
+      ["SN-HAZ-003", "UART bit error", "6", "CRC-16", "Mitigated"],
+      ["SN-HAZ-004", "Battery depletes early", "6", "Sleep between samples", "Open (SN-BUG-003)"]
+    ], "note": "Source: docs/HAZARDS.md"},
+    {"type": "bars", "title": "Power budget: where the current goes", "unit": "mA", "bars": [
+      {"label": "MCU active (40 % duty)", "value": 2.40, "max": 3.0},
+      {"label": "IMU", "value": 0.55, "max": 3.0},
+      {"label": "Everything else", "value": 0.02, "max": 3.0},
+      {"label": "Limit (SN-REQ-020)", "value": 2.70, "max": 3.0}
+    ], "note": "Total 2.97 mA vs 2.70 mA limit. Source: docs/POWER-BUDGET.md"},
+    {"type": "two-column", "title": "Decision: implement sleep mode now", "left_title": "For", "left": [
+      "Closes SN-BUG-003 and SN-HAZ-004 in one change",
+      "Battery life 28 days to about 40 days",
+      "Timing budget has 92 % headroom"
+    ], "right_title": "Against", "right": [
+      "Needs a wake-timer driver and new tests",
+      "Sleep entry adds 0.1 ms to the loop",
+      "Delays IMU B evaluation (SN-CAP-003)"
+    ]},
+    {"type": "bullets", "title": "Security and quality posture", "bullets": [
+      "Packet parser rejects bad length, sync, and CRC before any field is used",
+      "Reserved flag bits rejected at build time (SN-BUG-002 closed)",
+      "Same tests run against C firmware and the Python twin",
+      "No dynamic allocation after init; strict compiler warnings are errors"
+    ]},
+    {"type": "bullets", "title": "Asks for leadership", "bullets": [
+      "Approve sleep-mode work as the next sprint's priority",
+      "Decide whether CAN (SN-CAP-002) stays on the roadmap; it needs a 5 V rail",
+      "Accept SN-HAZ-005 (timing overrun) at risk level 4"
+    ]},
+    {"type": "quote", "text": "Every number on these slides is recomputed from the repository, not typed in.", "source": "tools/what_if.py, tools/tracker_report.py"}
+  ]
+}

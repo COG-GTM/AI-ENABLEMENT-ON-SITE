@@ -1,0 +1,20 @@
+{
+  "id": "imu-b",
+  "role": "imu",
+  "name": "IMU B - lower-power candidate (synthetic)",
+  "interface": "spi",
+  "spi_max_hz": 8000000,
+  "supply_v": [1.71, 3.6],
+  "active_current_ma": 0.35,
+  "odr_hz": [25, 50, 100, 200, 400],
+  "accel_range_g": 4,
+  "accel_lsb_per_g": 8192,
+  "gyro_range_dps": 500,
+  "gyro_lsb_per_dps": 65.5,
+  "who_am_i": "0x6C",
+  "data_ready_int": true,
+  "read_bytes_per_sample": 12,
+  "package": "LGA-14 2.5x3.0 mm",
+  "temp_range_c": [-40, 85],
+  "notes": "Same footprint as imu-a. Different WHO_AM_I, 12-byte burst read, 100 Hz exact ODR available."
+}

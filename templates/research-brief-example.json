@@ -1,0 +1,27 @@
+{
+  "question": "Should the sensor node move from a moving-average filter to an IIR low-pass?",
+  "audience": "Firmware lead and systems engineer",
+  "date": "2026-03-12",
+  "author": "analyst (role)",
+  "sources": [
+    {"id": "S1", "title": "ADR-0001 filter decision", "location": "example-system/docs/ADR-0001.md", "date": "2026-01-05", "type": "repo"},
+    {"id": "S2", "title": "Timing budget", "location": "example-system/docs/TIMING.md", "date": "2026-02-01", "type": "repo"},
+    {"id": "S3", "title": "Filter unit tests (C and Python twins)", "location": "example-system/tests/test_filter.py", "date": "2026-02-20", "type": "repo"},
+    {"id": "S4", "title": "Tracker: open filter-related items", "location": "example-system/tracker.json", "date": "2026-03-10", "type": "data"}
+  ],
+  "findings": [
+    {"claim": "The 4-sample moving average was chosen for integer-only math and testability; weak roll-off was an accepted trade.", "sources": ["S1"], "confidence": "high"},
+    {"claim": "The control loop uses about 8 % of its 10 ms budget, so a heavier filter is affordable on timing grounds.", "sources": ["S2"], "confidence": "high"},
+    {"claim": "Existing tests pin exact integer outputs (C-style truncation); any new filter needs new golden values in both twins.", "sources": ["S3"], "confidence": "high"},
+    {"claim": "No open tracker item requests better filtering; the open high-severity work is power (sleep mode).", "sources": ["S4"], "confidence": "medium", "note": "Absence of a request is not evidence of no need."}
+  ],
+  "open_questions": [
+    "What vibration spectrum does the deployment actually see? No field data is in the repository.",
+    "Does the host already filter, making node-side changes redundant?"
+  ],
+  "recommendation": "Keep the moving average for now. Revisit only if field data shows aliasing above 10 Hz; prioritise sleep mode (SN-CAP-001) first.",
+  "next_steps": [
+    "Capture 60 s of raw IMU data from a bench unit and attach an FFT to this brief.",
+    "If a change is warranted, prototype the IIR in sim/sensor_node/filter.py behind the same API and update ADR-0001."
+  ]
+}

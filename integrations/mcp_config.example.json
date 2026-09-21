@@ -1,0 +1,31 @@
+{
+  "_comment": "Copy the entries you need into .devin/mcp_config.json (project) or the user-level mcp_config.json. Values in ${VAR} are read from your shell environment; never paste tokens here. Only reference-system works offline.",
+  "mcpServers": {
+    "reference-system": {
+      "command": "python3",
+      "args": ["integrations/reference-mcp/server.py"],
+      "env": {}
+    },
+    "jira-readonly": {
+      "_comment": "Read-only Jira Data Center connector (github.com/COG-GTM/jira-mcp): clone it next to this repo, pip install -r requirements.txt (mcp, httpx), PAT auth, project allowlist. Docker variant is in that repo's devin-desktop.example.json. Remove this block if not approved.",
+      "command": "python3",
+      "args": ["../jira-mcp/connector/server.py"],
+      "env": {
+        "JIRA_URL": "${JIRA_BASE}",
+        "JIRA_AUTH_MODE": "token",
+        "JIRA_TOKEN": "${JIRA_TOKEN}",
+        "JIRA_PROJECTS": "SN",
+        "JIRA_SSL_VERIFY": "true"
+      }
+    },
+    "github-readonly": {
+      "_comment": "github/github-mcp-server binary, read-only toolsets. Remove this block if not approved.",
+      "command": "github-mcp-server",
+      "args": ["stdio", "--read-only", "--toolsets", "issues,pull_requests,repos"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}",
+        "GITHUB_HOST": "${GITHUB_HOST}"
+      }
+    }
+  }
+}

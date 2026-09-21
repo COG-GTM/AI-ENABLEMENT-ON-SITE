@@ -21,3 +21,6 @@ node_modules/
 __pycache__/
 .pytest_cache/
 .venv/
+outputs/*
+!outputs/.gitkeep
+example-system/build/

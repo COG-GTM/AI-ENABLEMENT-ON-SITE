@@ -1,61 +1,63 @@
-# AI Enablement On Site
+# Devin Desktop workflow library
 
-A reusable, customer-neutral workspace for planning and delivering FedRAMP-only AI engineering enablement with Devin Desktop and Devin CLI.
+Ready-to-run workflows for Devin Desktop (Devin Local agent) in a Federal environment: research
+briefs, executive HTML decks, embedded design artifacts, what-if part swaps, spec-driven and
+test-driven development, architecture docs, bug/capability tracking, and connecting to your tools
+(CLI, REST API, MCP). Everything runs offline against a synthetic reference system. No customer data.
 
-## Operating boundary
+## Start here (2 minutes)
 
-- Use only the organization-approved Federal deployment and approved integrations.
-- Treat every tenant, endpoint, plugin, MCP server, and external service as out of scope until its authorization and approval are confirmed.
-- Use synthetic or explicitly approved sanitized data for every demonstration.
-- Do not store customer names, participant identities, credentials, proprietary artifacts, regulated data, or production data in this repository.
-- Do not perform production changes or destructive operations during demonstrations.
+1. Clone or fork this repository and open the folder in Devin Desktop.
+2. Devin reads `AGENTS.md` automatically and finds the skills under `.devin/skills/`.
+3. Paste one of the prompts below. That is it.
 
-This repository is an enablement kit, not evidence that a product, integration, workflow, or dataset is authorized for a particular environment.
+## Prompts to paste
 
-## Intended outcomes
-
-- Establish a safe and repeatable on-site engagement plan.
-- Demonstrate practical Devin Desktop and Devin CLI workflows.
-- Identify and prioritize high-value engineering use cases.
-- Capture decisions, action items, evidence, and follow-up without customer-identifying content.
-- Leave behind reusable templates for future sessions.
-
-## Start here
-
-1. Review the [engagement charter](docs/00-charter/charter.md).
-2. Complete the [environment readiness checklist](docs/01-readiness/environment-checklist.md).
-3. Confirm the [FedRAMP boundary](docs/03-security/fedramp-boundary.md) and [data-handling rules](docs/03-security/data-handling.md).
-4. Select scenarios from the [use-case catalog](use-cases/README.md).
-5. Build a session flow with the [demo script template](templates/demo-script.md).
-6. Run the [preflight checklist](docs/02-demo/preflight-checklist.md).
-7. Record sanitized notes in [notes](notes/README.md) and outcomes in [docs/04-outcomes](docs/04-outcomes/README.md).
-
-## Repository map
-
-| Path | Purpose |
+| You want | Paste this |
 | --- | --- |
-| `docs/00-charter/` | Intent, outcomes, agenda, roles, and open questions |
-| `docs/01-readiness/` | Environment, repository, access, and integration readiness |
-| `docs/02-demo/` | Run of show, facilitator guidance, preflight, and fallback plans |
-| `docs/03-security/` | FedRAMP boundary, data handling, approvals, and demo guardrails |
-| `docs/04-outcomes/` | Scorecard, adoption roadmap, and follow-up |
-| `use-cases/` | Broad catalog of reusable engineering scenarios |
-| `demo-workspaces/` | Reserved locations for synthetic demo assets |
-| `templates/` | Use-case, prompt, decision, demo, and session templates |
-| `notes/` | Sanitized decisions, action items, parking lot, and session notes |
-| `assets/` | Approved, sanitized diagrams and presentation assets |
+| A tour | `Reference this repo. What can you do here? Run the checks and show me.` |
+| Research | `/research-brief Should we swap IMU A for IMU B? --sources example-system/parts,example-system/docs` |
+| Executive deck (HTML) | `/exec-deck Build a leadership deck on the sensor node: requirements, top hazards, power budget, open bugs` |
+| Design artifacts | `/design-artifacts Add a requirement and hazard for low-battery shutdown at 3.0 V` |
+| What-if a new chip | `/what-if-part-swap Replace the IMU with imu-c and move the uplink to CAN` |
+| Spec first | `/spec-driven Add a diagnostics packet with reinit count and uptime` |
+| Tests first | `/tdd Make the temperature fault flag stay set until two in-range readings` |
+| Architecture doc | `/architecture-doc Document the sensor node firmware` |
+| Bugs and status | `/track-and-report Show open high-severity items and make a status report` |
+| Connect a tool | `/connect-tools I have a GitLab PAT; pull open issues for project 123 read-only` |
+| MCP server by hand | `/mcp-server run-reference` then `/mcp-server new-tool return the timing budget` |
+| Mimic on your code | `Mimic the /design-artifacts workflow on my project in ../my-firmware` |
 
-## Working with Devin
+Prompts can also be plain English; `AGENTS.md` maps phrases like "make me a deck" to the right skill.
 
-- Open this repository as the only workspace unless another approved directory is explicitly required.
-- Start in Plan or Normal mode and review proposed actions before allowing changes.
-- Use `@` in Devin CLI to attach only the files needed for the current task.
-- Prefer small, reviewable tasks with an explicit outcome, constraints, and verification command.
-- Inspect every diff and validation result before accepting or committing changes.
-- Do not use unrestricted permission modes for an on-site demonstration.
+## What is in the box
 
-See [Devin Desktop and CLI facilitator guidance](docs/02-demo/facilitator-guide.md) for a safe demonstration sequence.
+```
+AGENTS.md            Devin reads this first: rules + which skill to use for what (30 lines)
+.devin/skills/       10 skills, one folder each, one SKILL.md each
+.devin/mcp_config.json  registers the offline reference MCP server
+example-system/      synthetic battery sensor node: C firmware + Python twin, requirements, ICD,
+                     ADRs, hazards, power/timing budgets, parts data, bug tracker, tests
+tools/               small Python scripts the skills call (deck builder, research brief, what-if,
+                     tracker report, repo checker). Standard library only.
+integrations/        CLI, REST/curl, and MCP recipes for Jira, Confluence, GitLab, GitHub, Azure DevOps
+templates/           spec / plan templates and example inputs for the tools
+outputs/             where generated decks, briefs, and reports land (not committed)
+```
 
-## Repository status
+## Prove it works (30 seconds, offline)
 
-This initial scaffold contains no customer artifacts and no executable demo application. Add only synthetic examples that satisfy the repository rules in [AGENTS.md](AGENTS.md) and [SECURITY.md](SECURITY.md).
+```bash
+python tools/check_repo.py            # validates skills, links, content, runs every test
+make -C example-system test           # firmware twins: Python + C
+python tools/build_deck.py templates/deck-outline-example.json outputs/example-deck.html
+```
+
+Open `outputs/example-deck.html` in the browser preview to see a finished deck.
+
+Requirements: Python 3.10+. Optional: a C compiler and `make` for the C tests. No packages to install.
+
+## Rules in one breath
+
+Customer-neutral, synthetic data only, least privilege, read-only integrations by default, ask
+before any network access, never paste a token into chat. Details: `AGENTS.md`, `SECURITY.md`.

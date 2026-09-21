@@ -1,0 +1,20 @@
+{
+  "id": "imu-c",
+  "role": "imu",
+  "name": "IMU C - higher-performance candidate (synthetic)",
+  "interface": "i2c",
+  "i2c_address": "0x6B",
+  "supply_v": [2.4, 3.6],
+  "active_current_ma": 1.20,
+  "odr_hz": [100, 200, 400, 800, 1600],
+  "accel_range_g": 8,
+  "accel_lsb_per_g": 4096,
+  "gyro_range_dps": 1000,
+  "gyro_lsb_per_dps": 32.8,
+  "who_am_i": "0x71",
+  "data_ready_int": true,
+  "read_bytes_per_sample": 14,
+  "package": "LGA-16 3.0x3.0 mm",
+  "temp_range_c": [-40, 105],
+  "notes": "I2C only: would share the bus with temp-x. Different scale factors change ICD section 2 and the packet units."
+}

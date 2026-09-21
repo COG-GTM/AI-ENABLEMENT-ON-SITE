@@ -1,0 +1,14 @@
+{
+  "id": "mcu-m0",
+  "role": "mcu",
+  "name": "Generic 32 MHz Cortex-M0-class MCU (synthetic)",
+  "supply_v": [1.8, 3.6],
+  "active_current_ma": 6.0,
+  "sleep_current_ma": 0.010,
+  "uart_tx_current_ma": 2.0,
+  "flash_kb": 128,
+  "ram_kb": 16,
+  "interfaces": ["spi", "i2c", "uart", "can"],
+  "package": "QFN-48",
+  "notes": "Numbers are illustrative only."
+}
