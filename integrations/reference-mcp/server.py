@@ -82,7 +82,7 @@ def schema_errors(schema: dict, value: dict) -> list[str]:
             elif "pattern" in rule and not re.match(rule["pattern"], v):
                 errs.append(f"{key} must match {rule['pattern']}")
         elif rule["type"] == "number":
-            if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or (isinstance(v, float) and not math.isfinite(v)):
                 errs.append(f"{key} must be a finite number")
             elif v < rule.get("minimum", float("-inf")) or v > rule.get("maximum", float("inf")):
                 errs.append(f"{key} must be between {rule.get('minimum')} and {rule.get('maximum')}")
@@ -204,7 +204,10 @@ def serve(inp: io.TextIOBase, out: io.TextIOBase) -> None:
             out.write(json.dumps(err(None, -32700, "parse error")) + "\n")
             out.flush()
             continue
-        resp = handle(msg)
+        try:
+            resp = handle(msg)
+        except Exception as e:  # one bad request must never take the whole server down
+            resp = err(msg.get("id"), -32603, f"internal error: {type(e).__name__}")
         if resp is not None:
             out.write(json.dumps(resp) + "\n")
             out.flush()
