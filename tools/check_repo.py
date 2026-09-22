@@ -167,6 +167,7 @@ def check_tools() -> None:
     run([py, "tools/tracker_report.py"])
     run([py, "tools/what_if.py", "--imu", "imu-b"], allowed_codes=frozenset({0, 2}))  # 2 = budget FAIL, a valid result
     run([py, "tools/build_deck.py", "templates/deck-outline-example.json", "outputs/example-deck.html"])
+    run([py, "tools/export_pptx.py", "templates/deck-outline-example.json", "outputs/example-deck.pptx"])
     run([py, "tools/research_brief.py", "--check"])
     run([py, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=ROOT / "example-system")
     run([py, "-m", "unittest", "discover", "-s", "tools/tests", "-q"])
