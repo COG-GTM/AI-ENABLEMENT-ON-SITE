@@ -47,7 +47,8 @@ class Client:
             with urllib.request.urlopen(req, timeout=5) as r:
                 return r.status, dict(r.headers), json.load(r)
         except urllib.error.HTTPError as e:
-            body = e.read().decode()
+            with e:
+                body = e.read().decode()
             return e.code, dict(e.headers), json.loads(body) if body else None
 
 

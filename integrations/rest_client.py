@@ -79,6 +79,7 @@ def request(url: str, headers: dict, dry_run: bool):
         with urllib.request.urlopen(req, timeout=TIMEOUT_S, context=ctx) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
+        e.close()
         sys.exit(f"HTTP {e.code} from {urllib.parse.urlsplit(url).netloc}; check token scope and host")
     except urllib.error.URLError as e:
         sys.exit(f"connection failed: {e.reason}")
