@@ -28,17 +28,83 @@ validate() is the single shape check shared by this tool and export_pptx.py.
 
 import argparse
 import html
+import itertools
 import json
 import math
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 ALLOWED_TYPES = {"title", "bullets", "two-column", "table", "stats", "bars", "quote", "section"}
 MAX_SLIDES = 60
 MAX_BULLETS = 8
 MAX_TABLE_COLS, MAX_TABLE_ROWS = 12, 12  # one slide's worth in both outputs (HTML clips past 13 rows at 1280x720)
-TABLE_CHARS, TABLE_LINES = 72, 14  # characters across one table row, and wrapped lines (header included) both outputs can show
+TABLE_LINES = 14  # wrapped table lines (header included) both outputs can show
+TABLE_PX, CELL_PAD_PX, CELL_FONT_PX, HEAD_FONT_PX = 1136, 24, 19, 16  # HTML table at 1280x720; the PPTX cells are a little wider
+NARROW = set(" ijl.,:;!|'`fIt()[]{}-")
+# Emoji_Modifier_Base ranges from Unicode 15.1 emoji-data.txt: the only glyphs a skin-tone modifier merges into.
+MODIFIER_BASE = (
+    "261D-261D 26F9-26F9 270A-270D 1F385-1F385 1F3C2-1F3C4 1F3C7-1F3C7 1F3CA-1F3CC 1F442-1F443 1F446-1F450"
+    " 1F466-1F478 1F47C-1F47C 1F481-1F483 1F485-1F487 1F48F-1F48F 1F491-1F491 1F4AA-1F4AA 1F574-1F575"
+    " 1F57A-1F57A 1F590-1F590 1F595-1F596 1F645-1F647 1F64B-1F64F 1F6A3-1F6A3 1F6B4-1F6B6 1F6C0-1F6C0"
+    " 1F6CC-1F6CC 1F90C-1F90C 1F90F-1F90F 1F918-1F91F 1F926-1F926 1F930-1F939 1F93C-1F93E 1F977-1F977"
+    " 1F9B5-1F9B6 1F9B8-1F9B9 1F9BB-1F9BB 1F9CD-1F9CF 1F9D1-1F9DD 1FAC3-1FAC5 1FAF0-1FAF8"
+)
+# Emoji outside _pictograph's ranges (Unicode 15.1 emoji-data.txt): Emoji_Presentation glyphs are always one em,
+# text-default ones (©, ↔, ™ ...) only with VS16 after them. # * 0-9 are emoji only as keycaps.
+EMOJI_DEFAULT = "231A-231B 23E9-23EC 23F0-23F0 23F3-23F3 25FD-25FE 2B1B-2B1C 2B50-2B50 2B55-2B55"
+EMOJI_TEXT = (
+    "00A9-00A9 00AE-00AE 203C-203C 2049-2049 2122-2122 2139-2139 2194-2199 21A9-21AA 2328-2328 23CF-23CF 23ED-23EF"
+    " 23F1-23F2 23F8-23FA 24C2-24C2 25AA-25AB 25B6-25B6 25C0-25C0 25FB-25FC 2934-2935 2B05-2B07 3030-3030 303D-303D"
+    " 3297-3297 3299-3299"
+)
+# All 254 RGI zero-width-joiner sequences of Unicode 15.1 emoji-zwj-sequences.txt with skin tones, VS16 and the
+# joiners removed. One line per pattern; [a b -] is a choice, "-" meaning nothing.
+ZWJ_SEQUENCES = """
+[26F9 1F3C4 1F3CA 1F3CB 1F3CC 1F46E 1F46F 1F470 1F471 1F473 1F477 1F481 1F482 1F486 1F487 1F575 1F645 1F646 1F647 1F64B
+ 1F64D 1F64E 1F6A3 1F6B4 1F6B5 1F926 1F935 1F937 1F938 1F939 1F93C 1F93D 1F93E 1F9B8 1F9B9 1F9CD 1F9CF 1F9D4 1F9D6 1F9D7
+ 1F9D8 1F9D9 1F9DA 1F9DB 1F9DC 1F9DD 1F9DE 1F9DF] [2640 2642]
+[1F3C3 1F6B6 1F9CE] [2640 2642]
+[1F3C3 1F6B6 1F9CE] [2640 2642 -] 27A1
+[1F468 1F469 1F9D1] [1F9AF 1F9BC 1F9BD] [27A1 -]
+[1F468 1F469 1F9D1] [2695 2696 2708 1F33E 1F373 1F37C 1F393 1F3A4 1F3A8 1F3EB 1F3ED 1F4BB 1F4BC 1F527 1F52C 1F680 1F692
+ 1F9B0 1F9B1 1F9B2 1F9B3]
+1F468 2764 [1F48B -] 1F468
+1F469 2764 [1F48B -] [1F468 1F469]
+1F9D1 2764 [1F48B -] 1F9D1
+1F468 1F91D 1F468
+1F469 1F91D [1F468 1F469]
+1F9D1 1F91D 1F9D1
+1F468 [1F468 1F469 -] 1F466 [1F466 -]
+1F468 [1F468 1F469 -] 1F467 [1F466 1F467 -]
+1F469 [1F469 -] 1F466 [1F466 -]
+1F469 [1F469 -] 1F467 [1F466 1F467 -]
+1F9D1 [1F9D1 -] 1F9D2 [1F9D2 -]
+1F9D1 1F384
+2764 [1F525 1FA79]
+1FAF1 1FAF2
+26D3 1F4A5
+1F344 1F7EB
+1F34B 1F7E9
+1F3F3 [26A7 1F308]
+1F3F4 2620
+1F408 2B1B
+1F415 1F9BA
+1F426 [2B1B 1F525]
+1F43B 2744
+1F441 1F5E8
+1F62E 1F4A8
+1F635 1F4AB
+1F636 1F32B
+1F642 [2194 2195]
+"""
+ZWJ_SEQUENCES = {
+    tuple(chr(int(c, 16)) for c in combo if c != "-")
+    for line in ZWJ_SEQUENCES.replace("\n ", " ").strip().splitlines()
+    for combo in itertools.product(*(t.strip("[]").split() for t in re.findall(r"\[[^]]*]|\S+", line)))
+}
+ZWJ_LONGEST = max(map(len, ZWJ_SEQUENCES))
 MAX_TEXT = 2000
 DEFAULT_ACCENT = "#2600FF"
 ACCENT_RE = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -115,22 +181,102 @@ def _number(v, where: str) -> None:
         raise SystemExit(f"{where}: expected a finite number")
 
 
+def _in(ch: str, ranges: str) -> bool:
+    """True when ch falls in one of the space-separated hex ranges "LO-HI"."""
+    return bool(ch) and any(int(lo, 16) <= ord(ch) <= int(hi, 16) for lo, hi in (r.split("-") for r in ranges.split()))
+
+
+def _pictograph(ch: str) -> bool:
+    return "\U0001F000" <= ch <= "\U0001FAFF" or "\u2600" <= ch <= "\u27bf"
+
+
+def _mark(ch: str) -> bool:
+    return unicodedata.category(ch) in ("Mn", "Me", "Cf")
+
+
+def _component(text: str, i: int) -> int:
+    """End of the emoji component at text[i]: the glyph, an optional VS16, and a skin tone if the glyph takes one."""
+    j = i + 1 + (text[i + 1:i + 2] == "\ufe0f")
+    return j + ("\U0001F3FB" <= text[j:j + 1] <= "\U0001F3FF" and _in(text[i], MODIFIER_BASE))
+
+
+def glyph_units(text: str) -> list:
+    """Per code point advance width in tenths of an em, rounded up for an Arial-class sans font.
+
+    Marks and format characters are 0, and so is the rest of an emoji sequence that renders as one glyph: a
+    skin tone on an Emoji_Modifier_Base, the second half of a flag pair, and the components joined by ZWJ into
+    an RGI sequence (longest match in ZWJ_SEQUENCES; a chain that is no RGI sequence shows every component).
+    A keycap widens its digit to a full em; a keycap mark on anything else is an ordinary zero-width mark.
+    Linear in len(text): a chain is matched at most ZWJ_LONGEST components at a time.
+    """
+    units, i = [], 0
+    while i < len(text):
+        if _mark(text[i]):
+            units.append(0)
+            i += 1
+            continue
+        heads, j = [i], _component(text, i)  # start of each component in the ZWJ chain; end of the chain
+        while text[j:j + 1] == "\u200d" and j + 1 < len(text) and not _mark(text[j + 1]):
+            heads.append(j + 1)
+            j = _component(text, j + 1)
+        if len(heads) == 1 and text[j:j + 1] == "\u20e3" and text[i] in "#*0123456789":  # keycap: digit, VS16?, mark
+            units += [_advance(text[i])] + [0] * (j - i - 1) + [4]
+            i = j + 1
+        elif len(heads) == 1 and j == i + 1 and all("\U0001F1E6" <= c <= "\U0001F1FF" for c in text[i:j + 1]) and j < len(text):
+            units += [10, 0]  # flag: a regional-indicator pair
+            i = j + 1
+        else:
+            seg, k = [0] * (j - i), 0
+            while k < len(heads):
+                n = 1  # components the (sub)sequence starting at heads[k] spans; its first one carries the width
+                for m in range(min(ZWJ_LONGEST, len(heads) - k), 1, -1):
+                    if tuple(text[h] for h in heads[k:k + m]) in ZWJ_SEQUENCES:
+                        n = m
+                        break
+                h = heads[k]
+                seg[h - i] = _advance(text[h], text[h + 1:h + 2] == "\ufe0f")
+                k += n
+            units += seg
+            i = j
+    return units
+
+
+def _advance(ch: str, vs16: bool = False) -> int:
+    if _pictograph(ch) or "\U0001F1E6" <= ch <= "\U0001F1FF" or unicodedata.east_asian_width(ch) in ("W", "F"):
+        return 10
+    if _in(ch, EMOJI_DEFAULT) or (vs16 and _in(ch, EMOJI_TEXT)):
+        return 10
+    if ch in NARROW:
+        return 3
+    if ch in "MWmw@%&":
+        return 9
+    return 7 if ch.isupper() else 6
+
+
 def wrapped_lines(text, width: int) -> int:
-    """Greedy word wrap: lines a cell `width` characters wide needs for text."""
+    """Greedy word wrap: lines a cell `width` units wide needs for text; over-long words break by glyph."""
     lines, used = 1, 0
     for w in str(text).split():
-        if used and used + 1 + len(w) <= width:
-            used += 1 + len(w)
-        else:
-            lines += (used > 0) + (len(w) - 1) // width
-            used = (len(w) - 1) % width + 1
+        units = glyph_units(w)
+        if used and used + 3 + sum(units) <= width:
+            used += 3 + sum(units)
+            continue
+        lines += used > 0
+        used = 0
+        for u in units:
+            if used and used + u > width:
+                lines, used = lines + 1, 0
+            used += u
     return lines
 
 
 def table_lines(columns: list, rows: list) -> list:
-    """Wrapped line count of the header and of each row, at TABLE_CHARS shared equally across the columns."""
-    width = max(1, TABLE_CHARS // len(columns))
-    return [max(wrapped_lines(c, width) for c in r) for r in (columns, *rows)]
+    """Wrapped line count of the header (upper-cased, smaller font) and of each row, columns sharing the width equally."""
+    width = max(1, int((TABLE_PX / len(columns) - CELL_PAD_PX) / CELL_FONT_PX * 10))
+    head = width * CELL_FONT_PX // HEAD_FONT_PX
+    return [max(wrapped_lines(str(c).upper(), head) for c in columns)] + [
+        max(wrapped_lines(c, width) for c in r) for r in rows
+    ]
 
 
 def validate(outline) -> dict:

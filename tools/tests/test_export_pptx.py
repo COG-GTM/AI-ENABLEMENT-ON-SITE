@@ -6,6 +6,7 @@ import posixpath
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -158,23 +159,56 @@ class ExportPptxTests(unittest.TestCase):
 
     def test_wrapped_table_text_is_bounded_in_both_outputs(self):
         """Cells wrap in narrow columns; both renderers must refuse a table whose wrapped text cannot fit one slide."""
-        wrap = build_deck.wrapped_lines
-        self.assertEqual([wrap("", 6), wrap("abc def", 7), wrap("abc def", 6), wrap("abcdefghijkl", 6), wrap("abcdefg hi jk", 6)],
-                         [1, 1, 2, 2, 3])
+        wrap, cjk = build_deck.wrapped_lines, "\u6771\u4eac\u90fd\u5e81\u820d\u524d"  # six wide glyphs
+        w12 = 37  # width units (tenths of an em) of a 12-column cell
+        self.assertEqual([wrap("", w12), wrap("abc def", w12), wrap("abc def", w12 - 2), wrap("abcdefghijkl", w12)], [1, 1, 2, 2])
+        self.assertEqual([wrap(cjk, w12), wrap("e\u0301" * 6, w12), wrap("abcdef", w12), wrap("ABCDEF", w12)], [2, 1, 1, 2])
+        thumbs, family, flags = "\U0001F44D\U0001F3FD" * 2, "\U0001F468\u200d\U0001F469\u200d\U0001F467", "\U0001F1FA\U0001F1F8" * 2
+        astronaut, heart_fire = "\U0001F468\U0001F3FD\u200d\U0001F680", "\u2764\ufe0f\u200d\U0001F525"
+        point, couple = "\u261d\ufe0f\U0001F3FD", "\U0001F469\U0001F3FD\u200d\u2764\ufe0f\u200d\U0001F468\U0001F3FB"  # modifier after VS16 / a joined person
+        chain, cat, shake, key = "\u26d3\ufe0f\u200d\U0001F4A5", "\U0001F408\u200d\u2b1b", "\U0001F642\u200d\u2194\ufe0f", "1\ufe0f\u20e3"
+        self.assertEqual(  # one em per emoji sequence
+            [sum(build_deck.glyph_units(s)) for s in (thumbs, family, flags, astronaut, heart_fire, point, couple, chain, cat, shake, key)],
+            [20, 10, 20, 10, 10, 10, 10, 10, 10, 10, 10],
+        )
+        loose = (  # not emoji sequences, every glyph shows: letters round a joiner, modifier on nothing / a letter /
+            "A\u200dB", "\U0001F3FD", "a\U0001F3FD", "\U0001F3E0\U0001F3FB",  # a house (not a modifier base),
+            "\U0001F44D\U0001F3FD\U0001F3FD", "\U0001F3E0\u200d\U0001F3E0", "\U0001F44D\u200dZ",  # second modifier, joined houses
+            "\u26d3\ufe0f\u200d\U0001F600", "\U0001F468\u200d\U0001F600",  # joins that are not RGI sequences,
+            "\U0001F466\u200d\U0001F466", "\U0001F468\u200d\U0001F469\u200d\U0001F467\u200d\U0001F600",  # even as fragments of one
+            "\U0001F44D\u200c\U0001F3FD", "\U0001F44D\u200c\u200d\U0001F680",  # a non-joiner breaks the cluster
+            "A\u20e3", "\u20e3",  # keycap on a letter / alone
+        )
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in loose], [14, 10, 16, 20, 20, 20, 17, 20, 20, 20, 20, 20, 20, 7, 0])
+        self.assertEqual(len(build_deck.ZWJ_SEQUENCES), 254)  # every RGI ZWJ sequence, tones/VS16 stripped
+        variants = ("\u00a9\ufe0f", "\u2122\ufe0f", "\u2194\ufe0f", "\u2b05\ufe0f", "\u2b1b", "\u2b50")  # emoji below U+2600 / above U+27BF
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in variants], [10] * 6)
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in ("\u00a9", "\u2b05", "A\ufe0f")], [6, 6, 7])  # text presentation
+        chain = "\u200d".join(["\U0001F600"] * 1000)  # 1999 code points, no RGI sequence: 1000 glyphs, in linear time
+        start = time.monotonic()
+        self.assertEqual(sum(build_deck.glyph_units(chain)), 10000)
+        self.assertEqual(len(build_deck.table_lines(list("abcdefghijkl"), [[chain] * 12] * 12)), 13)
+        self.assertLess(time.monotonic() - start, 10)  # a superlinear scan takes minutes on this table
         cols = list("abcdefghijkl")
-        long = "Battery depletion mitigation remains open"  # 8 lines in a 12-column cell
-        self.assertEqual(build_deck.table_lines(cols, [[long] + cols[1:]]), [1, 8])
-        tall = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[long] + cols[1:]] * 2}]}
-        for build in (build_deck.build, export_pptx.build_parts):  # 17 lines: too tall for either output
-            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
-                build(tall)
-            self.assertIn("shorten cells or split the slide", cm.exception.code)
-        tall["slides"][0]["rows"].pop()  # 9 lines: fits, and the wrapped row gets the height its lines need
+        emoji = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[thumbs] * 12] * 12}]}
+        for build in (build_deck.build, export_pptx.build_parts):  # 13 lines: fits
+            build(emoji)
+        long = "Battery depletion mitigation remains open"  # 7 lines in a 12-column cell
+        self.assertEqual(build_deck.table_lines(cols, [[long] + cols[1:]]), [1, 7])
+        self.assertEqual(build_deck.table_lines([cjk] * 12, [[cjk] * 12]), [2, 2])
+        copyright = " ".join(["\u00a9\ufe0f"] * 4)  # four one-em emoji: two lines in a 12-column cell
+        for rows in ([[long] + cols[1:]] * 2, [[cjk] * 12] * 12, [[copyright] * 12] * 12):  # 15, 25, 25 lines: too tall for either output
+            tall = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": rows}]}
+            for build in (build_deck.build, export_pptx.build_parts):
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                    build(tall)
+                self.assertIn("shorten cells or split the slide", cm.exception.code)
+        tall["slides"][0]["rows"] = [[long] + cols[1:]]  # 8 lines: fits, and the wrapped row gets the height its lines need
         out = export(tall, self.tmp)
         with zipfile.ZipFile(out) as z:
             rows = ET.fromstring(z.read("ppt/slides/slide1.xml")).findall(f".//{NS_A}tr")
         head_h, row_h = (int(r.get("h")) for r in rows)
-        self.assertGreaterEqual(row_h - head_h, 7 * 1400 * 1524 // 10)  # 7 extra lines of 14 pt text
+        self.assertGreaterEqual(row_h - head_h, 6 * 1400 * 1524 // 10)  # 6 extra lines of 14 pt text
         self.assertLessEqual(head_h + row_h, export_pptx.BODY_H)
 
     def test_concurrent_exports_to_one_destination(self):
