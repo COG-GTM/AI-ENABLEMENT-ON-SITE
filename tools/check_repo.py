@@ -58,17 +58,21 @@ BACKTICK_PATH_RE = re.compile(r"`((?:\.devin|\.agents|example-system|integration
 # Absolute paths in code spans need a second segment or a trailing slash (`/tmp/`, `/usr/bin`), see CONTRIBUTING.md.
 INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
 SLASH_CMD_RE = re.compile(r"^/([a-z][a-z0-9-]*)(?=\s|$|[.,;:!?](?:\s|$))")
-FENCE_RE = re.compile(r"^\s*(```|~~~)")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
 def slash_commands(text: str) -> set[str]:
     found = set()
-    in_fence = False
+    fence = ""  # opening fence marker; a block closes only on the same character, at least as long, alone on its line
     for line in text.splitlines():
-        if FENCE_RE.match(line):
-            in_fence = not in_fence
+        m = FENCE_RE.match(line)
+        if m and not fence:
+            fence = m.group(1)
             continue
-        spans = [line.strip()] if in_fence else INLINE_CODE_RE.findall(line)
+        if m and fence and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not m.group(2).strip():
+            fence = ""
+            continue
+        spans = [line.strip()] if fence else INLINE_CODE_RE.findall(line)
         for span in spans:
             m = SLASH_CMD_RE.match(span.strip())
             if m:

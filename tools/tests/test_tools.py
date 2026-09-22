@@ -153,12 +153,18 @@ class CheckRepoTests(unittest.TestCase):
             "~~~",
             "  /spec-driven Add a diagnostics packet",
             "~~~",
+            "````md",
+            "~~~",
+            "```",
+            "/track-and-report status",
+            "````",
             "prose mentions like /not-a-command or \"/quoted\" are not references",
             "paths in code: `/tmp/`, `/usr/bin/python3`, `/config.json`, `/workspace/`, `./relative`, `outputs/x.md`",
             "URLs: `https://example.invalid/not-a-skill` and prompts: `Mimic the /design-artifacts workflow`",
         ])
         self.assertEqual(check_repo.slash_commands(text),
-                         {"what-if-part-swap", "exec-deck", "tdd", "research-brief", "tour", "spec-driven"})
+                         {"what-if-part-swap", "exec-deck", "tdd", "research-brief", "tour", "spec-driven",
+                          "track-and-report"})
 
 
 class TrackerReportTests(unittest.TestCase):
