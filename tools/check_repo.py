@@ -54,6 +54,8 @@ TEXT_EXT = {".md", ".json", ".py", ".c", ".h", ".txt", ".sh", ".yaml", ".yml", "
 
 LINK_RE = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
 BACKTICK_PATH_RE = re.compile(r"`((?:\.devin|\.agents|example-system|integrations|templates|tools|outputs)/[^`\s*]+)`")
+# `/skill`, a fenced line starting with /skill, or "paste /skill ..."; not URL or path segments (preceded by a letter, `:` or `/`).
+SLASH_RE = re.compile(r"(?:^|(?<=[\s`(|]))/([a-z][a-z0-9-]*)(?=[\s`)|]|$)", re.M)
 
 problems: list[str] = []
 
@@ -113,7 +115,7 @@ def check_skills() -> set[str]:
 
 def check_agents(skill_names: set[str]) -> None:
     text = AGENTS.read_text()
-    listed = set(re.findall(r"`/([a-z0-9-]+)`", text))
+    listed = set(SLASH_RE.findall(text))
     for s in listed - skill_names:
         fail(f"AGENTS.md lists /{s} but .devin/skills/{s}/SKILL.md does not exist")
     for s in skill_names - listed:
@@ -125,7 +127,7 @@ def check_agents(skill_names: set[str]) -> None:
         if not p.exists():
             fail(f"{doc} is missing")
             continue
-        for s in set(re.findall(r"`/([a-z0-9-]+)", p.read_text())) - skill_names:
+        for s in set(SLASH_RE.findall(p.read_text())) - skill_names:
             fail(f"{doc} mentions /{s} but .devin/skills/{s}/SKILL.md does not exist")
 
 

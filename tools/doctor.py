@@ -55,31 +55,49 @@ def check_mcp_config() -> dict:
         cfg = json.loads(f.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
         return row("MCP config", "FAIL", f"{f.relative_to(ROOT)} unreadable: {type(e).__name__}")
-    servers = cfg.get("mcpServers")
+    servers = cfg.get("mcpServers") if isinstance(cfg, dict) else None
     if not isinstance(servers, dict) or not servers:
         return row("MCP config", "FAIL", "mcpServers must be a non-empty object")
     problems = []
     for name, entry in servers.items():
-        if not isinstance(entry, dict) or not isinstance(entry.get("command"), str):
+        if not isinstance(entry, dict):
+            problems.append(f"{name}: entry must be an object")
+            continue
+        cmd = entry.get("command")
+        if not isinstance(cmd, str) or not cmd.strip():
             problems.append(f"{name}: missing command")
             continue
-        for a in entry.get("args", []):
-            if isinstance(a, str) and a.endswith(".py") and not (ROOT / a).exists():
+        if not resolve_command(cmd):
+            problems.append(f"{name}: command {cmd!r} not found on PATH")
+        args = entry.get("args", [])
+        if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
+            problems.append(f"{name}: args must be a list of strings")
+            continue
+        for a in args:
+            if a.endswith(".py") and not (ROOT / a).exists():
                 problems.append(f"{name}: {a} not found")
     if problems:
         return row("MCP config", "FAIL", "; ".join(problems))
     return row("MCP config", "OK", f"{len(servers)} server(s): " + ", ".join(servers))
 
 
+def resolve_command(cmd: str) -> bool:
+    if os.sep in cmd or "/" in cmd:
+        p = Path(cmd) if Path(cmd).is_absolute() else ROOT / cmd
+        return p.is_file() and os.access(p, os.X_OK)
+    return shutil.which(cmd) is not None
+
+
 def check_outputs_writable() -> dict:
     d = ROOT / "outputs"
+    target = d if d.is_dir() else ROOT
     try:
-        d.mkdir(exist_ok=True)
-        with tempfile.NamedTemporaryFile(dir=d, prefix=".doctor-", delete=True):
+        with tempfile.NamedTemporaryFile(dir=target, prefix=".doctor-", delete=True):
             pass
     except OSError as e:
         return row("outputs/ writable", "FAIL", type(e).__name__)
-    return row("outputs/ writable", "OK", str(d.relative_to(ROOT)) + "/")
+    note = "" if d.is_dir() else " (not created yet; tools create it on first run)"
+    return row("outputs/ writable", "OK", "outputs/" + note)
 
 
 def check_c_toolchain() -> dict:

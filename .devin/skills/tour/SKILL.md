@@ -21,7 +21,7 @@ Everything below runs offline. If a command is refused or fails, say so plainly 
 ## Steps
 
 1. Readiness: `python tools/doctor.py`. Read the table to the user in one line
-   ("Python 3.12, 11 skills, MCP config OK, C compiler present/absent, no network needed").
+   (Python version, how many skills were found, MCP config OK or not, C compiler present or absent, no network needed).
 2. Proof: `python tools/check_repo.py`. Report the final `OK:` line or the first problem.
 3. Something to look at: `python tools/build_deck.py templates/deck-outline-example.json outputs/example-deck.html`,
    then open `outputs/example-deck.html` in the preview. Mention arrow keys and `P` to print.

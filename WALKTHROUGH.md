@@ -14,7 +14,7 @@ say while it runs, and a recovery move if something stalls. Everything is offlin
 Paste: `Reference this repo. What can you do here? Run the checks and show me.`
 
 Say: this is a plain folder. Nothing to install, no network. Devin reads one file, `AGENTS.md`, and
-finds eleven skills. Watch it check the laptop, run every test, and open a deck it did not write yet.
+counts the skills. Watch it check the laptop, run every test, and open a deck it did not write yet.
 
 Point at: the doctor table, the `OK:` line, the deck in the preview. Hit the right arrow twice.
 

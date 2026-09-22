@@ -46,7 +46,7 @@ Prompts can also be plain English; `AGENTS.md` maps phrases like "make me a deck
 AGENTS.md            Devin reads this first: rules + which skill to use for what (under 40 lines)
 WORKFLOWS.md         5 pipelines: which skills to run in what order, and what each stage leaves behind
 WALKTHROUGH.md              25-minute speaker path for showing the repo live
-.devin/skills/       11 skills, one folder each, one SKILL.md each
+.devin/skills/       one folder per skill, one SKILL.md each (cap: 12)
 .devin/mcp_config.json  registers the offline reference MCP server
 example-system/      synthetic battery sensor node: C firmware + Python twin, requirements, ICD,
                      ADRs, hazards, power/timing budgets, parts data, bug tracker, tests

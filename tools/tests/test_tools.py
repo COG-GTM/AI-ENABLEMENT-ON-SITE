@@ -58,6 +58,39 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(r["status"], "FAIL")
         self.assertIn("missing/server.py", r["detail"])
 
+    def test_malformed_mcp_shapes_fail_instead_of_raising(self):
+        cases = {
+            "[]": "non-empty object",
+            '{"mcpServers": {"x": 5}}': "must be an object",
+            '{"mcpServers": {"x": {"command": ""}}}': "missing command",
+            '{"mcpServers": {"x": {"command": "python3", "args": null}}}': "list of strings",
+            '{"mcpServers": {"x": {"command": "no-such-binary-for-doctor"}}}': "not found on PATH",
+        }
+        real = doctor.ROOT
+        with tempfile.TemporaryDirectory() as td:
+            fake = Path(td)
+            (fake / ".devin").mkdir()
+            doctor.ROOT = fake
+            try:
+                for body, expect in cases.items():
+                    (fake / ".devin" / "mcp_config.json").write_text(body)
+                    r = doctor.check_mcp_config()
+                    self.assertEqual(r["status"], "FAIL", body)
+                    self.assertIn(expect, r["detail"], body)
+            finally:
+                doctor.ROOT = real
+
+    def test_outputs_check_does_not_create_directory(self):
+        real = doctor.ROOT
+        with tempfile.TemporaryDirectory() as td:
+            doctor.ROOT = Path(td)
+            try:
+                r = doctor.check_outputs_writable()
+            finally:
+                doctor.ROOT = real
+            self.assertEqual(r["status"], "OK")
+            self.assertFalse((Path(td) / "outputs").exists())
+
 
 class CheckRepoTests(unittest.TestCase):
     def _with_skills(self, skills: dict[str, str]):
@@ -96,6 +129,19 @@ class CheckRepoTests(unittest.TestCase):
         check_repo.check_agents({"tour"})
         self.assertTrue(any("README.md mentions /exec-deck" in p for p in check_repo.problems))
         check_repo.problems = []
+
+    def test_slash_regex_sees_fenced_and_plain_forms_but_not_paths(self):
+        import check_repo
+        text = "\n".join([
+            "| swap a part | `/what-if-part-swap` |",
+            "```text",
+            "/exec-deck Design review deck",
+            "```",
+            "then paste /tdd and wait",
+            "see tools/build_deck.py and https://example.invalid/not-a-skill",
+            "outputs/x.md and example-system/docs/ICD.md",
+        ])
+        self.assertEqual(set(check_repo.SLASH_RE.findall(text)), {"what-if-part-swap", "exec-deck", "tdd"})
 
 
 class TrackerReportTests(unittest.TestCase):
