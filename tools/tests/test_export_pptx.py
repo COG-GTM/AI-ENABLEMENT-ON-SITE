@@ -164,8 +164,11 @@ class ExportPptxTests(unittest.TestCase):
         self.assertEqual([wrap(cjk, w12), wrap("e\u0301" * 6, w12), wrap("abcdef", w12), wrap("ABCDEF", w12)], [2, 1, 1, 2])
         thumbs, family, flags = "\U0001F44D\U0001F3FD" * 2, "\U0001F468\u200d\U0001F469\u200d\U0001F467", "\U0001F1FA\U0001F1F8" * 2
         astronaut, heart_fire = "\U0001F468\U0001F3FD\u200d\U0001F680", "\u2764\ufe0f\u200d\U0001F525"
+        point, couple = "\u261d\ufe0f\U0001F3FD", "\U0001F469\U0001F3FD\u200d\u2764\ufe0f\u200d\U0001F468\U0001F3FB"  # modifier after VS16 / a joined person
+        chain, cat, shake, key = "\u26d3\ufe0f\u200d\U0001F4A5", "\U0001F408\u200d\u2b1b", "\U0001F642\u200d\u2194\ufe0f", "1\ufe0f\u20e3"
         self.assertEqual(  # one em per emoji sequence
-            [sum(build_deck.glyph_units(s)) for s in (thumbs, family, flags, astronaut, heart_fire)], [20, 10, 20, 10, 10]
+            [sum(build_deck.glyph_units(s)) for s in (thumbs, family, flags, astronaut, heart_fire, point, couple, chain, cat, shake, key)],
+            [20, 10, 20, 10, 10, 10, 10, 10, 10, 10, 10],
         )
         loose = (  # not emoji sequences, every glyph shows: letters round a joiner, modifier on nothing / a letter /
             "A\u200dB", "\U0001F3FD", "a\U0001F3FD", "\U0001F3E0\U0001F3FB",  # a house (not a modifier base),
