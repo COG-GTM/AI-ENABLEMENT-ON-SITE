@@ -7,9 +7,9 @@
     python tools/trace_matrix.py --system ../my-firmware   # same layout: docs/SRS.md, docs/HAZARDS.md, tests/, tracker.json
 
 Reads the SRS and hazard tables, scans every test file for requirement IDs, and joins the tracker.
-Exit 1 when a requirement has no test and no analysis artifact, a `test_name` in "Verified by" does
-not exist, a hazard with risk >= 8 has no mitigation requirement, or an Open hazard has no tracker
-item. Standard library only; never touches the network.
+Exit 1 when a requirement has no test and no analysis artifact, a `test_name` or `FILE.md` in
+"Verified by" does not exist, a hazard with risk >= 8 has no mitigation requirement, or an Open
+hazard has no tracker item. Standard library only; never touches the network.
 """
 
 import argparse
@@ -27,7 +27,8 @@ ROW_RE = re.compile(r"^\|\s*([A-Z]{2,6}-(?:REQ|HAZ)-\d{3})\s*\|(.*)\|\s*$")
 PY_TEST_RE = re.compile(r"^\s*def\s+(test_\w+)\s*\(")
 C_TEST_RE = re.compile(r"^\s*(?:static\s+)?void\s+(test_\w+)\s*\(")
 NAMED_TEST_RE = re.compile(r"`(test_\w+)`")
-ANALYSIS_HINTS = ("review", "analysis", "inspection", ".md", "make test")
+ARTIFACT_RE = re.compile(r"[\w./-]+\.md\b")
+ANALYSIS_HINTS = ("review", "analysis", "inspection", "make test")
 HIGH_RISK = 8
 
 
@@ -124,6 +125,18 @@ def scan_tests(tests_dir: Path) -> tuple[dict[str, dict[str, list[str]]], set[st
     return found, names
 
 
+def artifacts(system: Path, verified_by: str) -> tuple[list[str], list[str]]:
+    """(.md artifacts named in a "Verified by" cell that exist under docs/ or the system root, those that do not)."""
+    present, missing = [], []
+    for name in ARTIFACT_RE.findall(verified_by):
+        safe = ".." not in name.split("/")
+        if safe and any((d / name).is_file() for d in (system / "docs", system)):
+            present.append(name)
+        else:
+            missing.append(name)
+    return present, missing
+
+
 def read_tracker(path: Path) -> list[dict]:
     if not path.exists():
         return []
@@ -143,6 +156,9 @@ def build(system: Path) -> dict:
         for name in NAMED_TEST_RE.findall(r["verified_by"]):
             if name not in test_names:
                 problems.append(f"{r['id']} says verified by `{name}` but no such test exists")
+        r["artifacts"], missing = artifacts(system, r["verified_by"])
+        for name in missing:
+            problems.append(f"{r['id']} says verified by {name} but no such file exists")
 
     for rid, t in tests.items():
         if rid in reqs:
@@ -176,7 +192,7 @@ def build(system: Path) -> dict:
         n_py, n_c = len(r["tests"]["python"]), len(r["tests"]["c"])
         if n_py or n_c:
             r["verdict"] = "tested" if (n_py and n_c) else "tested (one twin)"
-        elif any(k in r["verified_by"].lower() for k in ANALYSIS_HINTS):
+        elif r["artifacts"] or any(k in r["verified_by"].lower() for k in ANALYSIS_HINTS):
             r["verdict"] = "analysis"
         else:
             r["verdict"] = "UNTESTED"

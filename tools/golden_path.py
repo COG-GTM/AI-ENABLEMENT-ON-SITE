@@ -29,11 +29,12 @@ PY = sys.executable
 ID_RE = re.compile(r"\b[A-Z]{2,6}-(?:REQ|HAZ|BUG|CAP)-\d{3}\b")
 
 results: list[dict] = []
+progress = sys.stdout  # stderr in --json mode so stdout stays pure JSON
 
 
 def record(stage: str, ok: bool, detail: str) -> bool:
     results.append({"stage": stage, "ok": ok, "detail": detail})
-    print(f"{'ok  ' if ok else 'FAIL'} {stage}: {detail}")
+    print(f"{'ok  ' if ok else 'FAIL'} {stage}: {detail}", file=progress)
     return ok
 
 
@@ -55,7 +56,7 @@ def stage_doctor() -> None:
     except json.JSONDecodeError:
         record("doctor", False, f"no JSON on stdout (exit {r.returncode})")
         return
-    failing = [c["name"] for c in d.get("checks", []) if c.get("status") == "fail"]
+    failing = [c.get("check", "?") for c in d.get("checks", []) if c.get("status") == "FAIL"]
     record("doctor", r.returncode == 0 and d.get("ready") is True and not failing,
            f"ready={d.get('ready')} failing={failing or 'none'}")
 
@@ -231,6 +232,9 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--skip-tests", action="store_true", help="skip the unit-test suites")
     a = ap.parse_args(argv)
+    global progress
+    progress = sys.stderr if a.json else sys.stdout
+    results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp]
     if not a.skip_tests:

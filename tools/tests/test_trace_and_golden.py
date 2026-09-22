@@ -4,6 +4,7 @@ import io
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -25,6 +26,7 @@ def make_system(tmp: Path, srs: str, hazards: str, tests: dict[str, str], tracke
     (sysdir / "tests").mkdir()
     (sysdir / "docs" / "SRS.md").write_text(srs, encoding="utf-8")
     (sysdir / "docs" / "HAZARDS.md").write_text(hazards, encoding="utf-8")
+    (sysdir / "docs" / "BUDGET.md").write_text("# Budget\n", encoding="utf-8")
     for name, body in tests.items():
         (sysdir / "tests" / name).write_text(body, encoding="utf-8")
     (sysdir / "tracker.json").write_text(json.dumps({"items": tracker}), encoding="utf-8")
@@ -130,6 +132,21 @@ class TraceMatrixTests(unittest.TestCase):
             self.assertIn(expected, joined)
         self.assertEqual(m["counts"]["untested"], 2)  # REQ-002 (phantom test) and REQ-003
 
+    def test_named_analysis_artifact_must_exist(self):
+        srs = SRS.replace("`BUDGET.md` review", "`MISSING.md`")
+        with tempfile.TemporaryDirectory() as tmp:
+            m = trace_matrix.build(make_system(Path(tmp), srs, HAZARDS, TESTS, []))
+            self.assertIn("XX-REQ-002 says verified by MISSING.md but no such file exists", m["problems"])
+            self.assertEqual([r["verdict"] for r in m["requirements"] if r["id"] == "XX-REQ-002"], ["UNTESTED"])
+            # a bare file name (no hint word) is enough once the file exists; docs/ and the system root both count
+            sysdir = make_system(Path(tmp) / "b", SRS.replace("`BUDGET.md` review", "BUDGET.md, NOTES.md"), HAZARDS, TESTS, [])
+            (sysdir / "NOTES.md").write_text("# Notes\n", encoding="utf-8")
+            m = trace_matrix.build(sysdir)
+        self.assertEqual(m["problems"], [])
+        r2 = next(r for r in m["requirements"] if r["id"] == "XX-REQ-002")
+        self.assertEqual((r2["verdict"], r2["artifacts"]), ("analysis", ["BUDGET.md", "NOTES.md"]))
+        self.assertEqual(trace_matrix.artifacts(sysdir, "../../etc/x.md"), ([], ["../../etc/x.md"]))
+
     def test_cli_exit_codes_and_markdown(self):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
@@ -153,11 +170,12 @@ class GoldenPathTests(unittest.TestCase):
         golden_path.results.clear()
 
     def test_every_stage_passes_here(self):
-        out = io.StringIO()
-        with redirect_stdout(out):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
             code = golden_path.main(["--skip-tests", "--json"])
-        self.assertEqual(code, 0, out.getvalue())
-        data = json.loads(out.getvalue()[out.getvalue().index("{"):])
+        self.assertEqual(code, 0, out.getvalue() + err.getvalue())
+        data = json.loads(out.getvalue())  # stdout is pure JSON; progress lines go to stderr
+        self.assertIn("ok   doctor:", err.getvalue())
         self.assertTrue(data["ok"])
         stages = {s["stage"] for s in data["stages"]}
         self.assertEqual(stages, {"doctor", "research-brief", "what-if", "tracker", "trace-matrix", "exec-deck",
@@ -167,6 +185,18 @@ class GoldenPathTests(unittest.TestCase):
         for name in ("brief.md", "brief.html", "what-if-baseline.md", "what-if-imu-c-can.md", "status.md",
                      "trace-matrix.md", "deck.html", "mcp-handshake.jsonl"):
             self.assertTrue((golden_path.OUT / name).exists(), name)
+
+    def test_doctor_failures_are_named(self):
+        original = golden_path.run
+        fake = json.dumps({"ready": False, "checks": [{"check": "Python", "status": "OK", "detail": ""},
+                                                        {"check": "outputs/ writable", "status": "FAIL", "detail": "x"}]})
+        golden_path.run = lambda cmd, cwd=None, stdin=None: subprocess.CompletedProcess(cmd, 1, fake, "")
+        try:
+            with redirect_stdout(io.StringIO()):
+                golden_path.stage_doctor()
+        finally:
+            golden_path.run = original
+        self.assertEqual(golden_path.results, [{"stage": "doctor", "ok": False, "detail": "ready=False failing=['outputs/ writable']"}])
 
     def test_expected_numbers_are_derived_not_typed(self):
         src = golden_path.__file__
