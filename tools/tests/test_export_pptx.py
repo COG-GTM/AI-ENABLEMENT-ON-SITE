@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -15,6 +16,7 @@ from xml.etree import ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
+import build_deck  # noqa: E402
 import export_pptx  # noqa: E402
 
 EXAMPLE = ROOT / "templates" / "deck-outline-example.json"
@@ -130,7 +132,9 @@ class ExportPptxTests(unittest.TestCase):
             {"title": "t", "accent": "blue", "slides": [{"type": "title"}]},
             {"title": {"nested": 1}, "slides": [{"type": "title"}]},
             {"title": "t", "slides": [{"type": "table", "title": "t", "columns": ["a"], "rows": [["1"]] * 13}]},
+            {"title": "t", "slides": [{"type": "table", "title": "t", "columns": list(range(13)), "rows": [list(range(13))]}]},
             {"title": "\ud800", "slides": [{"type": "title"}]},  # lone surrogate: legal JSON, not encodable
+            {"title": "t", "slides": [{"type": "bars", "title": "t", "bars": [{"label": "a", "value": 10 ** 400}]}]},  # int too big for float
         ] + [
             {"title": "t", "slides": [{"type": "bars", "title": "t", "bars": [{"label": "a", "value": 1, k: v}]}]}
             for k in ("value", "max") for v in (float("nan"), float("inf"), float("-inf"))
@@ -144,6 +148,24 @@ class ExportPptxTests(unittest.TestCase):
             self.assertIsInstance(msg, str)  # one-line reason, not a traceback
             self.assertNotIn("\n", msg.strip())
             self.assertFalse((self.tmp / "bad.pptx").exists())
+
+    def test_table_fit_limit_is_pptx_only(self):
+        wide = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": ["a"], "rows": [["1"]] * 13}]}
+        self.assertIn("<table>", build_deck.build(wide))  # the HTML deck still renders it
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+            export_pptx.build_parts(wide)
+        self.assertIn("split the slide", cm.exception.code)
+
+    def test_concurrent_exports_to_one_destination(self):
+        src = self.tmp / "deck.json"
+        src.write_text(json.dumps(self.outline))
+        out = self.tmp / "same.pptx"
+        with redirect_stdout(io.StringIO()), ThreadPoolExecutor(8) as pool:
+            codes = list(pool.map(lambda _: export_pptx.main([str(src), str(out)]), range(8)))
+        self.assertEqual(codes, [0] * 8)
+        self.assertEqual([p.name for p in self.tmp.iterdir() if p.suffix != ".json"], [out.name])  # no stray temp files
+        with zipfile.ZipFile(out) as z:
+            self.assertIsNone(z.testzip())
 
     def test_failed_export_keeps_previous_file(self):
         good = export({"title": "t", "slides": [{"type": "title"}]}, self.tmp)
