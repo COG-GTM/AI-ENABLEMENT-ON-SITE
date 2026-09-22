@@ -162,7 +162,12 @@ class ExportPptxTests(unittest.TestCase):
         w12 = 37  # width units (tenths of an em) of a 12-column cell
         self.assertEqual([wrap("", w12), wrap("abc def", w12), wrap("abc def", w12 - 2), wrap("abcdefghijkl", w12)], [1, 1, 2, 2])
         self.assertEqual([wrap(cjk, w12), wrap("e\u0301" * 6, w12), wrap("abcdef", w12), wrap("ABCDEF", w12)], [2, 1, 1, 2])
+        thumbs, family, flags = "\U0001F44D\U0001F3FD" * 2, "\U0001F468\u200d\U0001F469\u200d\U0001F467", "\U0001F1FA\U0001F1F8" * 2
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in (thumbs, family, flags)], [20, 10, 20])  # one em per emoji
         cols = list("abcdefghijkl")
+        emoji = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[thumbs] * 12] * 12}]}
+        for build in (build_deck.build, export_pptx.build_parts):  # 13 lines: fits
+            build(emoji)
         long = "Battery depletion mitigation remains open"  # 7 lines in a 12-column cell
         self.assertEqual(build_deck.table_lines(cols, [[long] + cols[1:]]), [1, 7])
         self.assertEqual(build_deck.table_lines([cjk] * 12, [[cjk] * 12]), [2, 2])

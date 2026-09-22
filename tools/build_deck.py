@@ -118,31 +118,43 @@ def _number(v, where: str) -> None:
         raise SystemExit(f"{where}: expected a finite number")
 
 
-def glyph_units(ch: str) -> int:
-    """Advance width in tenths of an em, rounded up for an Arial-class sans font."""
-    if unicodedata.combining(ch) or unicodedata.category(ch) in ("Mn", "Me", "Cf"):
-        return 0
-    if unicodedata.east_asian_width(ch) in ("W", "F"):
-        return 10
-    if ch in NARROW:
-        return 3
-    if ch in "MWmw@%&":
-        return 9
-    return 7 if ch.isupper() else 6
+def glyph_units(text: str) -> list:
+    """Per code point advance width in tenths of an em, rounded up for an Arial-class sans font.
+
+    Marks, format characters, skin-tone modifiers, the pictograph after a zero-width joiner and the second
+    half of a flag pair are 0, so an emoji sequence is one wide glyph.
+    """
+    units, prev = [], ""
+    for ch in text:
+        flag = "\U0001F1E6" <= ch <= "\U0001F1FF"
+        if (unicodedata.category(ch) in ("Mn", "Me", "Cf") or "\U0001F3FB" <= ch <= "\U0001F3FF"
+                or prev == "\u200d" or (flag and "\U0001F1E6" <= prev <= "\U0001F1FF")):
+            units.append(0)
+            prev = "" if flag else ch
+            continue
+        if flag or unicodedata.east_asian_width(ch) in ("W", "F"):
+            units.append(10)
+        elif ch in NARROW:
+            units.append(3)
+        elif ch in "MWmw@%&":
+            units.append(9)
+        else:
+            units.append(7 if ch.isupper() else 6)
+        prev = ch
+    return units
 
 
 def wrapped_lines(text, width: int) -> int:
     """Greedy word wrap: lines a cell `width` units wide needs for text; over-long words break by glyph."""
     lines, used = 1, 0
     for w in str(text).split():
-        units = sum(map(glyph_units, w))
-        if used and used + 3 + units <= width:
-            used += 3 + units
+        units = glyph_units(w)
+        if used and used + 3 + sum(units) <= width:
+            used += 3 + sum(units)
             continue
         lines += used > 0
         used = 0
-        for ch in w:
-            u = glyph_units(ch)
+        for u in units:
             if used and used + u > width:
                 lines, used = lines + 1, 0
             used += u
