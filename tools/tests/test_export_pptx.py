@@ -158,23 +158,26 @@ class ExportPptxTests(unittest.TestCase):
 
     def test_wrapped_table_text_is_bounded_in_both_outputs(self):
         """Cells wrap in narrow columns; both renderers must refuse a table whose wrapped text cannot fit one slide."""
-        wrap = build_deck.wrapped_lines
-        self.assertEqual([wrap("", 6), wrap("abc def", 7), wrap("abc def", 6), wrap("abcdefghijkl", 6), wrap("abcdefg hi jk", 6)],
-                         [1, 1, 2, 2, 3])
+        wrap, cjk = build_deck.wrapped_lines, "\u6771\u4eac\u90fd\u5e81\u820d\u524d"  # six wide glyphs
+        w12 = 37  # width units (tenths of an em) of a 12-column cell
+        self.assertEqual([wrap("", w12), wrap("abc def", w12), wrap("abc def", w12 - 2), wrap("abcdefghijkl", w12)], [1, 1, 2, 2])
+        self.assertEqual([wrap(cjk, w12), wrap("e\u0301" * 6, w12), wrap("abcdef", w12), wrap("ABCDEF", w12)], [2, 1, 1, 2])
         cols = list("abcdefghijkl")
-        long = "Battery depletion mitigation remains open"  # 8 lines in a 12-column cell
-        self.assertEqual(build_deck.table_lines(cols, [[long] + cols[1:]]), [1, 8])
-        tall = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[long] + cols[1:]] * 2}]}
-        for build in (build_deck.build, export_pptx.build_parts):  # 17 lines: too tall for either output
-            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
-                build(tall)
-            self.assertIn("shorten cells or split the slide", cm.exception.code)
-        tall["slides"][0]["rows"].pop()  # 9 lines: fits, and the wrapped row gets the height its lines need
+        long = "Battery depletion mitigation remains open"  # 7 lines in a 12-column cell
+        self.assertEqual(build_deck.table_lines(cols, [[long] + cols[1:]]), [1, 7])
+        self.assertEqual(build_deck.table_lines([cjk] * 12, [[cjk] * 12]), [2, 2])
+        for rows in ([[long] + cols[1:]] * 2, [[cjk] * 12] * 12):  # 15 and 25 lines: too tall for either output
+            tall = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": rows}]}
+            for build in (build_deck.build, export_pptx.build_parts):
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                    build(tall)
+                self.assertIn("shorten cells or split the slide", cm.exception.code)
+        tall["slides"][0]["rows"] = [[long] + cols[1:]]  # 8 lines: fits, and the wrapped row gets the height its lines need
         out = export(tall, self.tmp)
         with zipfile.ZipFile(out) as z:
             rows = ET.fromstring(z.read("ppt/slides/slide1.xml")).findall(f".//{NS_A}tr")
         head_h, row_h = (int(r.get("h")) for r in rows)
-        self.assertGreaterEqual(row_h - head_h, 7 * 1400 * 1524 // 10)  # 7 extra lines of 14 pt text
+        self.assertGreaterEqual(row_h - head_h, 6 * 1400 * 1524 // 10)  # 6 extra lines of 14 pt text
         self.assertLessEqual(head_h + row_h, export_pptx.BODY_H)
 
     def test_concurrent_exports_to_one_destination(self):

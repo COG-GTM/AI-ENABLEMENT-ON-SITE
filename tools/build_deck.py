@@ -32,13 +32,16 @@ import json
 import math
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 ALLOWED_TYPES = {"title", "bullets", "two-column", "table", "stats", "bars", "quote", "section"}
 MAX_SLIDES = 60
 MAX_BULLETS = 8
 MAX_TABLE_COLS, MAX_TABLE_ROWS = 12, 12  # one slide's worth in both outputs (HTML clips past 13 rows at 1280x720)
-TABLE_CHARS, TABLE_LINES = 72, 14  # characters across one table row, and wrapped lines (header included) both outputs can show
+TABLE_LINES = 14  # wrapped table lines (header included) both outputs can show
+TABLE_PX, CELL_PAD_PX, CELL_FONT_PX, HEAD_FONT_PX = 1136, 24, 19, 16  # HTML table at 1280x720; the PPTX cells are a little wider
+NARROW = set(" ijl.,:;!|'`fIt()[]{}-")
 MAX_TEXT = 2000
 DEFAULT_ACCENT = "#2600FF"
 ACCENT_RE = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -115,22 +118,44 @@ def _number(v, where: str) -> None:
         raise SystemExit(f"{where}: expected a finite number")
 
 
+def glyph_units(ch: str) -> int:
+    """Advance width in tenths of an em, rounded up for an Arial-class sans font."""
+    if unicodedata.combining(ch) or unicodedata.category(ch) in ("Mn", "Me", "Cf"):
+        return 0
+    if unicodedata.east_asian_width(ch) in ("W", "F"):
+        return 10
+    if ch in NARROW:
+        return 3
+    if ch in "MWmw@%&":
+        return 9
+    return 7 if ch.isupper() else 6
+
+
 def wrapped_lines(text, width: int) -> int:
-    """Greedy word wrap: lines a cell `width` characters wide needs for text."""
+    """Greedy word wrap: lines a cell `width` units wide needs for text; over-long words break by glyph."""
     lines, used = 1, 0
     for w in str(text).split():
-        if used and used + 1 + len(w) <= width:
-            used += 1 + len(w)
-        else:
-            lines += (used > 0) + (len(w) - 1) // width
-            used = (len(w) - 1) % width + 1
+        units = sum(map(glyph_units, w))
+        if used and used + 3 + units <= width:
+            used += 3 + units
+            continue
+        lines += used > 0
+        used = 0
+        for ch in w:
+            u = glyph_units(ch)
+            if used and used + u > width:
+                lines, used = lines + 1, 0
+            used += u
     return lines
 
 
 def table_lines(columns: list, rows: list) -> list:
-    """Wrapped line count of the header and of each row, at TABLE_CHARS shared equally across the columns."""
-    width = max(1, TABLE_CHARS // len(columns))
-    return [max(wrapped_lines(c, width) for c in r) for r in (columns, *rows)]
+    """Wrapped line count of the header (upper-cased, smaller font) and of each row, columns sharing the width equally."""
+    width = max(1, int((TABLE_PX / len(columns) - CELL_PAD_PX) / CELL_FONT_PX * 10))
+    head = width * CELL_FONT_PX // HEAD_FONT_PX
+    return [max(wrapped_lines(str(c).upper(), head) for c in columns)] + [
+        max(wrapped_lines(c, width) for c in r) for r in rows
+    ]
 
 
 def validate(outline) -> dict:
