@@ -66,7 +66,7 @@ curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" "$GITHUB_BASE/repos/<owner>/<r
 # Basic auth with empty user; curl base64-encodes ":$ADO_TOKEN" for you
 curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/_apis/projects?api-version=7.1"
 # Run a saved query by its id (Boards > Queries > copy the id from the URL), then fetch the work items it lists
-curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/<project>/_apis/wit/wiql/<query-id>?api-version=7.1&\$top=50"
+curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/<project>/_apis/wit/wiql/<query-id>?api-version=7.1"   # no $top: the whole result, or an error from the service
 curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/<project>/_apis/wit/workitems?ids=101,102,103&api-version=7.1"
 ```
 Ad-hoc WIQL text needs a `POST`, so it is not used here; save the query in Azure DevOps and read it by id.
