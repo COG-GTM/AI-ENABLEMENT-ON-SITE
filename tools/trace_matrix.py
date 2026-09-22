@@ -26,7 +26,7 @@ HAZ_RE = re.compile(r"\b[A-Z]{2,6}-HAZ-\d{3}\b")
 ROW_RE = re.compile(r"^\|\s*([A-Z]{2,6}-(?:REQ|HAZ)-\d{3})\s*\|(.*)\|\s*$")
 PY_TEST_RE = re.compile(r"^\s*def\s+(test_\w+)\s*\(")
 C_TEST_RE = re.compile(r"^\s*(?:static\s+)?void\s+(test_\w+)\s*\(")
-NAMED_TEST_RE = re.compile(r"`(test_\w+)`")
+NAMED_TEST_RE = re.compile(r"`(test_\w+(?:\.test_\w+)?)`")  # `test_x` or qualified `test_file.test_x`
 ARTIFACT_RE = re.compile(r"[\w./-]+\.md\b")
 ANALYSIS_HINTS = ("review", "analysis", "inspection", "make test")
 HIGH_RISK = 8
@@ -100,7 +100,8 @@ def read_hazards(path: Path) -> dict[str, dict]:
 
 def scan_tests(tests_dir: Path) -> tuple[dict[str, dict[str, list[str]]], set[str]]:
     """Returns (requirement ID -> {"python": [file::test, ...], "c": [...]}, all test names).
-    Test names are function names plus file stems, so `test_packet` may mean tests/test_packet.py.
+    Test names are function names, file stems, and qualified `stem.function`, so `test_packet` may mean
+    tests/test_packet.py and `test_packet.test_seq_wraps` means that function in that file.
     A requirement named in a file's header (before the first test) is attributed to the whole file."""
     found: dict[str, dict[str, list[str]]] = {}
     names: set[str] = set()
@@ -116,7 +117,7 @@ def scan_tests(tests_dir: Path) -> tuple[dict[str, dict[str, list[str]]], set[st
             m = name_re.match(line)
             if m:
                 current = m.group(1)
-                names.add(current)
+                names.update((current, f"{f.stem}.{current}"))
             for rid in REQ_RE.findall(line):
                 label = f"{rel}::{current}" if current else rel
                 bucket = found.setdefault(rid, {"python": [], "c": []})[twin]
@@ -137,6 +138,15 @@ def artifacts(system: Path, verified_by: str) -> tuple[list[str], list[str]]:
     return present, missing
 
 
+def check_verified_by(system: Path, item_id: str, verified_by: str, test_names: set[str]) -> tuple[list[str], list[str]]:
+    """Validate one "Verified by" cell (requirement or hazard): returns (existing .md artifacts, problems)."""
+    problems = [f"{item_id} says verified by `{name}` but no such test exists"
+                for name in NAMED_TEST_RE.findall(verified_by) if name not in test_names]
+    present, missing = artifacts(system, verified_by)
+    problems += [f"{item_id} says verified by {name} but no such file exists" for name in missing]
+    return present, problems
+
+
 def read_tracker(path: Path) -> list[dict]:
     if not path.exists():
         return []
@@ -153,12 +163,8 @@ def build(system: Path) -> dict:
     problems: list[str] = []
 
     for r in reqs.values():
-        for name in NAMED_TEST_RE.findall(r["verified_by"]):
-            if name not in test_names:
-                problems.append(f"{r['id']} says verified by `{name}` but no such test exists")
-        r["artifacts"], missing = artifacts(system, r["verified_by"])
-        for name in missing:
-            problems.append(f"{r['id']} says verified by {name} but no such file exists")
+        r["artifacts"], found = check_verified_by(system, r["id"], r["verified_by"], test_names)
+        problems += found
 
     for rid, t in tests.items():
         if rid in reqs:
@@ -166,8 +172,7 @@ def build(system: Path) -> dict:
         else:
             problems.append(f"{rid} appears in tests but not in SRS.md")
     for h in hazards.values():
-        for name in artifacts(system, h["verified_by"])[1]:
-            problems.append(f"{h['id']} says verified by {name} but no such file exists")
+        problems += check_verified_by(system, h["id"], h["verified_by"], test_names)[1]
         for rid in h["requirements"]:
             if rid in reqs:
                 reqs[rid]["hazards"].append(h["id"])

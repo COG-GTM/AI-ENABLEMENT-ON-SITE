@@ -132,6 +132,15 @@ class TraceMatrixTests(unittest.TestCase):
             self.assertIn(expected, joined)
         self.assertEqual(m["counts"]["untested"], 2)  # REQ-002 (phantom test) and REQ-003
 
+    def test_hazard_test_names_are_checked_including_qualified_form(self):
+        good = HAZARDS.replace("| `test_rate` | Mitigated |", "| `test_node.test_rate`, C `test_rate` | Mitigated |")
+        bad = HAZARDS.replace("| `test_rate` | Mitigated |", "| `test_missing`, `test_fw.test_rate`, `test_node.test_nope` | Mitigated |")
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(trace_matrix.build(make_system(Path(tmp) / "good", SRS, good, TESTS, []))["problems"], [])
+            m = trace_matrix.build(make_system(Path(tmp) / "bad", SRS, bad, TESTS, []))
+        self.assertEqual(m["problems"], ["XX-HAZ-001 says verified by `test_missing` but no such test exists",
+                                         "XX-HAZ-001 says verified by `test_node.test_nope` but no such test exists"])
+
     def test_named_analysis_artifact_must_exist(self):
         srs = SRS.replace("`BUDGET.md` review", "`MISSING.md` review")  # the hint word must not rescue a missing file
         haz = HAZARDS.replace("| `test_rate` | Mitigated |", "| GONE.md | Mitigated |")
