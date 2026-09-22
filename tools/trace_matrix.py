@@ -166,6 +166,8 @@ def build(system: Path) -> dict:
         else:
             problems.append(f"{rid} appears in tests but not in SRS.md")
     for h in hazards.values():
+        for name in artifacts(system, h["verified_by"])[1]:
+            problems.append(f"{h['id']} says verified by {name} but no such file exists")
         for rid in h["requirements"]:
             if rid in reqs:
                 reqs[rid]["hazards"].append(h["id"])
@@ -192,8 +194,9 @@ def build(system: Path) -> dict:
         n_py, n_c = len(r["tests"]["python"]), len(r["tests"]["c"])
         if n_py or n_c:
             r["verdict"] = "tested" if (n_py and n_c) else "tested (one twin)"
-        elif r["artifacts"] or any(k in r["verified_by"].lower() for k in ANALYSIS_HINTS):
-            r["verdict"] = "analysis"
+        elif r["artifacts"] or (not ARTIFACT_RE.search(r["verified_by"])
+                                and any(k in r["verified_by"].lower() for k in ANALYSIS_HINTS)):
+            r["verdict"] = "analysis"  # a named-but-missing file is never rescued by a hint word
         else:
             r["verdict"] = "UNTESTED"
             problems.append(f"{r['id']} has no test and no analysis artifact")

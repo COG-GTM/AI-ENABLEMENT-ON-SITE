@@ -133,11 +133,15 @@ class TraceMatrixTests(unittest.TestCase):
         self.assertEqual(m["counts"]["untested"], 2)  # REQ-002 (phantom test) and REQ-003
 
     def test_named_analysis_artifact_must_exist(self):
-        srs = SRS.replace("`BUDGET.md` review", "`MISSING.md`")
+        srs = SRS.replace("`BUDGET.md` review", "`MISSING.md` review")  # the hint word must not rescue a missing file
+        haz = HAZARDS.replace("| `test_rate` | Mitigated |", "| GONE.md | Mitigated |")
         with tempfile.TemporaryDirectory() as tmp:
-            m = trace_matrix.build(make_system(Path(tmp), srs, HAZARDS, TESTS, []))
-            self.assertIn("XX-REQ-002 says verified by MISSING.md but no such file exists", m["problems"])
+            m = trace_matrix.build(make_system(Path(tmp), srs, haz, TESTS, []))
+            self.assertEqual(m["problems"], ["XX-REQ-002 says verified by MISSING.md but no such file exists",
+                                             "XX-HAZ-001 says verified by GONE.md but no such file exists",
+                                             "XX-REQ-002 has no test and no analysis artifact"])
             self.assertEqual([r["verdict"] for r in m["requirements"] if r["id"] == "XX-REQ-002"], ["UNTESTED"])
+            self.assertEqual(m["counts"]["analysis"], 0)
             # a bare file name (no hint word) is enough once the file exists; docs/ and the system root both count
             sysdir = make_system(Path(tmp) / "b", SRS.replace("`BUDGET.md` review", "BUDGET.md, NOTES.md"), HAZARDS, TESTS, [])
             (sysdir / "NOTES.md").write_text("# Notes\n", encoding="utf-8")
