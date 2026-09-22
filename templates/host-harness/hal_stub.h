@@ -48,9 +48,10 @@ bool hal_stub_script_i2c(uint8_t addr, const uint8_t *bytes, size_t n);
 /* Frame the SPI device answers with, cyclically, once the scripted queue is empty (for firmware
  * that polls a sensor thousands of times per test). n == 0 clears it; idle bus reads 0xFF. */
 bool hal_stub_spi_default(const uint8_t *frame, size_t n);
-/* Make the next `count` SPI transfers (or I2C reads of `addr`) fail, then recover. */
-void hal_stub_fail_spi(int count);
-void hal_stub_fail_i2c(uint8_t addr, int count);
+/* Make the next `count` SPI transfers (or I2C reads of `addr`) fail, then recover. Returns false
+ * for a negative count or when no I2C device slot is free, so a bad test setup fails loudly. */
+bool hal_stub_fail_spi(int count);
+bool hal_stub_fail_i2c(uint8_t addr, int count);
 void hal_stub_advance_ms(uint32_t ms);
 
 #endif

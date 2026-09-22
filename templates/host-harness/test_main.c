@@ -22,7 +22,9 @@ static void test_stub_scripts_and_records(void) {
     CHECK_EQ_INT(hal_stub_log.i2c_reads, 2);
     CHECK_EQ_INT(hal_stub_log.i2c_naks, 1);
 
-    hal_stub_fail_spi(1);
+    CHECK(!hal_stub_fail_spi(-1));                 /* a negative count is a test bug, not a no-op */
+    CHECK(!hal_stub_fail_i2c(0x48, -1));
+    CHECK(hal_stub_fail_spi(1));
     uint8_t tx[2] = {0x80, 0x00}, rx[2];
     CHECK_EQ_INT(hal_spi_transfer(tx, rx, 2), -1);
     CHECK_EQ_INT(hal_spi_transfer(tx, rx, 2), 0);  /* recovers after one failure */
@@ -106,7 +108,7 @@ static void test_one_second_produces_one_valid_packet(void) { /* SN-REQ-001, 004
 }
 
 static void test_spi_dropout_triggers_imu_reinit(void) { /* SN-REQ-008 */
-    hal_stub_fail_spi(IMU_TIMEOUT_SAMPLES);
+    CHECK(hal_stub_fail_spi(IMU_TIMEOUT_SAMPLES));
     imu_answers(8192);
     script_temp(1, 2350);
     node_t n;
@@ -127,7 +129,7 @@ static void test_i2c_nak_is_reported_as_temp_fault(void) { /* SN-REQ-007 */
     node_t n;
     node_init(&n, imu_read_via_spi, imu_reinit_via_gpio, temp_read_via_i2c, NULL);
     run_ticks(&n, 100);
-    hal_stub_fail_i2c(TEMP_ADDR, 1); /* second read NAKs */
+    CHECK(hal_stub_fail_i2c(TEMP_ADDR, 1)); /* second read NAKs */
     run_ticks(&n, 100);
     packet_t p;
     CHECK(packet_parse(hal_stub_log.uart + PACKET_LEN, PACKET_LEN, &p));

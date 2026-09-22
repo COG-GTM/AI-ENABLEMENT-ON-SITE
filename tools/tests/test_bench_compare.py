@@ -47,6 +47,13 @@ class BenchCompareTests(unittest.TestCase):
         self.assertEqual(self.run_cli(e, a, "--tol", "x=0.04")[0], 2)
         self.assertEqual(self.run_cli(e, a)[0], 2)  # exact by default
 
+    def test_exact_mode_has_no_magnitude_slack(self):
+        e = self.csv("e.csv", "n,f\n1000000000,1e12\n")
+        a = self.csv("a.csv", "n,f\n1000000001,1000000000001\n")
+        self.assertEqual(self.run_cli(e, a)[0], 2)
+        self.assertEqual(self.run_cli(e, a, "--tol", "*=1")[0], 0)
+        self.assertEqual(self.run_cli(e, a, "--tol", "n=1", "--tol", "f=0.5")[0], 2)  # f differs by 1 > 0.5
+
     def test_default_tolerance_and_first_divergence(self):
         e = self.csv("e.csv", "x,y\n1,1\n2,2\n3,3\n")
         a = self.csv("a.csv", "x,y\n1,1\n2,2.5\n3,9\n")

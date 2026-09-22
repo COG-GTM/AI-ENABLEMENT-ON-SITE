@@ -149,7 +149,7 @@ Each lane has a finished example in this repository so you can see the shape bef
 
 | Lane | Open this folder | What is in it |
 | --- | --- | --- |
-| C/C++ firmware | `templates/host-harness/` | `Makefile`, `hal_stub.c/.h` (scripted SPI/I2C/UART/GPIO, deterministic clock, fault injection), `harness.h` (tiny assert macros), `test_main.c` (35 checks against `example-system/src`). Point `FW_SRC`/`FW_INC` at your tree and rewrite section 2 only |
+| C/C++ firmware | `templates/host-harness/` | `Makefile`, `hal_stub.c/.h` (scripted SPI/I2C/UART/GPIO, deterministic clock, fault injection), `harness.h` (tiny assert macros), `test_main.c` (40 checks against `example-system/src`). Point `FW_SRC`/`FW_INC` at your tree and rewrite section 2 only |
 | MATLAB / Simulink | `example-system/model/` | `moving_avg.m` (the model), `export_vectors.m` (how the owner exports vectors), `filter_vectors.csv` (26 rows: warm-up, extremes, negatives, rounding), `run_vectors.py` (replays through the Python twin or the C via `vectors_driver.c`), `MODEL-NOTES.md` (the numeric-semantics table) |
 | LabVIEW / TestStand | `example-system/bench/` | `rig.vi.html` (what LabVIEW's own HTML export of a thermal-soak VI looks like), `rig_samples.csv` (24 raw readings), `rig_recording.csv` (the VI's own 3-step results, one step failing on purpose), `rig.py` (the Python port, instruments as callbacks, `--replay`), `RIG-REVIEW.md` (the manual review); its test is `example-system/tests/test_rig.py` |
 | Shared | `tools/bench_compare.py` | Two CSVs in, PASS/FAIL per column out, with tolerance per column, max error, and the first divergent row. Standard library only |
@@ -291,7 +291,7 @@ python tools/check_repo.py            # validates skills, links, content, runs e
 python tools/golden_path.py           # runs every workflow end to end, leaves proof in outputs/golden/
 python tools/trace_matrix.py          # requirement -> hazard -> test -> tracker matrix (fails on gaps)
 make -C example-system test           # firmware twins: Python + C
-make -C templates/host-harness test   # host harness over the C firmware through stubbed hardware (35 checks)
+make -C templates/host-harness test   # host harness over the C firmware through stubbed hardware (40 checks)
 python example-system/bench/rig.py --replay example-system/bench/rig_samples.csv --out outputs/rig-python.csv
 python tools/bench_compare.py example-system/bench/rig_recording.csv outputs/rig-python.csv   # LabVIEW port vs recording
 python tools/build_deck.py templates/deck-outline-example.json outputs/example-deck.html

@@ -80,11 +80,18 @@ static uint8_t spi_pop(void) {
     return b;
 }
 
-void hal_stub_fail_spi(int count) { spi_fail_left = count; }
+bool hal_stub_fail_spi(int count) {
+    if (count < 0) return false;
+    spi_fail_left = count;
+    return true;
+}
 
-void hal_stub_fail_i2c(uint8_t addr, int count) {
+bool hal_stub_fail_i2c(uint8_t addr, int count) {
+    if (count < 0) return false;
     int s = i2c_slot(addr, true);
-    if (s >= 0) i2c_dev[s].fail_left = count;
+    if (s < 0) return false;
+    i2c_dev[s].fail_left = count;
+    return true;
 }
 
 void hal_stub_advance_ms(uint32_t ms) { now_ms += ms; }

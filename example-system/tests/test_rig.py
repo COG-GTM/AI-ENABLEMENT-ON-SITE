@@ -63,6 +63,16 @@ class RigTests(unittest.TestCase):
         self.assertEqual(calls["chamber"], [25, 50, 25])  # cleanup frame returns to 25
         self.assertEqual(calls["settle"], 2)
 
+    def test_live_failure_still_returns_chamber_to_ambient(self):
+        chamber: list[int] = []
+
+        def read_packet() -> tuple[int, int]:
+            raise TimeoutError("UART timeout")
+
+        with self.assertRaises(TimeoutError):
+            rig.run_soak(read_packet=read_packet, set_chamber=chamber.append, settle=lambda: None, setpoints_c=(75,))
+        self.assertEqual(chamber, [75, 25])
+
     def test_bad_inputs_are_rejected(self):
         with self.assertRaises(ValueError):
             rig.compute_step(1, 25, [], [])
@@ -78,6 +88,12 @@ class RigTests(unittest.TestCase):
             bad.write_text("step,setpoint_c,sample_idx,t_ms,temp_cc,acc_z\n1,25,0,0,abc,0\n", encoding="utf-8")
             with self.assertRaises(SystemExit):
                 rig.load_samples(bad)
+            for rows in ("1,25,0,0,2500,8192\n1,25,0,1,2500,8192\n",   # repeated index
+                         "1,25,0,0,2500,8192\n1,25,2,2,2500,8192\n",   # gap
+                         "1,25,1,1,2500,8192\n1,25,0,0,2500,8192\n"):  # shuffled
+                bad.write_text("step,setpoint_c,sample_idx,t_ms,temp_cc,acc_z\n" + rows, encoding="utf-8")
+                with self.assertRaisesRegex(SystemExit, "sample_idx"):
+                    rig.load_samples(bad)
 
 
 if __name__ == "__main__":

@@ -13,9 +13,9 @@ Rules:
   - Both files need a header row. Columns are matched by name; order does not matter.
   - A column present in only one file is reported (missing / extra) and fails the run.
   - Row counts must match; the report gives the first row where a column diverges.
-  - A cell that parses as a number in both files is compared numerically (|a - b| <= tol, with a
-    1e-9 relative allowance for floating-point noise); anything else is compared as text after
-    stripping whitespace. NaN and infinity never pass.
+  - A cell that parses as a number in both files is compared numerically: exactly when no tolerance
+    is set, otherwise |a - b| <= tol plus a 1e-9 allowance for floating-point noise in the tolerance
+    itself; anything else is compared as text after stripping whitespace. NaN and infinity never pass.
   - Exit 0 = every column PASS, 2 = at least one FAIL, 1 = bad input.
 
 Standard library only; no network. The recorded file is never modified.
@@ -32,7 +32,7 @@ from pathlib import Path
 MAX_FILE_BYTES = 50 * 1024 * 1024
 MAX_ROWS = 1_000_000
 MAX_COLUMNS = 512
-FLOAT_SLACK = 1e-9  # so 10.05 - 10.0 counts as within 0.05 despite binary floating point
+FLOAT_SLACK = 1e-9  # so 10.05 - 10.0 counts as within 0.05 despite binary floating point; never applied when tol == 0
 COLUMN_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_ .:/()\[\]-]{0,63}$")
 TOL_RE = re.compile(r"^(\*|[A-Za-z0-9_][A-Za-z0-9_ .:/()\[\]-]{0,63})=([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)$")
 
@@ -103,7 +103,8 @@ def compare_cell(expected: str, actual: str, tol: float) -> tuple[bool, float | 
     if not (math.isfinite(e) and math.isfinite(a)):
         return False, math.inf
     err = abs(e - a)
-    return err <= tol + FLOAT_SLACK * max(1.0, abs(e), tol), err
+    allowance = 0.0 if tol == 0 else FLOAT_SLACK * max(1.0, tol)
+    return err <= tol + allowance, err
 
 
 def compare(expected_path: Path, actual_path: Path, tolerances: dict[str, float]) -> dict:

@@ -92,17 +92,22 @@ def run_soak(read_packet: ReadPacket, set_chamber: SetChamber, settle: Callable[
     if not 1 <= samples_per_step <= 10_000:
         raise ValueError("samples_per_step must be 1..10000")
     results = []
-    for step, sp in enumerate(setpoints_c, start=1):
-        set_chamber(sp)
-        settle()
-        pairs = [read_packet() for _ in range(samples_per_step)]
-        results.append(compute_step(step, sp, [t for t, _ in pairs], [a for _, a in pairs]))
-    set_chamber(DEFAULT_SETPOINTS_C[0])  # cleanup frame
+    try:
+        for step, sp in enumerate(setpoints_c, start=1):
+            set_chamber(sp)
+            settle()
+            pairs = [read_packet() for _ in range(samples_per_step)]
+            results.append(compute_step(step, sp, [t for t, _ in pairs], [a for _, a in pairs]))
+    finally:
+        set_chamber(DEFAULT_SETPOINTS_C[0])  # cleanup frame runs on the error path too, as the VI's does
     return results
 
 
 def load_samples(path: Path) -> dict[tuple[int, int], tuple[list[int], list[int]]]:
-    """Read rig_samples.csv (step, setpoint_c, sample_idx, t_ms, temp_cc, acc_z) grouped by step."""
+    """Read rig_samples.csv (step, setpoint_c, sample_idx, t_ms, temp_cc, acc_z) grouped by step.
+
+    Within a step, sample_idx must run 0, 1, 2, ... in file order: a gap, repeat, or shuffle means the
+    recording is incomplete or was re-sorted, and the replay would silently compute a different mean."""
     need = {"step", "setpoint_c", "sample_idx", "temp_cc", "acc_z"}
     groups: dict[tuple[int, int], tuple[list[int], list[int]]] = {}
     with path.open(newline="", encoding="utf-8") as fh:
@@ -111,7 +116,7 @@ def load_samples(path: Path) -> dict[tuple[int, int], tuple[list[int], list[int]
             raise SystemExit(f"{path}: header must include {sorted(need)}")
         for n, row in enumerate(reader, start=2):
             try:
-                step, sp = int(row["step"]), int(row["setpoint_c"])
+                step, sp, idx = int(row["step"]), int(row["setpoint_c"]), int(row["sample_idx"])
                 temp, acc = int(row["temp_cc"]), int(row["acc_z"])
             except (TypeError, ValueError):
                 raise SystemExit(f"{path}:{n}: non-integer value") from None
@@ -120,6 +125,8 @@ def load_samples(path: Path) -> dict[tuple[int, int], tuple[list[int], list[int]
             if temp not in INT16 or acc not in INT16:
                 raise SystemExit(f"{path}:{n}: sample outside int16")
             temps, accs = groups.setdefault((step, sp), ([], []))
+            if idx != len(temps):
+                raise SystemExit(f"{path}:{n}: step {step} expected sample_idx {len(temps)}, got {idx}")
             temps.append(temp)
             accs.append(acc)
             if n - 1 > MAX_SAMPLE_ROWS:
