@@ -324,6 +324,17 @@ class FakeServerTests(unittest.TestCase):
                 rest_client.main(["ado", "query", upper])
             self.assertEqual(json.loads(out.getvalue())["workItems"], lower["workItems"])
 
+    def test_ado_query_returns_every_hit_unless_top_given(self):
+        status, _, body = self.c.get(f"/sn-org/sensor-node/_apis/wit/wiql/{QUERY_ALL}?api-version=7.1", basic())
+        self.assertEqual((status, len(body["workItems"])), (200, 12))
+        status, _, body = self.c.get(f"/sn-org/sensor-node/_apis/wit/wiql/{QUERY_ALL}?api-version=7.1&$top=5", basic())
+        self.assertEqual((status, len(body["workItems"])), (200, 5))
+        with mock.patch.dict(os.environ, {"ADO_ORG": "https://ado.example", "ADO_PROJECT": "sensor-node", "ADO_TOKEN": CRED}, clear=True):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rest_client.main(["--dry-run", "ado", "query", QUERY_ALL])
+            self.assertNotIn("$top", out.getvalue())
+
     def test_jira_fields_projection(self):
         status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "project = SN", "fields": "key,summary,status"}), bearer())
         self.assertEqual(status, 200)
@@ -347,6 +358,21 @@ class FakeServerCliTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as cm:
                 fake_server.load_fixtures(Path(d))
             self.assertIn("surprise", str(cm.exception.code))
+
+    def test_fixture_validation_refuses_nameless_nested_fields(self):
+        for key, value, expect in (("status", {"statusCategory": {"name": "Done"}}, "status must be an object"),
+                                   ("status", {"name": "Done", "statusCategory": {}}, "statusCategory must be"),
+                                   ("issuetype", {"id": "1"}, "issuetype must be"), ("priority", "High", "priority must be"),
+                                   ("components", [{"id": "7"}], "components must be")):
+            with tempfile.TemporaryDirectory() as d:
+                shutil.copytree(FIXTURES, d, dirs_exist_ok=True)
+                p = Path(d) / "jira_issues.json"
+                data = json.loads(p.read_text())
+                data["issues"][0]["fields"][key] = value
+                p.write_text(json.dumps(data))
+                with self.assertRaises(SystemExit) as cm:
+                    fake_server.load_fixtures(Path(d))
+                self.assertIn(expect, str(cm.exception.code))
 
     def test_undecodable_fixture_refused(self):
         with tempfile.TemporaryDirectory() as d:
@@ -491,6 +517,15 @@ class TrackerImportTests(unittest.TestCase):
         self.assertIn(f"cannot read {src}", msg)
         msg = self.run_import("--from", "csv", "--in", str(FIXTURES / "csv_export.csv"), "--out", str(self.dir / "o.json"), "--merge", str(src), expect_fail=True)
         self.assertIn(f"cannot read {src}", msg)
+
+    def test_csv_quoted_newlines_are_kept(self):
+        rows = (FIXTURES / "csv_export.csv").read_text().splitlines()
+        cells = rows[1].rsplit(",", 1)
+        src = self.dir / "multiline.csv"
+        src.write_text("\n".join([rows[0], f'{cells[0]},"line one\nline two"']) + "\n")
+        out = self.dir / "multiline.json"
+        self.run_import("--from", "csv", "--in", str(src), "--out", str(out))
+        self.assertEqual(tracker_report.load(out)[0]["notes"], "line one\nline two")
 
     def test_csv_owner_column_is_kept(self):
         items = tracker_report.load(self.import_fixture("csv", "csv_export.csv"))

@@ -101,6 +101,12 @@ def _check_shape(name: str, item: dict, allowed: set, required: set) -> None:
     _expect(not missing, f"{name}: missing keys {sorted(missing)}")
 
 
+def _named(name: str, fields: dict, key: str) -> dict:
+    v = fields.get(key)
+    _expect(isinstance(v, dict) and isinstance(v.get("name"), str), f"{name}: {key} must be an object with a name")
+    return v
+
+
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text())
@@ -116,7 +122,12 @@ def load_fixtures(folder: Path) -> dict:
         _expect(isinstance(it["id"], str) and INT_RE.match(it["id"]) is not None, f"jira {it.get('key')}: id must be a numeric string")
         _expect(isinstance(it["key"], str) and JIRA_KEY_RE.match(it["key"]) is not None, f"jira {it.get('key')!r}: bad key")
         _check_shape(f"jira {it['key']} fields", it["fields"], JIRA_FIELDS, JIRA_REQUIRED)
-        _expect(isinstance(it["fields"]["status"], dict) and isinstance(it["fields"]["status"].get("statusCategory"), dict), f"jira {it['key']}: status shape")
+        _named(f"jira {it['key']}", _named(f"jira {it['key']}", it["fields"], "status"), "statusCategory")
+        _named(f"jira {it['key']}", it["fields"], "issuetype")
+        _named(f"jira {it['key']}", it["fields"], "priority")
+        comps = it["fields"].get("components", [])
+        _expect(isinstance(comps, list) and all(isinstance(c, dict) and isinstance(c.get("name"), str) for c in comps),
+                f"jira {it['key']}: components must be a list of objects with a name")
     _expect(len({i["key"] for i in jira["issues"]}) == len(jira["issues"]), "jira: duplicate keys")
 
     gitlab = _read_json(folder / "gitlab_issues.json")
@@ -376,11 +387,11 @@ class Handler(BaseHTTPRequestHandler):
         if len(segs) == 6 and segs[4] == "wiql":
             allow_keys(q, {"api-version", "$top", "timePrecision"})
             self.api_version(q)
-            top = int_param(q, "$top", 200, 1, 200)
+            top = int_param(q, "$top", 0, 1, 200)  # omitted: the whole result, like the service
             qid = segs[5].lower()
             if not UUID_RE.match(qid) or qid not in queries:
                 raise ApiError(404, "query not found")
-            hits = queries[qid]["ids"][:top]
+            hits = queries[qid]["ids"][:top] if top else queries[qid]["ids"]
             columns = [{"referenceName": c, "name": c.rsplit(".", 1)[1], "url": f"{base}/_apis/wit/fields/{c}"} for c in ADO_COLUMNS]
             return 200, {"queryType": "flat", "queryResultType": "workItem", "asOf": ASOF, "columns": columns,
                          "workItems": [{"id": i, "url": url(i)} for i in hits]}, {}

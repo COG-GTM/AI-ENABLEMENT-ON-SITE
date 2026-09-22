@@ -209,7 +209,7 @@ def ado_base() -> str:
 def ado_query(args, dry):
     if not UUID_RE.match(args.query):
         sys.exit("expected a saved query id (uuid); ad-hoc WIQL needs POST and is not offered")
-    url = f"{ado_base()}/wiql/{args.query}?api-version=7.1&$top={MAX_RESULTS}"
+    url = f"{ado_base()}/wiql/{args.query}?api-version=7.1"  # no $top: the service returns the whole result or an error
     return request(url, {"Authorization": basic("", env("ADO_TOKEN"))}, dry)
 
 

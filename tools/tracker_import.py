@@ -260,8 +260,9 @@ def from_ado(path: Path):
 
 def from_csv(path: Path):
     try:
-        reader = csv.DictReader(path.read_text(encoding="utf-8-sig").splitlines())
-        rows = list(reader)
+        with path.open(encoding="utf-8-sig", newline="") as stream:
+            reader = csv.DictReader(stream)
+            rows = list(reader)
     except (OSError, UnicodeDecodeError, csv.Error) as e:
         fail(f"cannot read {path}: {e}")
     fieldnames = reader.fieldnames or []
@@ -349,7 +350,7 @@ def main(argv=None) -> int:
         about = doc.get("_about", about) if isinstance(doc, dict) else about
     imported = list(READERS[a.mode](a.src))
     items, updated, added = merge(existing, imported, a.prefix, a.owner)
-    tmp = a.out.with_name(a.out.name + ".tmp")  # validate the candidate first; --out is only ever replaced whole
+    tmp = a.out.with_name(f"{a.out.name}.{os.getpid()}.tmp")  # validate the candidate first; --out is only ever replaced whole
     tmp.write_text(json.dumps({"_about": about, "items": items}, indent=2) + "\n")
     try:
         tracker_report.load(tmp)
