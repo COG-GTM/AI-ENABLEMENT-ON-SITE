@@ -1,7 +1,7 @@
 # Devin Desktop workflow library
 
 Ready-to-run workflows for Devin Desktop (Devin Local agent) in a Federal environment: research
-briefs, executive HTML decks, embedded design artifacts, what-if part swaps, spec-driven and
+briefs, executive decks (HTML and PPTX), embedded design artifacts, what-if part swaps, spec-driven and
 test-driven development, architecture docs, bug/capability tracking, and connecting to your tools
 (CLI, REST API, MCP). Everything runs offline against a synthetic reference system. No customer data.
 
@@ -27,7 +27,7 @@ are in `WORKFLOWS.md`. Showing this to a room? Follow `WALKTHROUGH.md`.
 | --- | --- |
 | A tour | `/tour` or `Reference this repo. What can you do here? Run the checks and show me.` |
 | Research | `/research-brief Should we swap IMU A for IMU B? --sources example-system/parts,example-system/docs` |
-| Executive deck (HTML) | `/exec-deck Build a leadership deck on the sensor node: requirements, top hazards, power budget, open bugs` |
+| Executive deck (HTML + PPTX) | `/exec-deck Build a leadership deck on the sensor node: requirements, top hazards, power budget, open bugs` |
 | Design artifacts | `/design-artifacts Add a requirement and hazard for low-battery shutdown at 3.0 V` |
 | What-if a new chip | `/what-if-part-swap Replace the IMU with imu-c and move the uplink to CAN` |
 | Spec first | `/spec-driven Add a diagnostics packet with reinit count and uptime` |
@@ -51,8 +51,8 @@ WALKTHROUGH.md              25-minute speaker path for showing the repo live
 example-system/      synthetic battery sensor node: C firmware + Python twin, requirements, ICD,
                      ADRs, hazards, power/timing budgets, parts data, bug tracker, tests
 specs/               one finished spec -> plan -> tasks example (the pattern /spec-driven follows)
-tools/               small Python scripts the skills call (doctor, deck builder, research brief,
-                     what-if, tracker report, traceability matrix, golden path, repo checker).
+tools/               small Python scripts the skills call (doctor, deck builder, PPTX exporter, research
+                     brief, what-if, tracker report, traceability matrix, golden path, repo checker).
                      Standard library only.
 integrations/        CLI, REST/curl, and MCP recipes for Jira, Confluence, GitLab, GitHub, Azure DevOps
 templates/           spec / plan templates and example inputs for the tools
@@ -68,9 +68,11 @@ python tools/golden_path.py           # runs every workflow end to end, leaves p
 python tools/trace_matrix.py          # requirement -> hazard -> test -> tracker matrix (fails on gaps)
 make -C example-system test           # firmware twins: Python + C
 python tools/build_deck.py templates/deck-outline-example.json outputs/example-deck.html
+python tools/export_pptx.py templates/deck-outline-example.json outputs/example-deck.pptx
 ```
 
-Open `outputs/example-deck.html` in the browser preview to see a finished deck.
+Open `outputs/example-deck.html` in the browser preview to see a finished deck, or
+`outputs/example-deck.pptx` in a PowerPoint-compatible viewer (checked with LibreOffice Impress).
 
 Requirements: Python 3.10+. Optional: a C compiler and `make` for the C tests. No packages to install.
 

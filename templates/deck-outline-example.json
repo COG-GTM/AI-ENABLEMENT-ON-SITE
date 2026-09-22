@@ -48,7 +48,7 @@
       "Approve sleep-mode work as the next sprint's priority",
       "Decide whether CAN (SN-CAP-002) stays on the roadmap; it needs a 5 V rail",
       "Accept SN-HAZ-005 (timing overrun) at risk level 4"
-    ]},
+    ], "notes": "Speaker notes: pause here for the decision. Numbers come from tools/what_if.py and tools/tracker_report.py."},
     {"type": "quote", "text": "Every number on these slides is recomputed from the repository, not typed in.", "source": "tools/what_if.py, tools/tracker_report.py"}
   ]
 }
