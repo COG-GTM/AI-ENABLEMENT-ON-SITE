@@ -82,6 +82,8 @@ class RigTests(unittest.TestCase):
             rig.run_soak(lambda: (0, 0), lambda _: None, lambda: None, samples_per_step=0)
         with tempfile.TemporaryDirectory() as td:
             bad = Path(td) / "bad.csv"
+            with self.assertRaisesRegex(SystemExit, "not a file"):   # a typo'd path is a message, not a traceback
+                rig.load_samples(bad)
             bad.write_text("step,temp_cc\n1,2\n", encoding="utf-8")
             with self.assertRaises(SystemExit):
                 rig.load_samples(bad)

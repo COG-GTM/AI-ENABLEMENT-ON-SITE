@@ -110,6 +110,8 @@ def load_samples(path: Path) -> dict[tuple[int, int], tuple[list[int], list[int]
     recording is incomplete or was re-sorted, and the replay would silently compute a different mean."""
     need = {"step", "setpoint_c", "sample_idx", "temp_cc", "acc_z"}
     groups: dict[tuple[int, int], tuple[list[int], list[int]]] = {}
+    if not path.is_file():
+        raise SystemExit(f"{path}: not a file")
     with path.open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         if reader.fieldnames is None or not need.issubset(reader.fieldnames):

@@ -80,6 +80,8 @@ class ModelEquivalenceTests(unittest.TestCase):
     def test_run_vectors_rejects_bad_input(self):
         with tempfile.TemporaryDirectory() as td:
             bad = Path(td) / "bad.csv"
+            with self.assertRaisesRegex(SystemExit, "not a file"):
+                run_vectors.load_samples(bad)
             bad.write_text("k,sample,filtered\n1,40000,0\n", encoding="utf-8")
             with self.assertRaises(SystemExit):
                 run_vectors.load_samples(bad)

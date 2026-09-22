@@ -10,12 +10,17 @@ Usage:
     python tools/bench_compare.py expected.csv actual.csv --json
 
 Rules:
-  - Both files need a header row. Columns are matched by name; order does not matter.
+  - Both files need a header row and at least one data row; a header-only file is bad input, not a PASS.
+    Columns are matched by name; order does not matter.
   - A column present in only one file is reported (missing / extra) and fails the run.
   - Row counts must match; the report gives the first row where a column diverges.
-  - A cell that parses as a number in both files is compared numerically: exactly when no tolerance
-    is set, otherwise |a - b| <= tol plus a 1e-9 allowance for floating-point noise in the tolerance
-    itself; anything else is compared as text after stripping whitespace. NaN and infinity never pass.
+  - A cell that parses as a number in both files is compared numerically in decimal arithmetic, so
+    `9007199254740993` and `9007199254740992` differ, as do `0.1` and `0.10000000000000001`. Exact when
+    no tolerance is set, otherwise |a - b| <= tol; anything else is compared as text after stripping
+    whitespace. NaN, infinity, and magnitudes outside about 1e-300..1e300 (not a measurement) never pass.
+  - Report figures (tolerance, max abs error) are rounded to doubles; the PASS/FAIL decision is not. Max abs
+    error is `-` (JSON null) for text columns and when a cell is NaN, infinite, or out of range; the first
+    divergence names the cell.
   - Exit 0 = every column PASS, 2 = at least one FAIL, 1 = bad input.
 
 Standard library only; no network. The recorded file is never modified.
@@ -24,15 +29,16 @@ Standard library only; no network. The recorded file is never modified.
 import argparse
 import csv
 import json
-import math
 import re
 import sys
+from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path
 
 MAX_FILE_BYTES = 50 * 1024 * 1024
 MAX_ROWS = 1_000_000
 MAX_COLUMNS = 512
-FLOAT_SLACK = 1e-9  # so 10.05 - 10.0 counts as within 0.05 despite binary floating point; never applied when tol == 0
+MAX_NUMBER_CHARS = 64  # longer than any sane CSV number; keeps Decimal parsing bounded
+MAX_EXPONENT = 300  # |decimal exponent| bound: keeps subtraction exact, never under/overflows, and report doubles finite
 COLUMN_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_ .:/()\[\]-]{0,63}$")
 TOL_RE = re.compile(r"^(\*|[A-Za-z0-9_][A-Za-z0-9_ .:/()\[\]-]{0,63})=([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)$")
 
@@ -71,55 +77,77 @@ def read_table(path: Path) -> tuple[list[str], list[dict[str, str]]]:
                     raise CompareError(f"{path}: more than {MAX_ROWS} rows")
         except (csv.Error, UnicodeDecodeError) as e:
             raise CompareError(f"{path}: not readable as UTF-8 CSV ({type(e).__name__})") from e
+    if not rows:
+        raise CompareError(f"{path}: header only, no data rows; nothing to compare")
     return header, rows
 
 
-def parse_tolerances(specs: list[str]) -> dict[str, float]:
-    tol: dict[str, float] = {}
+def parse_tolerances(specs: list[str]) -> dict[str, Decimal]:
+    tol: dict[str, Decimal] = {}
     for s in specs:
         m = TOL_RE.match(s.strip())
         if not m:
             raise CompareError(f"bad --tol {s!r}; use column=number (e.g. temp_c=0.05) or '*=0.05'")
-        value = float(m.group(2))
-        if not math.isfinite(value) or value < 0:
-            raise CompareError(f"bad --tol {s!r}; tolerance must be a finite number >= 0")
+        value = as_number(m.group(2))
+        if value is None or not in_range(value) or value < 0:
+            raise CompareError(f"bad --tol {s!r}; tolerance must be 0 or a number in 1e-{MAX_EXPONENT}..1e{MAX_EXPONENT}")
         tol[m.group(1)] = value
     return tol
 
 
-def as_number(text: str) -> float | None:
-    try:
-        v = float(text)
-    except ValueError:
+def as_number(text: str) -> Decimal | None:
+    """Decimal, so exact mode is exact: floats would merge 2**53 and 2**53 + 1. None if not a number."""
+    if len(text) > MAX_NUMBER_CHARS:
         return None
-    return v  # may be nan/inf; the caller decides
+    try:
+        return Decimal(text)  # accepts nan/inf spellings too; the caller decides
+    except InvalidOperation:
+        return None
 
 
-def compare_cell(expected: str, actual: str, tol: float) -> tuple[bool, float | None]:
+def in_range(v: Decimal) -> bool:
+    """Finite and either zero or with a decimal exponent within +-MAX_EXPONENT."""
+    return v.is_finite() and (v.is_zero() or abs(v.adjusted()) <= MAX_EXPONENT)
+
+
+def compare_cell(expected: str, actual: str, tol: Decimal) -> tuple[bool, Decimal | None]:
     """Return (match, abs_error). abs_error is None for text cells."""
     e, a = as_number(expected), as_number(actual)
     if e is None or a is None:
         return expected == actual, None
-    if not (math.isfinite(e) and math.isfinite(a)):
-        return False, math.inf
-    err = abs(e - a)
-    allowance = 0.0 if tol == 0 else FLOAT_SLACK * max(1.0, tol)
-    return err <= tol + allowance, err
+    if not (in_range(e) and in_range(a)):
+        return False, Decimal("Infinity")
+    if tol == 0:
+        match = e == a  # exact mode never subtracts, so nothing can round or underflow to zero
+    else:
+        match = None
+    with localcontext() as ctx:
+        # operands are bounded (MAX_NUMBER_CHARS digits, |exponent| <= MAX_EXPONENT), so with this
+        # precision the difference is exact to the digit and well inside the context's Emin/Emax
+        ctx.prec = 2 * (MAX_NUMBER_CHARS + MAX_EXPONENT)
+        err = abs(e - a)
+        if match is None:
+            match = err <= tol
+    return match, err
 
 
-def compare(expected_path: Path, actual_path: Path, tolerances: dict[str, float]) -> dict:
+def compare(expected_path: Path, actual_path: Path, tolerances: dict[str, Decimal | float | int]) -> dict:
+    tolerances = {k: v if isinstance(v, Decimal) else Decimal(str(v)) for k, v in tolerances.items()}
+    bad_tol = [k for k, v in tolerances.items() if not in_range(v) or v < 0]
+    if bad_tol:
+        raise CompareError(f"tolerance must be 0 or a number in 1e-{MAX_EXPONENT}..1e{MAX_EXPONENT}: {bad_tol[:3]!r}")
     exp_header, exp_rows = read_table(expected_path)
     act_header, act_rows = read_table(actual_path)
     missing = [c for c in exp_header if c not in act_header]
     extra = [c for c in act_header if c not in exp_header]
     shared = [c for c in exp_header if c in act_header]
     unknown_tol = [c for c in tolerances if c != "*" and c not in exp_header and c not in act_header]
-    default_tol = tolerances.get("*", 0.0)
+    default_tol = tolerances.get("*", Decimal(0))
     n = min(len(exp_rows), len(act_rows))
     columns = []
     for col in shared:
         tol = tolerances.get(col, default_tol)
-        mismatches, max_err, first_bad, numeric = 0, 0.0, None, True
+        mismatches, max_err, first_bad, numeric = 0, Decimal(0), None, True
         for i in range(n):
             ok, err = compare_cell(exp_rows[i][col], act_rows[i][col], tol)
             if err is None:
@@ -133,10 +161,10 @@ def compare(expected_path: Path, actual_path: Path, tolerances: dict[str, float]
         columns.append({
             "column": col,
             "kind": "numeric" if numeric else "text",
-            "tolerance": tol,
+            "tolerance": float(tol),
             "rows": n,
             "mismatches": mismatches,
-            "max_abs_error": max_err if numeric else None,
+            "max_abs_error": float(max_err) if numeric and max_err.is_finite() else None,
             "first_divergence": first_bad,
             "pass": mismatches == 0,
         })
@@ -165,11 +193,7 @@ def compare(expected_path: Path, actual_path: Path, tolerances: dict[str, float]
 
 
 def fmt(v: float | None) -> str:
-    if v is None:
-        return "-"
-    if v == math.inf:
-        return "inf"
-    return f"{v:.6g}"
+    return "-" if v is None else f"{v:.6g}"
 
 
 def render_text(r: dict) -> str:
@@ -218,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     if a.json:
-        print(json.dumps(result, indent=2))
+        print(json.dumps(result, indent=2, allow_nan=False))
     elif a.markdown:
         print(render_markdown(result), end="")
     else:

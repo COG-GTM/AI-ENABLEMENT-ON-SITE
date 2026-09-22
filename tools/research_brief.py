@@ -144,7 +144,10 @@ def main(argv=None) -> int:
     ap.add_argument("--check", action="store_true", help="validate only (defaults to the example file)")
     a = ap.parse_args(argv)
     src = a.input or EXAMPLE
-    brief = json.loads(src.read_text())
+    try:
+        brief = json.loads(src.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"{src}: cannot read brief JSON ({e})")
     errs = validate(brief)
     if errs:
         print("brief validation failed:\n  " + "\n  ".join(errs))

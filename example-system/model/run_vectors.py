@@ -29,6 +29,8 @@ from sensor_node.filter import MovingAverage  # noqa: E402
 
 def load_samples(path: Path = VECTORS) -> list[int]:
     samples = []
+    if not path.is_file():
+        raise SystemExit(f"{path}: not a file")
     with path.open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         if reader.fieldnames is None or "sample" not in reader.fieldnames:

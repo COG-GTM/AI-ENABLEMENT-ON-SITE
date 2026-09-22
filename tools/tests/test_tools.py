@@ -316,6 +316,16 @@ class ResearchBriefTests(unittest.TestCase):
             self.assertIn(s["id"], h)
         self.assertIn("## Bottom line", md)
 
+    def test_missing_or_malformed_input_is_a_one_line_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            missing = Path(td) / "missing.json"
+            with self.assertRaisesRegex(SystemExit, "cannot read brief JSON"):
+                research_brief.main([str(missing)])
+            bad = Path(td) / "bad.json"
+            bad.write_text("{not json", encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "cannot read brief JSON"):
+                research_brief.main([str(bad)])
+
     def test_uncited_claim_rejected(self):
         b = json.loads(research_brief.EXAMPLE.read_text())
         b["findings"][0]["sources"] = []

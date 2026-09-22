@@ -54,6 +54,63 @@ class BenchCompareTests(unittest.TestCase):
         self.assertEqual(self.run_cli(e, a, "--tol", "*=1")[0], 0)
         self.assertEqual(self.run_cli(e, a, "--tol", "n=1", "--tol", "f=0.5")[0], 2)  # f differs by 1 > 0.5
 
+    def test_exact_mode_is_decimal_not_float(self):
+        # 2**53 and 2**53 + 1 are the same float; 0.1 and 0.10000000000000001 are too.
+        e = self.csv("e.csv", "counter,ts,frac\n9007199254740992,1700000000123456789,0.1\n")
+        a = self.csv("a.csv", "counter,ts,frac\n9007199254740993,1700000000123456788,0.10000000000000001\n")
+        r = bench_compare.compare(e, a, {})
+        self.assertEqual(r["verdict"], "FAIL")
+        self.assertEqual([c["mismatches"] for c in r["columns"]], [1, 1, 1])
+        self.assertEqual(r["columns"][0]["max_abs_error"], 1.0)
+        self.assertEqual(self.run_cli(e, a, "--tol", "counter=1", "--tol", "ts=1", "--tol", "frac=1e-17")[0], 0)
+        same = self.csv("s.csv", "counter,ts,frac\n9007199254740992,1700000000123456789,0.1\n")
+        self.assertEqual(bench_compare.compare(e, same, {})["verdict"], "PASS")
+
+    def test_absurd_exponents_fail_instead_of_crashing(self):
+        e = self.csv("e.csv", "x\n1e999999999999\n")
+        a = self.csv("a.csv", "x\n1\n")
+        code, out, _ = self.run_cli(e, a)
+        self.assertEqual(code, 2)
+        self.assertIn("row 2: expected '1e999999999999', got '1'", out)
+        self.assertIsNone(bench_compare.compare(e, a, {})["columns"][0]["max_abs_error"])
+
+    def test_extreme_exponents_never_pass_even_against_zero(self):
+        # Decimal subtraction would underflow 1e-999999999999 - 0 to zero; the comparator must not call that equal.
+        for tiny in ("1e-999999999999", "1e-400", "-1e-301", "1e400", "1e301"):
+            e = self.csv("e.csv", f"x\n{tiny}\n")
+            for other in ("0", "0E-1000000", tiny):
+                a = self.csv("a.csv", f"x\n{other}\n")
+                for tol in ({}, {"x": 1e300}):
+                    r = bench_compare.compare(e, a, tol)
+                    self.assertEqual(r["verdict"], "FAIL", (tiny, other, tol))
+                    self.assertIsNone(r["columns"][0]["max_abs_error"])
+                    self.assertEqual(r["columns"][0]["first_divergence"]["expected"], tiny)
+        self.assertEqual(bench_compare.compare_cell("1e-999999999999", "0", bench_compare.Decimal(0)), (False, bench_compare.Decimal("Infinity")))
+        # in-range values with many exponent digits still compare exactly
+        e = self.csv("e.csv", "x\n1e-300\n")
+        z = self.csv("z.csv", "x\n0\n")
+        self.assertEqual(bench_compare.compare(e, z, {})["verdict"], "FAIL")
+        self.assertEqual(bench_compare.compare(e, z, {"x": 1e-300})["verdict"], "PASS")
+        self.assertEqual(bench_compare.compare(e, e, {})["verdict"], "PASS")
+        big = self.csv("big.csv", "x\n1e300\n")
+        neg = self.csv("neg.csv", "x\n-1e300\n")
+        r = bench_compare.compare(big, neg, {})
+        self.assertEqual(r["verdict"], "FAIL")
+        self.assertEqual(r["columns"][0]["max_abs_error"], 2e300)
+
+    def test_header_only_files_are_bad_input_not_pass(self):
+        e = self.csv("e.csv", "step,verdict\n1,PASS\n")
+        empty = self.csv("empty.csv", "step,verdict\n")
+        blank = self.csv("blank.csv", "step,verdict\n\n  ,  \n")
+        for bad in (empty, blank):
+            for pair in ((e, bad), (bad, e), (bad, bad)):
+                code, out, err = self.run_cli(*pair)
+                self.assertEqual(code, 1, pair)
+                self.assertIn("no data rows", err)
+                self.assertNotIn("PASS", out)
+        with self.assertRaises(bench_compare.CompareError):
+            bench_compare.compare(e, empty, {})
+
     def test_default_tolerance_and_first_divergence(self):
         e = self.csv("e.csv", "x,y\n1,1\n2,2\n3,3\n")
         a = self.csv("a.csv", "x,y\n1,1\n2,2.5\n3,9\n")
@@ -106,9 +163,12 @@ class BenchCompareTests(unittest.TestCase):
             code, _, err = self.run_cli(good, bad)
             self.assertEqual(code, 1, bad.name)
             self.assertTrue(err.startswith("error:"), bad.name)
-        for spec in ("x", "x=", "x=abc", "x=-1", "x=nan", "x=inf", "$(rm)=1"):
+        for spec in ("x", "x=", "x=abc", "x=-1", "x=nan", "x=inf", "$(rm)=1", "x=1e999", "x=1e-999", "x=1e301", "x=1e-301"):
             code, _, err = self.run_cli(good, good, "--tol", spec)
             self.assertEqual(code, 1, spec)
+        for bad_api_tol in (float("inf"), float("nan"), -1, 1e301):
+            with self.assertRaises(bench_compare.CompareError):
+                bench_compare.compare(good, good, {"a": bad_api_tol})
         code, _, err = self.run_cli(good, good, "--tol", "zzz=1")
         self.assertEqual(code, 2)  # unknown column named in --tol is a FAIL, not a crash
 
@@ -124,6 +184,26 @@ class BenchCompareTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(data["verdict"], "FAIL")
         self.assertEqual(data["columns"][0]["first_divergence"]["row"], 2)
+
+    def test_json_is_standard_json_at_the_range_limits(self):
+        def strict(text: str) -> dict:
+            return json.loads(text, parse_constant=lambda c: self.fail(f"non-standard JSON constant {c}"))
+
+        e = self.csv("e.csv", "x,y\n1e300,1e-300\n")
+        a = self.csv("a.csv", "x,y\n-1e300,0\n")
+        code, js, _ = self.run_cli(e, a, "--json", "--tol", "x=1e300", "--tol", "y=1e-300")
+        data = strict(js)
+        self.assertEqual(code, 2)
+        cols = {c["column"]: c for c in data["columns"]}
+        self.assertEqual(cols["x"]["tolerance"], 1e300)
+        self.assertEqual(cols["x"]["max_abs_error"], 2e300)
+        self.assertEqual(cols["y"]["tolerance"], 1e-300)
+        self.assertTrue(cols["y"]["pass"])
+        self.assertFalse(cols["x"]["pass"])
+        bad = self.csv("bad.csv", "x,y\n1e999,1\n")
+        code, js, _ = self.run_cli(e, bad, "--json")
+        self.assertEqual(code, 2)
+        strict(js)
 
     def test_blank_lines_and_bom_are_tolerated(self):
         e = self.csv("e.csv", "\ufeffx,y\n1,2\n\n")
