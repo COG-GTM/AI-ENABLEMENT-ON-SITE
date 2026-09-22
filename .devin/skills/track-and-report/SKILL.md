@@ -12,9 +12,10 @@ triggers:
 ---
 
 Tracker operations. Request: `$ARGUMENTS`.
-Data: `example-system/tracker.json`. Schema: `templates/tracker-item.json`. Tool: `tools/tracker_report.py`.
+Data: `example-system/tracker.json`. Schema: `templates/tracker-item.json`. Tools: `tools/tracker_report.py`, `tools/tracker_import.py`.
 The tracker is deliberately a file in Git so it works offline and diffs in review. If the user has Jira,
-GitLab, GitHub, or Azure DevOps approved, see `/connect-tools` to read from or push to it instead.
+GitLab, GitHub, or Azure DevOps approved, see `/connect-tools` to read from it; the import below brings the
+export into this schema.
 
 ## Add an item
 
@@ -27,8 +28,21 @@ GitLab, GitHub, or Azure DevOps approved, see `/connect-tools` to read from or p
 
 ## Close or update an item
 
-Set `status` to `closed` (or `in-review`), `closed` to the date, append to notes what fixed it and which
+Set `status` to `closed` (or `in_review`), `closed` to the date, append to notes what fixed it and which
 test proves it (`tests/test_node.py::test_...` or the C test name). Never delete items.
+
+## Import from Jira, GitLab, Azure DevOps, or a CSV
+
+```
+python tools/tracker_import.py --from jira   --in outputs/export.json --out outputs/tracker.json
+python tools/tracker_import.py --from csv    --in outputs/export.csv  --out outputs/tracker.json --merge example-system/tracker.json
+python tools/tracker_report.py --file outputs/tracker.json
+```
+`--from` is one of `jira`, `gitlab`, `ado`, `csv`; the JSON is the vendor's list response (all pages fetched first).
+Only a fixed set of fields is mapped, the rest is dropped, and an unknown status or priority stops the import
+with the allowed set. Items get a `source` (`jira:SN-101`); `--merge` updates a matching item in place, so
+running the same import twice changes nothing. To practice without a real tool, start `python integrations/fake_server.py`
+and follow "Prove it offline" in `integrations/README.md`; the fixtures in `integrations/fixtures/` import directly too.
 
 ## Report
 

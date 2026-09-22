@@ -65,11 +65,11 @@ curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" "$GITHUB_BASE/repos/<owner>/<r
 ```bash
 # Basic auth with empty user; curl base64-encodes ":$ADO_TOKEN" for you
 curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/_apis/projects?api-version=7.1"
-curl -sS -u ":$ADO_TOKEN" -X POST -H "Content-Type: application/json" \
-  -d '{"query":"SELECT [System.Id],[System.Title] FROM WorkItems WHERE [System.State] = '"'"'Active'"'"'"}' \
-  "$ADO_ORG/<project>/_apis/wit/wiql?api-version=7.1"
+# Run a saved query by its id (Boards > Queries > copy the id from the URL), then fetch the work items it lists
+curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/<project>/_apis/wit/wiql/<query-id>?api-version=7.1&\$top=50"
+curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/<project>/_apis/wit/workitems?ids=101,102,103&api-version=7.1"
 ```
-The WIQL call is a `POST` but it only reads; that is how the query endpoint works.
+Ad-hoc WIQL text needs a `POST`, so it is not used here; save the query in Azure DevOps and read it by id.
 
 ## Pagination and rate limits
 
@@ -78,6 +78,6 @@ Azure DevOps: `$top`/`continuationToken`. Fetch every page before filtering or c
 
 ## Turning results into repository artifacts
 
-Save the JSON under `outputs/` and convert with Devin into `example-system/tracker.json` shape, then
-`python tools/tracker_report.py --file outputs/<file>.json` gives you the same report and deck inputs
-as the offline tracker.
+Save the JSON under `outputs/`, then `python tools/tracker_import.py --from jira|gitlab|ado --in outputs/<file>.json --out outputs/tracker.json`
+and `python tools/tracker_report.py --file outputs/tracker.json` give you the same report and deck inputs
+as the offline tracker. To practice without a token, see "Prove it offline" in `README.md`.

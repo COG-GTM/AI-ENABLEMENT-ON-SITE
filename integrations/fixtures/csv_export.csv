@@ -1,0 +1,13 @@
+id,type,title,severity,status,component,requirements,hazards,opened,closed,owner,notes
+EXPORT-1,bug,Filter output biased by one LSB for negative readings during warm-up,low,closed,filter,SN-REQ-003,,2026-01-08,2026-01-15,firmware,Rounding used truncation toward zero; fixed by round-half-even.
+EXPORT-2,defect,Host parser accepted packets with reserved flag bits set,medium,closed,packet,SN-REQ-005,SN-HAZ-003,2026-01-20,2026-02-02,systems,Parser now rejects any packet with reserved bits set.
+EXPORT-3,defect,MCU busy-waits between samples; sleep mode not entered,high,open,node,SN-REQ-010;SN-REQ-020,SN-HAZ-004,2026-02-10,,firmware,Measured 2.9 mA average against a 2.0 mA budget.
+EXPORT-4,bug,IMU reinit counter not reported in any packet field,low,open,packet,SN-REQ-008,SN-HAZ-001,2026-02-18,,systems,Counter increments in firmware but no packet field carries it.
+EXPORT-5,bug,Temperature fault flag clears after one packet even if sensor still out of range,medium,in_review,node,SN-REQ-007,SN-HAZ-002,2026-03-01,,firmware,Fix under review: flag latches until reading returns to range.
+EXPORT-6,capability,Implement low-power sleep between samples,high,open,node,SN-REQ-010;SN-REQ-020,SN-HAZ-004,2026-02-10,,firmware,Needs timer wake and IMU FIFO drain on wake.
+EXPORT-7,capability,CAN uplink option for multi-node deployments,medium,open,uplink,SN-REQ-004,,2026-02-22,,systems,Requires an ICD revision and an ADR.
+EXPORT-8,capability,Evaluate IMU B as lower-power drop-in replacement,medium,open,imu,SN-REQ-001;SN-REQ-020,SN-HAZ-001,2026-03-05,,systems,Use /what-if-part-swap; WHO_AM_I differs.
+EXPORT-9,capability,Host-side packet decoder library with CRC validation,low,closed,tools,SN-REQ-006,SN-HAZ-003,2026-01-12,2026-01-30,systems,Shipped as tools/decoder with tests.
+EXPORT-10,capability,"Diagnostics packet (reinit count, uptime, battery voltage)",low,proposed,packet,,SN-HAZ-001;SN-HAZ-004,2026-03-10,,systems,Proposed; would resolve the reinit counter gap.
+EXPORT-11,capability,Support 9600 baud legacy uplink,low,wont_fix,uplink,SN-REQ-004,,2026-01-25,2026-02-05,systems,Declined: no deployment still uses 9600 baud.
+EXPORT-12,bug,CRC mismatch counter wraps at 255 and hides sustained link faults,critical,open,packet,SN-REQ-006,SN-HAZ-003,2026-03-12,,systems,Counter is uint8; saturate or widen to uint16.

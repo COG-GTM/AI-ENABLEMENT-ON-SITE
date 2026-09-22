@@ -1,0 +1,233 @@
+[
+  {
+    "id": 1001,
+    "iid": 1,
+    "project_id": 123,
+    "title": "Filter output biased by one LSB for negative readings during warm-up",
+    "description": "Rounding used truncation toward zero; fixed by round-half-even.",
+    "state": "closed",
+    "labels": [
+      "type::bug",
+      "priority::low",
+      "component::filter",
+      "SN-REQ-003"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-01-08T09:00:00.000Z",
+    "updated_at": "2026-01-15T17:30:00.000Z",
+    "closed_at": "2026-01-15T17:30:00.000Z"
+  },
+  {
+    "id": 1002,
+    "iid": 2,
+    "project_id": 123,
+    "title": "Host parser accepted packets with reserved flag bits set",
+    "description": "Parser now rejects any packet with reserved bits set.",
+    "state": "closed",
+    "labels": [
+      "type::defect",
+      "priority::medium",
+      "component::packet",
+      "SN-REQ-005",
+      "SN-HAZ-003"
+    ],
+    "issue_type": "incident",
+    "created_at": "2026-01-20T09:00:00.000Z",
+    "updated_at": "2026-02-02T17:30:00.000Z",
+    "closed_at": "2026-02-02T17:30:00.000Z"
+  },
+  {
+    "id": 1003,
+    "iid": 3,
+    "project_id": 123,
+    "title": "MCU busy-waits between samples; sleep mode not entered",
+    "description": "Measured 2.9 mA average against a 2.0 mA budget.",
+    "state": "opened",
+    "labels": [
+      "type::defect",
+      "priority::high",
+      "component::node",
+      "SN-REQ-010",
+      "SN-REQ-020",
+      "SN-HAZ-004"
+    ],
+    "issue_type": "incident",
+    "created_at": "2026-02-10T09:00:00.000Z",
+    "updated_at": "2026-03-15T17:30:00.000Z",
+    "closed_at": null
+  },
+  {
+    "id": 1004,
+    "iid": 4,
+    "project_id": 123,
+    "title": "IMU reinit counter not reported in any packet field",
+    "description": "Counter increments in firmware but no packet field carries it.",
+    "state": "opened",
+    "labels": [
+      "type::bug",
+      "priority::low",
+      "component::packet",
+      "SN-REQ-008",
+      "SN-HAZ-001"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-02-18T09:00:00.000Z",
+    "updated_at": "2026-03-15T17:30:00.000Z",
+    "closed_at": null
+  },
+  {
+    "id": 1005,
+    "iid": 5,
+    "project_id": 123,
+    "title": "Temperature fault flag clears after one packet even if sensor still out of range",
+    "description": "Fix under review: flag latches until reading returns to range.",
+    "state": "opened",
+    "labels": [
+      "type::bug",
+      "priority::medium",
+      "component::node",
+      "SN-REQ-007",
+      "SN-HAZ-002",
+      "workflow::in review"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-03-01T09:00:00.000Z",
+    "updated_at": "2026-03-15T17:30:00.000Z",
+    "closed_at": null
+  },
+  {
+    "id": 1006,
+    "iid": 6,
+    "project_id": 123,
+    "title": "Implement low-power sleep between samples",
+    "description": "Needs timer wake and IMU FIFO drain on wake.",
+    "state": "opened",
+    "labels": [
+      "type::capability",
+      "priority::high",
+      "component::node",
+      "SN-REQ-010",
+      "SN-REQ-020",
+      "SN-HAZ-004"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-02-10T09:00:00.000Z",
+    "updated_at": "2026-03-15T17:30:00.000Z",
+    "closed_at": null
+  },
+  {
+    "id": 1007,
+    "iid": 7,
+    "project_id": 123,
+    "title": "CAN uplink option for multi-node deployments",
+    "description": "Requires an ICD revision and an ADR.",
+    "state": "opened",
+    "labels": [
+      "type::capability",
+      "priority::medium",
+      "component::uplink",
+      "SN-REQ-004"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-02-22T09:00:00.000Z",
+    "updated_at": "2026-03-15T17:30:00.000Z",
+    "closed_at": null
+  },
+  {
+    "id": 1008,
+    "iid": 8,
+    "project_id": 123,
+    "title": "Evaluate IMU B as lower-power drop-in replacement",
+    "description": "Use /what-if-part-swap; WHO_AM_I differs.",
+    "state": "opened",
+    "labels": [
+      "type::capability",
+      "priority::medium",
+      "component::imu",
+      "SN-REQ-001",
+      "SN-REQ-020",
+      "SN-HAZ-001"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-03-05T09:00:00.000Z",
+    "updated_at": "2026-03-15T17:30:00.000Z",
+    "closed_at": null
+  },
+  {
+    "id": 1009,
+    "iid": 9,
+    "project_id": 123,
+    "title": "Host-side packet decoder library with CRC validation",
+    "description": "Shipped as tools/decoder with tests.",
+    "state": "closed",
+    "labels": [
+      "type::capability",
+      "priority::low",
+      "component::tools",
+      "SN-REQ-006",
+      "SN-HAZ-003"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-01-12T09:00:00.000Z",
+    "updated_at": "2026-01-30T17:30:00.000Z",
+    "closed_at": "2026-01-30T17:30:00.000Z"
+  },
+  {
+    "id": 1010,
+    "iid": 10,
+    "project_id": 123,
+    "title": "Diagnostics packet (reinit count, uptime, battery voltage)",
+    "description": "Proposed; would resolve the reinit counter gap.",
+    "state": "opened",
+    "labels": [
+      "type::capability",
+      "priority::low",
+      "component::packet",
+      "SN-HAZ-001",
+      "SN-HAZ-004",
+      "workflow::proposed"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-03-10T09:00:00.000Z",
+    "updated_at": "2026-03-15T17:30:00.000Z",
+    "closed_at": null
+  },
+  {
+    "id": 1011,
+    "iid": 11,
+    "project_id": 123,
+    "title": "Support 9600 baud legacy uplink",
+    "description": "Declined: no deployment still uses 9600 baud.",
+    "state": "closed",
+    "labels": [
+      "type::capability",
+      "priority::low",
+      "component::uplink",
+      "SN-REQ-004",
+      "workflow::wont fix"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-01-25T09:00:00.000Z",
+    "updated_at": "2026-02-05T17:30:00.000Z",
+    "closed_at": "2026-02-05T17:30:00.000Z"
+  },
+  {
+    "id": 1012,
+    "iid": 12,
+    "project_id": 123,
+    "title": "CRC mismatch counter wraps at 255 and hides sustained link faults",
+    "description": "Counter is uint8; saturate or widen to uint16.",
+    "state": "opened",
+    "labels": [
+      "type::bug",
+      "priority::critical",
+      "component::packet",
+      "SN-REQ-006",
+      "SN-HAZ-003"
+    ],
+    "issue_type": "issue",
+    "created_at": "2026-03-12T09:00:00.000Z",
+    "updated_at": "2026-03-15T17:30:00.000Z",
+    "closed_at": null
+  }
+]

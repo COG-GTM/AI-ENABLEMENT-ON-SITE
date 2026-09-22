@@ -170,6 +170,7 @@ def check_tools() -> None:
     run([py, "tools/research_brief.py", "--check"])
     run([py, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=ROOT / "example-system")
     run([py, "-m", "unittest", "discover", "-s", "tools/tests", "-q"])
+    run([py, "-m", "unittest", "tools/tests/test_integrations.py", "-q"])  # fake server + importer, in-process on 127.0.0.1
     run([py, "-m", "unittest", "integrations/reference-mcp/test_server.py", "-q"])
     run([py, "-m", "unittest", "integrations/test_rest_client.py", "-q"])
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")

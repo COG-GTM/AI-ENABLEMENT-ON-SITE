@@ -44,13 +44,16 @@ class DryRunTests(unittest.TestCase):
             ("gitlab", "issues", "123"): ("GET", "/api/v4/projects/123/issues?"),
             ("gitlab", "mrs", "group/project"): ("GET", "/api/v4/projects/group%2Fproject/merge_requests?"),
             ("github", "issues", "owner/repo"): ("GET", "https://api.github.com/repos/owner/repo/issues?"),
-            ("ado", "wiql", "SELECT [System.Id] FROM WorkItems"): ("POST", "/Sensor%20Node/_apis/wit/wiql?"),
+            ("ado", "query", "00000000-0000-4000-8000-000000000001"): ("GET", "/Sensor%20Node/_apis/wit/wiql/00000000-0000-4000-8000-000000000001?"),
+            ("ado", "workitems", "101,102"): ("GET", "/Sensor%20Node/_apis/wit/workitems?ids=101,102&"),
         }
         self.assertEqual({k[:2] for k in cases}, set(rest_client.COMMANDS), "docs and COMMANDS disagree")
         for (system, action, query), (method, fragment) in cases.items():
             with self.subTest(system=system, action=action):
                 r = dry([system, action, query])
                 self.assertEqual(r["method"], method)
+                self.assertEqual(r["method"], "GET")
+                self.assertIsNone(r["body"])
                 self.assertIn(fragment, r["url"])
                 self.assertTrue(r["url"].startswith("https://"))
                 dumped = json.dumps(r)
@@ -83,9 +86,17 @@ class RejectionTests(unittest.TestCase):
     def test_non_https_base_refused(self):
         msg = self.assert_exits(["jira", "issue", "SN-42"], {"JIRA_BASE": "http://jira.example.internal"})
         self.assertIn("HTTPS", msg)
+        self.assert_exits(["jira", "issue", "SN-42"], {"JIRA_BASE": "http://localhost:8080"})
+        self.assert_exits(["jira", "issue", "SN-42"], {"JIRA_BASE": "http://127.0.0.1.example.test"})
 
-    def test_wiql_must_be_select(self):
-        self.assert_exits(["ado", "wiql", "DELETE FROM WorkItems"])
+    def test_loopback_http_allowed_for_the_offline_fake(self):
+        r = dry(["jira", "issue", "SN-42"], {"JIRA_BASE": "http://127.0.0.1:8089"})
+        self.assertEqual(r["url"], "http://127.0.0.1:8089/rest/api/2/issue/SN-42")
+
+    def test_ado_query_needs_saved_query_id_not_wiql_text(self):
+        msg = self.assert_exits(["ado", "query", "SELECT [System.Id] FROM WorkItems"])
+        self.assertIn("POST", msg)
+        self.assert_exits(["ado", "workitems", "101;102"])
 
     def test_missing_env_does_not_leak_other_values(self):
         msg = self.assert_exits(["jira", "issue", "SN-42"], {"JIRA_TOKEN": ""})

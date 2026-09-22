@@ -1,0 +1,241 @@
+{
+  "count": 12,
+  "value": [
+    {
+      "id": 101,
+      "rev": 3,
+      "fields": {
+        "System.Id": 101,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\filter",
+        "System.WorkItemType": "Bug",
+        "System.State": "Closed",
+        "System.Title": "Filter output biased by one LSB for negative readings during warm-up",
+        "System.Description": "Rounding used truncation toward zero; fixed by round-half-even.",
+        "System.Tags": "SN-REQ-003",
+        "System.CreatedDate": "2026-01-08T09:00:00Z",
+        "System.ChangedDate": "2026-01-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 4,
+        "Microsoft.VSTS.Common.ClosedDate": "2026-01-15T17:30:00Z"
+      }
+    },
+    {
+      "id": 102,
+      "rev": 3,
+      "fields": {
+        "System.Id": 102,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\packet",
+        "System.WorkItemType": "Issue",
+        "System.State": "Closed",
+        "System.Title": "Host parser accepted packets with reserved flag bits set",
+        "System.Description": "Parser now rejects any packet with reserved bits set.",
+        "System.Tags": "SN-REQ-005; SN-HAZ-003",
+        "System.CreatedDate": "2026-01-20T09:00:00Z",
+        "System.ChangedDate": "2026-02-02T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 3,
+        "Microsoft.VSTS.Common.ClosedDate": "2026-02-02T17:30:00Z"
+      }
+    },
+    {
+      "id": 103,
+      "rev": 1,
+      "fields": {
+        "System.Id": 103,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\node",
+        "System.WorkItemType": "Issue",
+        "System.State": "Active",
+        "System.Title": "MCU busy-waits between samples; sleep mode not entered",
+        "System.Description": "Measured 2.9 mA average against a 2.0 mA budget.",
+        "System.Tags": "SN-REQ-010; SN-REQ-020; SN-HAZ-004",
+        "System.CreatedDate": "2026-02-10T09:00:00Z",
+        "System.ChangedDate": "2026-03-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 2
+      }
+    },
+    {
+      "id": 104,
+      "rev": 1,
+      "fields": {
+        "System.Id": 104,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\packet",
+        "System.WorkItemType": "Bug",
+        "System.State": "Active",
+        "System.Title": "IMU reinit counter not reported in any packet field",
+        "System.Description": "Counter increments in firmware but no packet field carries it.",
+        "System.Tags": "SN-REQ-008; SN-HAZ-001",
+        "System.CreatedDate": "2026-02-18T09:00:00Z",
+        "System.ChangedDate": "2026-03-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 4
+      }
+    },
+    {
+      "id": 105,
+      "rev": 1,
+      "fields": {
+        "System.Id": 105,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\node",
+        "System.WorkItemType": "Bug",
+        "System.State": "Resolved",
+        "System.Title": "Temperature fault flag clears after one packet even if sensor still out of range",
+        "System.Description": "Fix under review: flag latches until reading returns to range.",
+        "System.Tags": "SN-REQ-007; SN-HAZ-002",
+        "System.CreatedDate": "2026-03-01T09:00:00Z",
+        "System.ChangedDate": "2026-03-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 3
+      }
+    },
+    {
+      "id": 106,
+      "rev": 1,
+      "fields": {
+        "System.Id": 106,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\node",
+        "System.WorkItemType": "User Story",
+        "System.State": "Active",
+        "System.Title": "Implement low-power sleep between samples",
+        "System.Description": "Needs timer wake and IMU FIFO drain on wake.",
+        "System.Tags": "SN-REQ-010; SN-REQ-020; SN-HAZ-004",
+        "System.CreatedDate": "2026-02-10T09:00:00Z",
+        "System.ChangedDate": "2026-03-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 2
+      }
+    },
+    {
+      "id": 107,
+      "rev": 1,
+      "fields": {
+        "System.Id": 107,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\uplink",
+        "System.WorkItemType": "User Story",
+        "System.State": "Active",
+        "System.Title": "CAN uplink option for multi-node deployments",
+        "System.Description": "Requires an ICD revision and an ADR.",
+        "System.Tags": "SN-REQ-004",
+        "System.CreatedDate": "2026-02-22T09:00:00Z",
+        "System.ChangedDate": "2026-03-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 3
+      }
+    },
+    {
+      "id": 108,
+      "rev": 1,
+      "fields": {
+        "System.Id": 108,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\imu",
+        "System.WorkItemType": "User Story",
+        "System.State": "Active",
+        "System.Title": "Evaluate IMU B as lower-power drop-in replacement",
+        "System.Description": "Use /what-if-part-swap; WHO_AM_I differs.",
+        "System.Tags": "SN-REQ-001; SN-REQ-020; SN-HAZ-001",
+        "System.CreatedDate": "2026-03-05T09:00:00Z",
+        "System.ChangedDate": "2026-03-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 3
+      }
+    },
+    {
+      "id": 109,
+      "rev": 3,
+      "fields": {
+        "System.Id": 109,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\tools",
+        "System.WorkItemType": "User Story",
+        "System.State": "Closed",
+        "System.Title": "Host-side packet decoder library with CRC validation",
+        "System.Description": "Shipped as tools/decoder with tests.",
+        "System.Tags": "SN-REQ-006; SN-HAZ-003",
+        "System.CreatedDate": "2026-01-12T09:00:00Z",
+        "System.ChangedDate": "2026-01-30T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 4,
+        "Microsoft.VSTS.Common.ClosedDate": "2026-01-30T17:30:00Z"
+      }
+    },
+    {
+      "id": 110,
+      "rev": 1,
+      "fields": {
+        "System.Id": 110,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\packet",
+        "System.WorkItemType": "User Story",
+        "System.State": "New",
+        "System.Title": "Diagnostics packet (reinit count, uptime, battery voltage)",
+        "System.Description": "Proposed; would resolve the reinit counter gap.",
+        "System.Tags": "SN-HAZ-001; SN-HAZ-004",
+        "System.CreatedDate": "2026-03-10T09:00:00Z",
+        "System.ChangedDate": "2026-03-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 4
+      }
+    },
+    {
+      "id": 111,
+      "rev": 3,
+      "fields": {
+        "System.Id": 111,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\uplink",
+        "System.WorkItemType": "User Story",
+        "System.State": "Removed",
+        "System.Title": "Support 9600 baud legacy uplink",
+        "System.Description": "Declined: no deployment still uses 9600 baud.",
+        "System.Tags": "SN-REQ-004",
+        "System.CreatedDate": "2026-01-25T09:00:00Z",
+        "System.ChangedDate": "2026-02-05T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 4,
+        "Microsoft.VSTS.Common.ClosedDate": "2026-02-05T17:30:00Z"
+      }
+    },
+    {
+      "id": 112,
+      "rev": 1,
+      "fields": {
+        "System.Id": 112,
+        "System.TeamProject": "sensor-node",
+        "System.AreaPath": "sensor-node\\packet",
+        "System.WorkItemType": "Bug",
+        "System.State": "Active",
+        "System.Title": "CRC mismatch counter wraps at 255 and hides sustained link faults",
+        "System.Description": "Counter is uint8; saturate or widen to uint16.",
+        "System.Tags": "SN-REQ-006; SN-HAZ-003",
+        "System.CreatedDate": "2026-03-12T09:00:00Z",
+        "System.ChangedDate": "2026-03-15T17:30:00Z",
+        "Microsoft.VSTS.Common.Priority": 1
+      }
+    }
+  ],
+  "queries": {
+    "00000000-0000-4000-8000-000000000001": {
+      "name": "All sensor-node work items",
+      "ids": [
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112
+      ]
+    },
+    "00000000-0000-4000-8000-000000000002": {
+      "name": "Open bugs and issues",
+      "ids": [
+        103,
+        104,
+        105,
+        112
+      ]
+    }
+  }
+}

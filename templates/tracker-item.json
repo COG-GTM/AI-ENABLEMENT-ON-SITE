@@ -16,6 +16,7 @@
     "opened": {"type": "string", "format": "date"},
     "closed": {"type": ["string", "null"], "format": "date"},
     "owner": {"type": "string", "description": "A role (firmware, systems, hardware), never a person."},
-    "notes": {"type": "string"}
+    "notes": {"type": "string"},
+    "source": {"type": "string", "pattern": "^(jira|gitlab|ado|csv):[A-Za-z0-9._/#-]{1,64}$", "description": "Optional. Set by tools/tracker_import.py (jira:SN-101); the merge key for re-imports."}
   }
 }
