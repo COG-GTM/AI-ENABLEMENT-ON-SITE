@@ -17,7 +17,8 @@ Endpoints (GET only; every other method is 405):
   GET /{org}/{project}/_apis/wit/workitems?ids=1,2&api-version=7.1   Azure DevOps list: count, value[]
   GET /{org}/{project}/_apis/wit/wiql/{queryId}?api-version=7.1      Azure DevOps saved query: workItems[]
 
-Errors are JSON: 401 missing/wrong credential, 404 unknown path or id, 400 bad query parameter, 405 non-GET.
+Errors are JSON: 401 missing/wrong credential, 404 unknown path or id, 400 bad query parameter, 405 non-GET,
+500 for an unexpected failure (generic body; the detail goes to the server log only).
 Credential header values are never echoed; the request log prints them as <redacted>.
 
 Azure DevOps offers WIQL as POST (ad-hoc query text) and as GET by saved query id. This fake serves only the
@@ -54,7 +55,7 @@ DEFAULT_TOKEN_VALUE = "fake-token-for-local-tests"
 TOKEN_RE = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
 SEGMENT_RE = re.compile(r"^[A-Za-z0-9._%-]{1,64}$")
 INT_RE = re.compile(r"^[0-9]{1,6}$")
-IDS_RE = re.compile(r"^[0-9]{1,6}(,[0-9]{1,6}){0,199}$")
+IDS_RE = re.compile(r"^[0-9]{1,10}(,[0-9]{1,10}){0,199}$")  # Azure DevOps work item ids are int32
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 JIRA_KEY_RE = re.compile(r"^[A-Z]{2,6}-[0-9]{1,6}$")
 JQL_RE = re.compile(r"^[A-Za-z0-9 =!_'\"-]{1,200}$")
@@ -125,7 +126,7 @@ def load_fixtures(folder: Path) -> dict:
         _expect(isinstance(it["iid"], int) and isinstance(it["project_id"], int), f"gitlab {it.get('iid')}: iid and project_id must be integers")
         _expect(it["state"] in GITLAB_STATES[:2], f"gitlab {it['iid']}: state must be opened or closed")
         _expect(isinstance(it["labels"], list), f"gitlab {it['iid']}: labels must be a list")
-    _expect(len({i["project_id"] for i in gitlab}) == 1, "gitlab: all issues must share one project_id")
+    _expect(len({i["project_id"] for i in gitlab}) == 1, "gitlab: need at least one issue, all sharing one project_id")
     _expect(len({i["iid"] for i in gitlab}) == len(gitlab), "gitlab: duplicate iids")
 
     ado = _read_json(folder / "ado_workitems.json")
@@ -138,7 +139,7 @@ def load_fixtures(folder: Path) -> dict:
         _expect(it["fields"]["System.Id"] == it["id"], f"ado {it['id']}: System.Id must equal id")
     ids = {i["id"] for i in ado["value"]}
     _expect(len(ids) == len(ado["value"]), "ado: duplicate ids")
-    _expect(len({i["fields"]["System.TeamProject"] for i in ado["value"]}) == 1, "ado: all work items must share one System.TeamProject")
+    _expect(len({i["fields"]["System.TeamProject"] for i in ado["value"]}) == 1, "ado: need at least one work item, all sharing one System.TeamProject")
     _expect(isinstance(ado["queries"], dict), "ado: queries must be an object keyed by query id")
     for qid, q in ado["queries"].items():
         _expect(UUID_RE.match(qid) is not None, f"ado query {qid!r}: id must be a lowercase uuid")
@@ -240,6 +241,9 @@ class Handler(BaseHTTPRequestHandler):
             status, body, extra = self.route()
         except ApiError as e:
             status, body, extra = e.status, self.error_body(e.message), {}
+        except Exception as e:  # never drop the connection or leak a traceback to the client
+            self.log_message("internal error: %s", type(e).__name__)
+            status, body, extra = 500, self.error_body("internal error"), {}
         self.reply(status, body, extra)
 
     # -- auth --

@@ -42,7 +42,7 @@ JIRA_FIELDS = "key,summary,description,status,priority,issuetype,components,labe
 ID_RE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
 PROJECT_NAME_RE = re.compile(r"^[A-Za-z0-9._ -]{1,64}$")  # Azure DevOps project names may contain spaces
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-IDS_RE = re.compile(r"^[0-9]{1,6}(,[0-9]{1,6}){0,199}$")
+IDS_RE = re.compile(r"^[0-9]{1,10}(,[0-9]{1,10}){0,199}$")  # Azure DevOps work item ids are int32
 
 
 def env(name: str, default: str | None = None) -> str:
@@ -68,7 +68,7 @@ def local_http(url: str) -> bool:
 
 
 def fetch(url: str, headers: dict, dry_run: bool):
-    """GET url; return (json body, response headers). Dry run prints the request and returns (None, {})."""
+    """GET url; return (json body, response headers as a case-insensitive HTTPMessage). Dry run prints the request and returns (None, {})."""
     if not url.startswith("https://") and not local_http(url):
         sys.exit("refusing non-HTTPS URL; TLS is required (plain HTTP is allowed only to 127.0.0.1)")
     if dry_run:
@@ -82,7 +82,7 @@ def fetch(url: str, headers: dict, dry_run: bool):
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_S, context=ctx) as r:
-            return json.load(r), dict(r.headers)
+            return json.load(r), r.headers
     except urllib.error.HTTPError as e:
         e.close()
         sys.exit(f"HTTP {e.code} from {urllib.parse.urlsplit(url).netloc}; check token scope and host")

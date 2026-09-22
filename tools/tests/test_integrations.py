@@ -287,6 +287,30 @@ class FakeServerTests(unittest.TestCase):
                     rest_client.main(argv)
                 self.assertIn("more than 2 pages (10 items so far)", str(cm.exception.code))
 
+    def test_rest_client_reads_lowercase_next_page_header(self):
+        orig = fake_server.Handler.reply
+
+        def lowercase_headers(handler, status, body, extra=None):
+            orig(handler, status, body, {k.lower(): v for k, v in (extra or {}).items()})
+
+        env = {"GITLAB_BASE": self.c.base, "GITLAB_TOKEN": CRED}
+        with mock.patch.object(fake_server.Handler, "reply", lowercase_headers), mock.patch.dict(os.environ, env, clear=True), mock.patch.object(rest_client, "MAX_RESULTS", 5):
+            _, hdrs, _ = self.c.get("/api/v4/projects/123/issues?per_page=5", gitlab())
+            self.assertEqual(hdrs.get("x-next-page"), "2")  # the wire really carries the lowercase spelling
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rest_client.main(["gitlab", "issues", "123"])
+            self.assertEqual(len(json.loads(out.getvalue())), 12)
+
+    def test_large_ado_ids_reach_the_server(self):
+        self.assertEqual(rest_client.IDS_RE.pattern, fake_server.IDS_RE.pattern)
+        status, _, err = self.c.get("/sn-org/sensor-node/_apis/wit/workitems?ids=1234567890&api-version=7.1", basic())
+        self.assertEqual((status, err["message"]), (404, "work item 1234567890 does not exist"))
+        with mock.patch.dict(os.environ, {"ADO_ORG": f"{self.c.base}/sn-org", "ADO_PROJECT": "sensor-node", "ADO_TOKEN": CRED}, clear=True):
+            with self.assertRaises(SystemExit) as cm, contextlib.redirect_stdout(io.StringIO()):
+                rest_client.main(["ado", "workitems", "101,1234567890"])
+            self.assertIn("HTTP 404", str(cm.exception.code))
+
     def test_jira_fields_projection(self):
         status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "project = SN", "fields": "key,summary,status"}), bearer())
         self.assertEqual(status, 200)
@@ -310,6 +334,16 @@ class FakeServerCliTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as cm:
                 fake_server.load_fixtures(Path(d))
             self.assertIn("surprise", str(cm.exception.code))
+
+    def test_empty_fixture_sets_refused(self):
+        for name, empty, expect in (("gitlab_issues.json", [], "at least one issue"),
+                                    ("ado_workitems.json", {"count": 0, "value": [], "queries": {}}, "at least one work item")):
+            with tempfile.TemporaryDirectory() as d:
+                shutil.copytree(FIXTURES, d, dirs_exist_ok=True)
+                (Path(d) / name).write_text(json.dumps(empty))
+                with self.assertRaises(SystemExit) as cm:
+                    fake_server.load_fixtures(Path(d))
+                self.assertIn(expect, str(cm.exception.code))
 
     def test_bad_token_shape_refused(self):
         with self.assertRaises(SystemExit):
@@ -512,6 +546,39 @@ class TrackerImportTests(unittest.TestCase):
         (self.dir / "h.csv").write_text("id,title\nX,Y\n")
         msg = self.run_import("--from", "csv", "--in", str(self.dir / "h.csv"), "--out", str(out), expect_fail=True)
         self.assertIn("header", msg)
+
+    def test_jira_cloud_adf_description_becomes_notes(self):
+        data = json.loads((FIXTURES / "jira_issues.json").read_text())
+        data["issues"][0]["fields"]["description"] = {"type": "doc", "version": 1, "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "Battery "}, {"type": "text", "text": "fails", "marks": [{"type": "strong"}]}]},
+            {"type": "bulletList", "content": [{"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "below 3.3 V"}]}]}]}]}
+        src = self.dir / "cloud.json"
+        src.write_text(json.dumps(data))
+        out = self.dir / "cloud-out.json"
+        self.run_import("--from", "jira", "--in", str(src), "--out", str(out))
+        self.assertEqual(tracker_report.load(out)[0]["notes"], "Battery fails\nbelow 3.3 V")
+        for bad in (42, {"type": "doc", "content": "nope"}, {"content": []}):
+            data["issues"][0]["fields"]["description"] = bad
+            src.write_text(json.dumps(data))
+            msg = self.run_import("--from", "jira", "--in", str(src), "--out", str(out), expect_fail=True)
+            self.assertIn("jira SN-101: description", msg)
+
+    def test_existing_tracker_with_duplicate_sources_refused(self):
+        first = self.import_fixture("jira", "jira_issues.json")
+        base = json.loads(first.read_text())
+        base["items"][1]["source"] = base["items"][0]["source"]
+        first.write_text(json.dumps(base))
+        msg = self.run_import("--from", "jira", "--in", str(FIXTURES / "jira_issues.json"), "--out", str(self.dir / "x.json"), "--merge", str(first), expect_fail=True)
+        self.assertIn("SN-BUG-001 and SN-BUG-002 both carry source jira:SN-101", msg)
+
+    def test_failed_import_leaves_out_file_untouched(self):
+        out = self.dir / "keep.json"
+        out.write_text("previous contents\n")
+        with mock.patch.object(tracker_import.tracker_report, "load", side_effect=SystemExit("schema says no")):
+            msg = self.run_import("--from", "jira", "--in", str(FIXTURES / "jira_issues.json"), "--out", str(out), expect_fail=True)
+        self.assertIn("untouched", msg)
+        self.assertEqual(out.read_text(), "previous contents\n")
+        self.assertEqual(sorted(p.name for p in self.dir.iterdir()), ["keep.json"])
 
     def test_duplicate_external_id_in_one_export_refused(self):
         data = json.loads((FIXTURES / "jira_issues.json").read_text())

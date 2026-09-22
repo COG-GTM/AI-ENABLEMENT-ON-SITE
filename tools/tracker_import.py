@@ -23,6 +23,7 @@ import argparse
 import csv
 import datetime
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -50,6 +51,8 @@ EXTERNAL_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 OWNER_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 MAX_TITLE = SCHEMA["properties"]["title"]["maxLength"]
 MAX_NOTES = 500
+ADF_MAX_DEPTH = 20
+ADF_CONTAINERS = {"doc", "bulletList", "orderedList", "listItem", "blockquote", "panel", "table", "tableRow", "expand"}
 
 JIRA_TYPE = {"bug": "bug", "defect": "defect", "story": "capability", "task": "capability", "new feature": "capability",
              "improvement": "capability", "epic": "capability"}
@@ -87,6 +90,27 @@ def text(value, where: str, what: str, required: bool = False) -> str:
     if not isinstance(value, str):
         fail(f"{where}: {what} must be a string")
     return value.strip()
+
+
+def adf_text(node, where: str, depth: int = 0) -> str:
+    """Plain text of a Jira Cloud (API v3) Atlassian Document Format description; one line per block."""
+    if depth > ADF_MAX_DEPTH or not isinstance(node, dict) or not isinstance(node.get("type"), str):
+        fail(f"{where}: description is not a string or a well-formed Atlassian document")
+    if node["type"] == "text":
+        return node.get("text", "") if isinstance(node.get("text"), str) else ""
+    if node["type"] == "hardBreak":
+        return "\n"
+    content = node.get("content", [])
+    if not isinstance(content, list):
+        fail(f"{where}: description content must be a list")
+    parts = [adf_text(c, where, depth + 1) for c in content]
+    return "\n".join(p for p in parts if p) if node["type"] in ADF_CONTAINERS else "".join(parts)
+
+
+def description(value, where: str, what: str) -> str:
+    if isinstance(value, dict):
+        return adf_text(value, where).strip()
+    return text(value, where, what)
 
 
 def named(obj: dict, key: str, where: str):
@@ -178,7 +202,7 @@ def from_jira(path: Path):
                    comp=component(comps[0]["name"] if comps and isinstance(comps[0], dict) and isinstance(comps[0].get("name"), str) else None, where),
                    tags=f.get("labels") if isinstance(f.get("labels"), list) else [],
                    opened=date(f.get("created"), where, "created"), closed=date(f.get("resolutiondate"), where, "resolutiondate"),
-                   notes=text(f.get("description") if isinstance(f.get("description"), str) else None, where, "description"))
+                   notes=description(f.get("description"), where, "description"))
 
 
 def from_gitlab(path: Path):
@@ -261,6 +285,8 @@ def merge(existing: list, imported: list, prefix: str, owner: str) -> tuple[list
         if src is not None:
             if not isinstance(src, str) or not SOURCE_RE.match(src):
                 fail(f"{it.get('id')}: existing source {src!r} must match {SOURCE_RE.pattern}")
+            if src in by_source:
+                fail(f"existing items {by_source[src]['id']} and {it['id']} both carry source {src}; keep one before merging")
             by_source[src] = it
     counters = {"BUG": 0, "CAP": 0}
     for it in existing:
@@ -313,12 +339,14 @@ def main(argv=None) -> int:
         about = json.loads(a.merge.read_text()).get("_about", about)
     imported = list(READERS[a.mode](a.src))
     items, updated, added = merge(existing, imported, a.prefix, a.owner)
-    a.out.write_text(json.dumps({"_about": about, "items": items}, indent=2) + "\n")
+    tmp = a.out.with_name(a.out.name + ".tmp")  # validate the candidate first; --out is only ever replaced whole
+    tmp.write_text(json.dumps({"_about": about, "items": items}, indent=2) + "\n")
     try:
-        tracker_report.load(a.out)
+        tracker_report.load(tmp)
     except SystemExit as e:
-        a.out.unlink()
-        fail(f"result did not validate, nothing written:\n{e}")
+        tmp.unlink()
+        fail(f"result did not validate, {a.out} untouched:\n{e}")
+    os.replace(tmp, a.out)
     print(f"{len(imported)} items read from {a.src}: {updated} updated, {added} added; {len(items)} items written to {a.out}")
     return 0
 
