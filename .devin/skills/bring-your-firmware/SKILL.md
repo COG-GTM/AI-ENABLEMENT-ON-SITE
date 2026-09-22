@@ -110,4 +110,4 @@ hazards, ICD from what the tests exposed) → `/track-and-report` (findings beco
 Map: `Makefile`, host `cc`, no RTOS, callback HAL (`node_init(..., imu_fn, reinit_fn, temp_fn, ctx)`), pure
 `filter.c`/`packet.c`/`node.c`, requirement IDs `SN-REQ-*` in comments. Seam: callback. Harness: as shipped
 in `templates/host-harness/`. Tests: one second → one valid packet; five SPI failures → IMU reset on GPIO 7
-and `FLAG_IMU_REINIT`; I2C NAK → `FLAG_FAULT` with last good temperature. 40 checks pass on a laptop.
+and `FLAG_IMU_REINIT`; I2C NAK → `FLAG_FAULT` with last good temperature. 58 checks pass on a laptop.

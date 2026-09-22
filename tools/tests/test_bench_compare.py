@@ -54,6 +54,38 @@ class BenchCompareTests(unittest.TestCase):
         self.assertEqual(self.run_cli(e, a, "--tol", "*=1")[0], 0)
         self.assertEqual(self.run_cli(e, a, "--tol", "n=1", "--tol", "f=0.5")[0], 2)  # f differs by 1 > 0.5
 
+    def test_exact_mode_is_decimal_not_float(self):
+        # 2**53 and 2**53 + 1 are the same float; 0.1 and 0.10000000000000001 are too.
+        e = self.csv("e.csv", "counter,ts,frac\n9007199254740992,1700000000123456789,0.1\n")
+        a = self.csv("a.csv", "counter,ts,frac\n9007199254740993,1700000000123456788,0.10000000000000001\n")
+        r = bench_compare.compare(e, a, {})
+        self.assertEqual(r["verdict"], "FAIL")
+        self.assertEqual([c["mismatches"] for c in r["columns"]], [1, 1, 1])
+        self.assertEqual(r["columns"][0]["max_abs_error"], 1.0)
+        self.assertEqual(self.run_cli(e, a, "--tol", "counter=1", "--tol", "ts=1", "--tol", "frac=1e-17")[0], 0)
+        same = self.csv("s.csv", "counter,ts,frac\n9007199254740992,1700000000123456789,0.1\n")
+        self.assertEqual(bench_compare.compare(e, same, {})["verdict"], "PASS")
+
+    def test_absurd_exponents_fail_instead_of_crashing(self):
+        e = self.csv("e.csv", "x\n1e999999999999\n")
+        a = self.csv("a.csv", "x\n1\n")
+        code, out, _ = self.run_cli(e, a)
+        self.assertEqual(code, 2)
+        self.assertIn("inf", out)
+
+    def test_header_only_files_are_bad_input_not_pass(self):
+        e = self.csv("e.csv", "step,verdict\n1,PASS\n")
+        empty = self.csv("empty.csv", "step,verdict\n")
+        blank = self.csv("blank.csv", "step,verdict\n\n  ,  \n")
+        for bad in (empty, blank):
+            for pair in ((e, bad), (bad, e), (bad, bad)):
+                code, out, err = self.run_cli(*pair)
+                self.assertEqual(code, 1, pair)
+                self.assertIn("no data rows", err)
+                self.assertNotIn("PASS", out)
+        with self.assertRaises(bench_compare.CompareError):
+            bench_compare.compare(e, empty, {})
+
     def test_default_tolerance_and_first_divergence(self):
         e = self.csv("e.csv", "x,y\n1,1\n2,2\n3,3\n")
         a = self.csv("a.csv", "x,y\n1,1\n2,2.5\n3,9\n")

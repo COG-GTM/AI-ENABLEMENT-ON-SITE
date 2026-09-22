@@ -59,6 +59,8 @@ void hal_stub_reset(void) {
 
 bool hal_stub_script_spi(const uint8_t *bytes, size_t n) { return q_push(&spi_q, bytes, n); }
 
+bool hal_stub_add_i2c(uint8_t addr) { return i2c_slot(addr, true) >= 0; }
+
 bool hal_stub_script_i2c(uint8_t addr, const uint8_t *bytes, size_t n) {
     int s = i2c_slot(addr, true);
     return s >= 0 && q_push(&i2c_dev[s].q, bytes, n);
@@ -130,7 +132,13 @@ int hal_i2c_write(uint8_t addr, uint8_t reg, const uint8_t *buf, size_t n) {
     hal_stub_log.i2c_writes++;
     hal_stub_log.last_i2c_addr = addr;
     hal_stub_log.last_i2c_reg = reg;
-    return i2c_slot(addr, false) < 0 ? -1 : 0;
+    int s = i2c_slot(addr, false);
+    if (s < 0 || i2c_dev[s].fail_left > 0) {
+        if (s >= 0) i2c_dev[s].fail_left--;
+        hal_stub_log.i2c_naks++;
+        return -1;
+    }
+    return 0;
 }
 
 void hal_gpio_write(int pin, bool level) {

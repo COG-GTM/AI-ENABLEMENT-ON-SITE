@@ -209,18 +209,24 @@ def compare(expected: Path, actual: Path, name: str) -> tuple[subprocess.Complet
 
 
 def stage_model() -> None:
-    # MATLAB model -> Python twin: every golden vector row must match exactly (integer output).
+    # MATLAB model -> code: every golden vector row must match exactly (integer output) in the Python
+    # twin, and in the C twin when a compiler is present. The skill claims both; prove both.
     vectors = SYSTEM / "model" / "filter_vectors.csv"
     n_rows = len(vectors.read_text(encoding="utf-8").splitlines()) - 1
-    out = OUT / "model-python.csv"
-    r = run([PY, "example-system/model/run_vectors.py", "--impl", "python", "--out", str(out)])
-    if r.returncode:
-        record("model-to-code", False, (r.stdout + r.stderr)[-300:])
-        return
-    c, j = compare(vectors, out, "model")
-    ok = c.returncode == 0 and j is not None and j["verdict"] == "PASS" and j["rows_expected"] == j["rows_actual"] == n_rows
-    record("model-to-code", ok, f"{n_rows} vectors replayed through the Python twin; "
-           + (f"{sum(x['pass'] for x in j['columns'])}/{len(j['columns'])} columns match exactly" if j else f"compare exit {c.returncode}"))
+    impls = ["python"] + (["c"] if shutil.which("cc") or shutil.which("gcc") or shutil.which("clang") else [])
+    parts = []
+    ok = True
+    for impl in impls:
+        out = OUT / f"model-{impl}.csv"
+        r = run([PY, "example-system/model/run_vectors.py", "--impl", impl, "--out", str(out)])
+        if r.returncode:
+            record("model-to-code", False, f"{impl}: " + (r.stdout + r.stderr)[-300:])
+            return
+        c, j = compare(vectors, out, f"model-{impl}")
+        ok = ok and c.returncode == 0 and j is not None and j["verdict"] == "PASS" and j["rows_expected"] == j["rows_actual"] == n_rows
+        parts.append(f"{impl} {sum(x['pass'] for x in j['columns'])}/{len(j['columns'])} columns" if j else f"{impl} compare exit {c.returncode}")
+    record("model-to-code", ok, f"{n_rows} vectors replayed through the {' and '.join(impls)} twin{'s' if len(impls) > 1 else ''}; "
+           + ", ".join(parts) + " match exactly" + ("" if "c" in impls else " (no C compiler: C twin skipped)"))
 
 
 def stage_bench() -> None:

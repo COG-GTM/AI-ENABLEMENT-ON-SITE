@@ -36,6 +36,34 @@ static void test_stub_scripts_and_records(void) {
     CHECK_EQ_INT(hal_millis(), 10);
 }
 
+/* Most I2C parts are configured with a write before the first read. The stub must ACK that write
+ * for a registered device that has no read data queued yet, and NAK it for an empty address. */
+static void test_stub_i2c_write_before_first_read(void) {
+    static const uint8_t cfg[] = {0x60};
+    CHECK(hal_stub_add_i2c(0x48));
+    CHECK_EQ_INT(hal_i2c_write(0x48, 0x01, cfg, 1), 0);   /* registered, nothing scripted: ACK */
+    CHECK_EQ_INT(hal_i2c_write(0x49, 0x01, cfg, 1), -1);  /* nothing at 0x49: NAK */
+    CHECK_EQ_INT(hal_stub_log.i2c_writes, 2);
+    CHECK_EQ_INT(hal_stub_log.i2c_naks, 1);
+    CHECK_EQ_INT(hal_stub_log.last_i2c_addr, 0x49);
+    CHECK_EQ_INT(hal_stub_log.last_i2c_reg, 0x01);
+
+    uint8_t buf[2] = {0, 0};
+    CHECK_EQ_INT(hal_i2c_read(0x48, 0x00, buf, 2), 0);   /* registered but no data: idle bus reads high */
+    CHECK_EQ_INT(buf[0], 0xFF);
+
+    CHECK(hal_stub_fail_i2c(0x48, 1));                      /* a fault NAKs the next transaction, write or read */
+    CHECK_EQ_INT(hal_i2c_write(0x48, 0x01, cfg, 1), -1);
+    CHECK_EQ_INT(hal_i2c_write(0x48, 0x01, cfg, 1), 0);
+    CHECK_EQ_INT(hal_stub_log.i2c_naks, 2);
+
+    CHECK(hal_stub_add_i2c(0x48));                          /* re-adding is idempotent, not a second slot */
+    CHECK(hal_stub_add_i2c(0x10));
+    CHECK(hal_stub_add_i2c(0x11));
+    CHECK(hal_stub_add_i2c(0x12));
+    CHECK(!hal_stub_add_i2c(0x13));                         /* 4 device slots: the fifth fails loudly */
+}
+
 /* ---------- 2. Adapters: the firmware's callback HAL -> the link-time stub ---------- */
 /* On the target these would wrap the vendor SPI/I2C/GPIO drivers. */
 #define IMU_FRAME_BYTES 8
@@ -139,6 +167,7 @@ static void test_i2c_nak_is_reported_as_temp_fault(void) { /* SN-REQ-007 */
 
 int main(void) {
     RUN(test_stub_scripts_and_records);
+    RUN(test_stub_i2c_write_before_first_read);
     RUN(test_one_second_produces_one_valid_packet);
     RUN(test_spi_dropout_triggers_imu_reinit);
     RUN(test_i2c_nak_is_reported_as_temp_fault);

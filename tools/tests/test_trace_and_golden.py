@@ -197,9 +197,19 @@ class GoldenPathTests(unittest.TestCase):
         report = (golden_path.OUT / "REPORT.md").read_text(encoding="utf-8")
         self.assertIn(f"{len(stages)}/{len(stages)} stages passed", report)
         for name in ("brief.md", "brief.html", "what-if-baseline.md", "what-if-imu-c-can.md", "status.md",
-                     "trace-matrix.md", "deck.html", "mcp-handshake.jsonl", "model-python.csv", "model-compare.md",
+                     "trace-matrix.md", "deck.html", "mcp-handshake.jsonl", "model-python.csv", "model-python-compare.md",
                      "rig-python.csv", "rig-compare.md"):
             self.assertTrue((golden_path.OUT / name).exists(), name)
+        model = next(s for s in data["stages"] if s["stage"] == "model-to-code")
+        if shutil.which("cc") or shutil.which("gcc") or shutil.which("clang"):
+            # The skill claims C and Python both match the model; the stage must have proven both.
+            self.assertIn("python and c twins", model["detail"])
+            self.assertTrue((golden_path.OUT / "model-c.csv").exists())
+            self.assertTrue((golden_path.OUT / "model-c-compare.md").exists())
+            self.assertEqual((golden_path.OUT / "model-c.csv").read_text(encoding="utf-8"),
+                             (golden_path.OUT / "model-python.csv").read_text(encoding="utf-8"))
+        else:
+            self.assertIn("C twin skipped", model["detail"])
 
     def test_docs_quote_the_counts_the_stages_measure(self):
         # README and the three skills quote sizes of the example lanes; pin them to the files and stage output.
