@@ -4,8 +4,10 @@
     python tools/check_repo.py
 
 Checks:
-  1. Every .devin/skills/*/SKILL.md has valid frontmatter (name matches folder, has description).
-  2. Every skill listed in AGENTS.md exists, and every skill is listed in AGENTS.md.
+  1. Every .devin/skills/*/SKILL.md has valid frontmatter (name matches folder, has description,
+     only documented keys).
+  2. Every skill listed in AGENTS.md exists, and every skill is listed in AGENTS.md; every /skill
+     mentioned in README.md, WORKFLOWS.md, WALKTHROUGH.md exists.
   3. Relative links and paths mentioned in Markdown files resolve.
   4. No secrets-looking strings, forbidden words, or non-synthetic identifiers (see FORBIDDEN, SECRET_PATTERNS).
   5. JSON files parse; tracker validates; the example deck builds; what-if runs; research brief validates.
@@ -24,6 +26,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / ".devin" / "skills"
 AGENTS = ROOT / "AGENTS.md"
+ROUTING_DOCS = ["README.md", "WORKFLOWS.md", "WALKTHROUGH.md"]
+# Frontmatter keys documented for Devin Local skills. Anything else is a typo or an unsupported field.
+FRONTMATTER_KEYS = {"name", "description", "argument-hint", "model", "allowed-tools", "permissions", "triggers"}
+MAX_SKILLS = 12
 
 # Words that must never appear (case-insensitive). Add customer/program names here before publishing.
 FORBIDDEN = [
@@ -48,6 +54,31 @@ TEXT_EXT = {".md", ".json", ".py", ".c", ".h", ".txt", ".sh", ".yaml", ".yml", "
 
 LINK_RE = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
 BACKTICK_PATH_RE = re.compile(r"`((?:\.devin|\.agents|example-system|integrations|templates|tools|outputs)/[^`\s*]+)`")
+# Skill references in routing docs are code: `/skill ...` inline, or a fenced line starting with /skill.
+# Absolute paths in code spans need a second segment or a trailing slash (`/tmp/`, `/usr/bin`), see CONTRIBUTING.md.
+INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
+SLASH_CMD_RE = re.compile(r"^/([a-z][a-z0-9-]*)(?=\s|$|[.,;:!?](?:\s|$))")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+
+
+def slash_commands(text: str) -> set[str]:
+    found = set()
+    fence = ""  # opening fence marker; a block closes only on the same character, at least as long, alone on its line
+    for line in text.splitlines():
+        m = FENCE_RE.match(line)
+        if m and not fence:
+            fence = m.group(1)
+            continue
+        if m and fence and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not m.group(2).strip():
+            fence = ""
+            continue
+        spans = [line.strip()] if fence else INLINE_CODE_RE.findall(line)
+        for span in spans:
+            m = SLASH_CMD_RE.match(span.strip())
+            if m:
+                found.add(m.group(1))
+    return found
+
 
 problems: list[str] = []
 
@@ -97,19 +128,30 @@ def check_skills() -> set[str]:
             fail(f"{f}: description missing or too short")
         if not re.fullmatch(r"[a-z0-9-]+", d.name):
             fail(f"{d}: skill folder must be lowercase-kebab")
+        for k in set(fm) - FRONTMATTER_KEYS:
+            fail(f"{f}: unknown frontmatter key {k!r} (allowed: {', '.join(sorted(FRONTMATTER_KEYS))})")
         names.add(d.name)
+    if len(names) > MAX_SKILLS:
+        fail(f"{len(names)} skills; cap is {MAX_SKILLS}. Merge or remove one before adding more")
     return names
 
 
 def check_agents(skill_names: set[str]) -> None:
     text = AGENTS.read_text()
-    listed = set(re.findall(r"`/([a-z0-9-]+)`", text))
+    listed = slash_commands(text)
     for s in listed - skill_names:
         fail(f"AGENTS.md lists /{s} but .devin/skills/{s}/SKILL.md does not exist")
     for s in skill_names - listed:
         fail(f".devin/skills/{s} exists but AGENTS.md does not route to it")
     if len(text.splitlines()) > 80:
         fail("AGENTS.md is over 80 lines; move detail into a skill")
+    for doc in ROUTING_DOCS:
+        p = ROOT / doc
+        if not p.exists():
+            fail(f"{doc} is missing")
+            continue
+        for s in slash_commands(p.read_text()) - skill_names:
+            fail(f"{doc} mentions /{s} but .devin/skills/{s}/SKILL.md does not exist")
 
 
 def check_links() -> None:
@@ -164,11 +206,14 @@ def check_tools() -> None:
             except json.JSONDecodeError as e:
                 fail(f"{p.relative_to(ROOT)}: invalid JSON ({e})")
     py = sys.executable
+    run([py, "tools/doctor.py"])
     run([py, "tools/tracker_report.py"])
     run([py, "tools/what_if.py", "--imu", "imu-b"], allowed_codes=frozenset({0, 2}))  # 2 = budget FAIL, a valid result
     run([py, "tools/build_deck.py", "templates/deck-outline-example.json", "outputs/example-deck.html"])
     run([py, "tools/export_pptx.py", "templates/deck-outline-example.json", "outputs/example-deck.pptx"])
     run([py, "tools/research_brief.py", "--check"])
+    run([py, "tools/trace_matrix.py", "--out", "outputs/trace-matrix.md"])
+    run([py, "tools/golden_path.py", "--skip-tests"])  # the test suites run below
     run([py, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=ROOT / "example-system")
     run([py, "-m", "unittest", "discover", "-s", "tools/tests", "-q"])
     run([py, "-m", "unittest", "integrations/reference-mcp/test_server.py", "-q"])

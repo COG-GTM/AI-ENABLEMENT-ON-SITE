@@ -13,9 +13,158 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import build_deck  # noqa: E402
+import doctor  # noqa: E402
 import research_brief  # noqa: E402
 import tracker_report  # noqa: E402
 import what_if  # noqa: E402
+
+
+class DoctorTests(unittest.TestCase):
+    def test_repo_is_ready_here(self):
+        rows = doctor.run_all()
+        self.assertEqual([r["check"] for r in rows if r["status"] == "FAIL"], [])
+        self.assertTrue({r["status"] for r in rows} <= {"OK", "SKIP", "FAIL"})
+        self.assertIn("READY", doctor.render(rows))
+
+    def test_skill_count_matches_disk(self):
+        skills = [r for r in doctor.run_all() if r["check"] == "Skills"][0]
+        on_disk = sorted(p.name for p in (ROOT / ".devin" / "skills").iterdir() if (p / "SKILL.md").is_file())
+        self.assertIn(f"{len(on_disk)} found", skills["detail"])
+        for name in on_disk:
+            self.assertIn(name, skills["detail"])
+
+    def test_json_output_and_exit_codes(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = doctor.main(["--json"])
+        data = json.loads(out.getvalue())
+        self.assertEqual(code, 0)
+        self.assertTrue(data["ready"])
+        self.assertEqual(len(data["checks"]), len(doctor.run_all()))
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(doctor.main(["--bogus"]), 2)
+
+    def test_broken_mcp_config_is_reported(self):
+        real = doctor.ROOT
+        with tempfile.TemporaryDirectory() as td:
+            fake = Path(td)
+            (fake / ".devin").mkdir()
+            (fake / ".devin" / "mcp_config.json").write_text('{"mcpServers": {"x": {"command": "python3", "args": ["missing/server.py"]}}}')
+            doctor.ROOT = fake
+            try:
+                r = doctor.check_mcp_config()
+            finally:
+                doctor.ROOT = real
+        self.assertEqual(r["status"], "FAIL")
+        self.assertIn("missing/server.py", r["detail"])
+
+    def test_malformed_mcp_shapes_fail_instead_of_raising(self):
+        cases = {
+            "[]": "non-empty object",
+            '{"mcpServers": {"x": 5}}': "must be an object",
+            '{"mcpServers": {"x": {"command": ""}}}': "missing command",
+            '{"mcpServers": {"x": {"command": "python3", "args": null}}}': "list of strings",
+            '{"mcpServers": {"x": {"command": "no-such-binary-for-doctor"}}}': "not found on PATH",
+        }
+        real = doctor.ROOT
+        with tempfile.TemporaryDirectory() as td:
+            fake = Path(td)
+            (fake / ".devin").mkdir()
+            doctor.ROOT = fake
+            try:
+                for body, expect in cases.items():
+                    (fake / ".devin" / "mcp_config.json").write_text(body)
+                    r = doctor.check_mcp_config()
+                    self.assertEqual(r["status"], "FAIL", body)
+                    self.assertIn(expect, r["detail"], body)
+            finally:
+                doctor.ROOT = real
+
+    def test_outputs_check_does_not_create_directory(self):
+        real = doctor.ROOT
+        with tempfile.TemporaryDirectory() as td:
+            doctor.ROOT = Path(td)
+            try:
+                r = doctor.check_outputs_writable()
+            finally:
+                doctor.ROOT = real
+            self.assertEqual(r["status"], "OK")
+            self.assertFalse((Path(td) / "outputs").exists())
+
+    def test_outputs_as_a_file_fails(self):
+        real = doctor.ROOT
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "outputs").write_text("not a directory")
+            doctor.ROOT = Path(td)
+            try:
+                r = doctor.check_outputs_writable()
+            finally:
+                doctor.ROOT = real
+        self.assertEqual(r["status"], "FAIL")
+        self.assertIn("not a directory", r["detail"])
+
+
+class CheckRepoTests(unittest.TestCase):
+    def _with_skills(self, skills: dict[str, str]):
+        import check_repo
+        td = tempfile.TemporaryDirectory()
+        for name, fm in skills.items():
+            d = Path(td.name) / name
+            d.mkdir()
+            (d / "SKILL.md").write_text(f"---\n{fm}\n---\nbody\n")
+        real, check_repo.SKILLS, check_repo.problems = check_repo.SKILLS, Path(td.name), []
+        try:
+            names = check_repo.check_skills()
+            return names, list(check_repo.problems)
+        finally:
+            check_repo.SKILLS = real
+            td.cleanup()
+
+    def test_unknown_frontmatter_key_is_rejected(self):
+        _, problems = self._with_skills({"good": "name: good\ndescription: a perfectly fine description here",
+                                         "bad": "name: bad\ndescription: a perfectly fine description here\ntools: [exec]"})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("unknown frontmatter key 'tools'", problems[0])
+
+    def test_skill_cap_enforced(self):
+        import check_repo
+        many = {f"s{n}": f"name: s{n}\ndescription: a perfectly fine description here" for n in range(check_repo.MAX_SKILLS + 1)}
+        _, problems = self._with_skills(many)
+        self.assertTrue(any("cap is" in p for p in problems))
+
+    def test_routing_docs_only_mention_real_skills(self):
+        import check_repo
+        check_repo.problems = []
+        check_repo.check_agents(set(check_repo.check_skills()))
+        self.assertEqual(check_repo.problems, [])
+        check_repo.problems = []
+        check_repo.check_agents({"tour"})
+        self.assertTrue(any("README.md mentions /exec-deck" in p for p in check_repo.problems))
+        check_repo.problems = []
+
+    def test_slash_commands_are_code_spans_or_fenced_lines_not_prose_or_paths(self):
+        import check_repo
+        text = "\n".join([
+            "| swap a part | `/what-if-part-swap` |",
+            "```text",
+            "/exec-deck Design review deck",
+            "```",
+            "then paste `/tdd` and wait; `/research-brief.` or `/tour!` also count",
+            "~~~",
+            "  /spec-driven Add a diagnostics packet",
+            "~~~",
+            "````md",
+            "~~~",
+            "```",
+            "/track-and-report status",
+            "````",
+            "prose mentions like /not-a-command or \"/quoted\" are not references",
+            "paths in code: `/tmp/`, `/usr/bin/python3`, `/config.json`, `/workspace/`, `./relative`, `outputs/x.md`",
+            "URLs: `https://example.invalid/not-a-skill` and prompts: `Mimic the /design-artifacts workflow`",
+        ])
+        self.assertEqual(check_repo.slash_commands(text),
+                         {"what-if-part-swap", "exec-deck", "tdd", "research-brief", "tour", "spec-driven",
+                          "track-and-report"})
 
 
 class TrackerReportTests(unittest.TestCase):
