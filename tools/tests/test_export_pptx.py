@@ -163,9 +163,15 @@ class ExportPptxTests(unittest.TestCase):
         self.assertEqual([wrap("", w12), wrap("abc def", w12), wrap("abc def", w12 - 2), wrap("abcdefghijkl", w12)], [1, 1, 2, 2])
         self.assertEqual([wrap(cjk, w12), wrap("e\u0301" * 6, w12), wrap("abcdef", w12), wrap("ABCDEF", w12)], [2, 1, 1, 2])
         thumbs, family, flags = "\U0001F44D\U0001F3FD" * 2, "\U0001F468\u200d\U0001F469\u200d\U0001F467", "\U0001F1FA\U0001F1F8" * 2
-        self.assertEqual([sum(build_deck.glyph_units(s)) for s in (thumbs, family, flags)], [20, 10, 20])  # one em per emoji
-        loose = ("A\u200dB", "\U0001F3FD", "a\U0001F3FD", "\U0001F44D\u200dZ")  # not emoji sequences: every glyph shows
-        self.assertEqual([sum(build_deck.glyph_units(s)) for s in loose], [14, 10, 16, 17])
+        astronaut, heart_fire = "\U0001F468\U0001F3FD\u200d\U0001F680", "\u2764\ufe0f\u200d\U0001F525"
+        self.assertEqual(  # one em per emoji sequence
+            [sum(build_deck.glyph_units(s)) for s in (thumbs, family, flags, astronaut, heart_fire)], [20, 10, 20, 10, 10]
+        )
+        loose = (  # not emoji sequences, every glyph shows: letters round a joiner, modifier on nothing / a letter /
+            "A\u200dB", "\U0001F3FD", "a\U0001F3FD", "\U0001F3E0\U0001F3FB",  # a house (not a modifier base),
+            "\U0001F44D\U0001F3FD\U0001F3FD", "\U0001F3E0\u200d\U0001F3E0", "\U0001F44D\u200dZ",  # second modifier, joined houses
+        )
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in loose], [14, 10, 16, 20, 20, 20, 17])
         cols = list("abcdefghijkl")
         emoji = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[thumbs] * 12] * 12}]}
         for build in (build_deck.build, export_pptx.build_parts):  # 13 lines: fits

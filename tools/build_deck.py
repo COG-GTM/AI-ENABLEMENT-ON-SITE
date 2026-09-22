@@ -42,6 +42,16 @@ MAX_TABLE_COLS, MAX_TABLE_ROWS = 12, 12  # one slide's worth in both outputs (HT
 TABLE_LINES = 14  # wrapped table lines (header included) both outputs can show
 TABLE_PX, CELL_PAD_PX, CELL_FONT_PX, HEAD_FONT_PX = 1136, 24, 19, 16  # HTML table at 1280x720; the PPTX cells are a little wider
 NARROW = set(" ijl.,:;!|'`fIt()[]{}-")
+# Emoji_Modifier_Base ranges from Unicode 15.1 emoji-data.txt: the only glyphs a skin-tone modifier merges into.
+MODIFIER_BASE = (
+    "261D-261D 26F9-26F9 270A-270D 1F385-1F385 1F3C2-1F3C4 1F3C7-1F3C7 1F3CA-1F3CC 1F442-1F443 1F446-1F450"
+    " 1F466-1F478 1F47C-1F47C 1F481-1F483 1F485-1F487 1F48F-1F48F 1F491-1F491 1F4AA-1F4AA 1F574-1F575"
+    " 1F57A-1F57A 1F590-1F590 1F595-1F596 1F645-1F647 1F64B-1F64F 1F6A3-1F6A3 1F6B4-1F6B6 1F6C0-1F6C0"
+    " 1F6CC-1F6CC 1F90C-1F90C 1F90F-1F90F 1F918-1F91F 1F926-1F926 1F930-1F939 1F93C-1F93E 1F977-1F977"
+    " 1F9B5-1F9B6 1F9B8-1F9B9 1F9BB-1F9BB 1F9CD-1F9CF 1F9D1-1F9DD 1FAC3-1FAC5 1FAF0-1FAF8"
+)
+# Non-people first glyphs of the RGI zero-width-joiner sequences (flags, animals, faces, heart, food).
+ZWJ_HEAD = "2764-2764 1F344-1F344 1F34B-1F34B 1F3F3-1F3F4 1F408-1F408 1F415-1F415 1F426-1F426 1F43B-1F43B 1F441-1F441 1F62E-1F62E 1F635-1F636 1F642-1F642"
 MAX_TEXT = 2000
 DEFAULT_ACCENT = "#2600FF"
 ACCENT_RE = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -118,6 +128,11 @@ def _number(v, where: str) -> None:
         raise SystemExit(f"{where}: expected a finite number")
 
 
+def _in(ch: str, ranges: str) -> bool:
+    """True when ch falls in one of the space-separated hex ranges "LO-HI"."""
+    return bool(ch) and any(int(lo, 16) <= ord(ch) <= int(hi, 16) for lo, hi in (r.split("-") for r in ranges.split()))
+
+
 def _pictograph(ch: str) -> bool:
     return "\U0001F000" <= ch <= "\U0001FAFF" or "\u2600" <= ch <= "\u27bf"
 
@@ -125,15 +140,16 @@ def _pictograph(ch: str) -> bool:
 def glyph_units(text: str) -> list:
     """Per code point advance width in tenths of an em, rounded up for an Arial-class sans font.
 
-    Marks and format characters are 0. So are a skin-tone modifier on a pictograph, a pictograph joined to
-    another by a zero-width joiner and the second half of a flag pair: the emoji sequence is one wide glyph.
+    Marks and format characters are 0. So are a skin-tone modifier on a modifier base, a pictograph joined
+    by a zero-width joiner to a sequence head, and the second half of a flag pair: the emoji sequence is
+    one wide glyph. Modifiers and joins on anything else keep their own advance.
     """
     units, prev, base = [], "", ""  # prev: last code point; base: glyph the current cluster started with
     for ch in text:
         flag = "\U0001F1E6" <= ch <= "\U0001F1FF"
         if (unicodedata.category(ch) in ("Mn", "Me", "Cf")
-                or ("\U0001F3FB" <= ch <= "\U0001F3FF" and _pictograph(base))
-                or (prev == "\u200d" and _pictograph(ch) and _pictograph(base))
+                or ("\U0001F3FB" <= ch <= "\U0001F3FF" and prev == base and _in(base, MODIFIER_BASE))
+                or (prev == "\u200d" and _pictograph(ch) and _in(base, MODIFIER_BASE + " " + ZWJ_HEAD))
                 or (flag and "\U0001F1E6" <= base <= "\U0001F1FF")):
             units.append(0)
             prev, base = ch, "" if flag else base
