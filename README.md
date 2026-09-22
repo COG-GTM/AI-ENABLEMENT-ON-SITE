@@ -9,9 +9,22 @@ This is a reference repository, not a product. Every skill is a procedure Devin 
 sensor node in `example-system/` is what it practises on. The last step of every workflow is
 "now do this on my project".
 
+## Get the files (once)
+
+Devin Desktop works on a folder on your laptop, so the repository has to be on the machine. Reading
+it on GitHub is fine; running it needs a local copy. Pick one:
+
+1. **No git needed:** on the GitHub page click the green **Code** button, **Download ZIP**, unzip it
+   anywhere, and open that folder in Devin Desktop.
+2. **Have git:** `git clone https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE.git`, then open the folder.
+3. **Let Devin do it:** paste the repository URL into Devin Desktop and say `clone this and open it`.
+   Works only if the laptop is allowed to reach github.com.
+
+Nothing to install afterwards: Python 3.10+ is the only requirement.
+
 ## Start here (2 minutes)
 
-1. Clone or fork this repository and open the folder in Devin Desktop.
+1. Open the folder in Devin Desktop.
 2. Devin reads `AGENTS.md` automatically and finds the skills under `.devin/skills/`.
 3. Paste these three prompts, in order:
 
@@ -71,11 +84,11 @@ input. Full tables with every prompt are in `WORKFLOWS.md`; here is what each on
 
 | # | Workflow | Skills in order | The question it answers |
 | --- | --- | --- | --- |
-| 1 | Design change to leadership brief | what-if-part-swap, design-artifacts, tdd, track-and-report, exec-deck | "What if we change this part, and what do I tell the review board?" |
-| 2 | Research to decision | research-brief, exec-deck | "What do we know, with sources, and what is the recommendation?" |
-| 3 | Feature: spec to tests to code to document | spec-driven, tdd, architecture-doc | "Add this feature properly, with the paperwork kept honest." |
-| 4 | Connect a tool, then report | connect-tools, track-and-report, exec-deck | "Pull our real issues, read-only, and turn them into a status deck." |
-| 5 | Stand up an MCP server by hand | mcp-server | "Show me the whole MCP protocol in one file, then add a tool to it." |
+| 1 | Design change to leadership brief | `/what-if-part-swap`, `/design-artifacts`, `/tdd`, `/track-and-report`, `/exec-deck` | "What if we change this part, and what do I tell the review board?" |
+| 2 | Research to decision | `/research-brief`, `/exec-deck` | "What do we know, with sources, and what is the recommendation?" |
+| 3 | Feature: spec to tests to code to document | `/spec-driven`, `/tdd`, `/architecture-doc` | "Add this feature properly, with the paperwork kept honest." |
+| 4 | Connect a tool, then report | `/connect-tools`, convert to the tracker schema (`tools/tracker_import.py`), `/track-and-report`, `/exec-deck` | "Pull our real issues, read-only, and turn them into a status deck." |
+| 5 | Stand up an MCP server by hand | `/mcp-server` | "Show me the whole MCP protocol in one file, then add a tool to it." |
 
 Ask for the end result and Devin runs the whole row: `Swap the IMU for imu-c and brief leadership`.
 
@@ -116,8 +129,9 @@ example-system/      the synthetic battery sensor node everything practises on
   docs/              SRS.md (requirements), ICD.md (interfaces), HAZARDS.md (FMEA), ADR-*.md (decisions),
                      POWER-BUDGET.md, TIMING.md, ARCHITECTURE.md
   parts/             one JSON per part (mcu-m0, imu-a/b/c, temp-x, can-xcvr): the numbers what-if uses
-  src/               C firmware: node.c, packet.c, filter.c (host-buildable, hardware via callbacks)
-  sim/sensor_node/   Python twin of the same firmware
+  README.md          how the node works and how to build and test it
+  src/               C firmware: node.c, packet.c, filter.c and their .h headers (host-buildable, hardware via callbacks)
+  sim/sensor_node/   Python twin of the same firmware (node.py, packet.py, filter.py, demo.py)
   tests/             test_node.py, test_packet.py, test_filter.py, test_firmware.c
   tracker.json       bugs (SN-BUG-*) and capabilities (SN-CAP-*) linked to requirement and hazard IDs
   Makefile           make test runs both twins
@@ -128,8 +142,10 @@ tools/               small Python scripts the skills call. Standard library only
   build_deck.py      JSON outline -> HTML deck           export_pptx.py   same outline -> PPTX
   research_brief.py  research JSON -> MD + HTML brief    tracker_report.py status report
   golden_path.py     runs every workflow end to end      tests/           tests for the tools
+  tracker_import.py  Jira / GitLab / Azure DevOps / CSV export -> tracker.json schema
 integrations/        README.md (which lane, which credential), curl-recipes.md, cli-recipes.md,
                      rest_client.py (read-only, redacts tokens), mcp_config.example.json,
+                     fake_server.py (offline stand-in for Jira, GitLab, Azure DevOps; fixtures/ holds its data),
                      reference-mcp/ (one-file MCP server + handshake + tests)
 templates/           spec.md, plan.md, tracker-item.json, deck-outline-example.json,
                      research-brief-example.json: the input shapes the tools accept
