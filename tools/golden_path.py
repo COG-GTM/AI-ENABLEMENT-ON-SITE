@@ -8,8 +8,9 @@ Usage:
 
 This is the proof that the repository works on a fresh checkout with no network: readiness, research
 brief, what-if analysis, tracker report, traceability matrix, executive deck (HTML and, when the exporter
-is present, PPTX), the spec worked example, the MCP handshake, and the firmware twins. Every expected
-number is derived from the source files, never typed in here. Exit 1 if any stage fails.
+is present, PPTX), the spec worked example, the MCP handshake, the model-to-code and LabVIEW-rig
+equivalence checks, the host harness, and the firmware twins. Every expected number is derived from the
+source files, never typed in here. Exit 1 if any stage fails.
 Standard library only.
 """
 
@@ -198,6 +199,60 @@ def stage_mcp() -> None:
            f"{len(responses)} responses for {len(expected_ids)} requests; errors={errors or 'none'}; {len(tools)} tools listed")
 
 
+def compare(expected: Path, actual: Path, name: str) -> tuple[subprocess.CompletedProcess, dict | None]:
+    r = run([PY, "tools/bench_compare.py", str(expected), str(actual), "--json"])
+    (OUT / f"{name}-compare.md").write_text(run([PY, "tools/bench_compare.py", str(expected), str(actual), "--markdown"]).stdout, encoding="utf-8")
+    try:
+        return r, json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return r, None
+
+
+def stage_model() -> None:
+    # MATLAB model -> Python twin: every golden vector row must match exactly (integer output).
+    vectors = SYSTEM / "model" / "filter_vectors.csv"
+    n_rows = len(vectors.read_text(encoding="utf-8").splitlines()) - 1
+    out = OUT / "model-python.csv"
+    r = run([PY, "example-system/model/run_vectors.py", "--impl", "python", "--out", str(out)])
+    if r.returncode:
+        record("model-to-code", False, (r.stdout + r.stderr)[-300:])
+        return
+    c, j = compare(vectors, out, "model")
+    ok = c.returncode == 0 and j is not None and j["verdict"] == "PASS" and j["rows_expected"] == j["rows_actual"] == n_rows
+    record("model-to-code", ok, f"{n_rows} vectors replayed through the Python twin; "
+           + (f"{sum(x['pass'] for x in j['columns'])}/{len(j['columns'])} columns match exactly" if j else f"compare exit {c.returncode}"))
+
+
+def stage_bench() -> None:
+    # LabVIEW rig -> Python: replay the recorded samples, compare with the VI's own results row by row.
+    bench = SYSTEM / "bench"
+    recording = bench / "rig_recording.csv"
+    n_steps = len(recording.read_text(encoding="utf-8").splitlines()) - 1
+    out = OUT / "rig-python.csv"
+    r = run([PY, "example-system/bench/rig.py", "--replay", str(bench / "rig_samples.csv"), "--out", str(out)])
+    if r.returncode:
+        record("labview-to-python", False, (r.stdout + r.stderr)[-300:])
+        return
+    verdicts = [line.rsplit(",", 1)[-1] for line in out.read_text(encoding="utf-8").splitlines()[1:]]
+    c, j = compare(recording, out, "rig")
+    ok = (c.returncode == 0 and j is not None and j["verdict"] == "PASS" and j["rows_expected"] == j["rows_actual"] == n_steps
+          and "FAIL" in verdicts)  # the recording contains a genuine failing step; the port must reproduce it
+    record("labview-to-python", ok, f"{n_steps} soak steps replayed; "
+           + (f"{sum(x['pass'] for x in j['columns'])}/{len(j['columns'])} columns match the VI recording; " if j else f"compare exit {c.returncode}; ")
+           + f"verdicts {'/'.join(verdicts)}")
+
+
+def stage_host_harness() -> None:
+    cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
+    if not (cc and shutil.which("make")):
+        record("host-harness", True, "no C compiler/make found; skipped")
+        return
+    r = run(["make", "-s", "-C", "templates/host-harness", "test"])
+    m = re.search(r"host tests: (\d+) checks passed", r.stdout)
+    record("host-harness", r.returncode == 0 and m is not None,
+           f"{m.group(1)} checks against example-system/src through hal_stub.c" if m else (r.stdout + r.stderr)[-300:])
+
+
 def stage_tests() -> None:
     r = run([PY, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=SYSTEM)
     m = re.search(r"Ran (\d+) tests", r.stderr)
@@ -236,7 +291,8 @@ def main(argv=None) -> int:
     progress = sys.stderr if a.json else sys.stdout
     results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
-    stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp]
+    stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
+              stage_model, stage_bench, stage_host_harness]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:
