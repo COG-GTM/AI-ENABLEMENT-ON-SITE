@@ -1,0 +1,4 @@
+step,setpoint_c,samples,mean_temp_cc,max_dev_cc,acc_z_mean,temp_ok,imu_ok,verdict
+1,25,8,2500,4,8192,TRUE,TRUE,PASS
+2,50,8,5024,16,8204,TRUE,TRUE,PASS
+3,75,8,7335,35,8104,FALSE,TRUE,FAIL

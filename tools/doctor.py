@@ -112,6 +112,14 @@ def check_c_toolchain() -> dict:
                "optional; Python firmware twin covers the same behaviour" + (f" (found: {', '.join(have)})" if have else ""))
 
 
+def check_optional_tools() -> dict:
+    found = [name for name in ("lvkit", "cppcheck") if shutil.which(name)]
+    if found:
+        return row("Optional tools", "OK", ", ".join(found) + " (lvkit: LabVIEW .vi inventory; cppcheck: C static analysis)")
+    return row("Optional tools", "SKIP",
+               "lvkit, cppcheck not found; optional. /labview-to-python works from exported VI docs without lvkit")
+
+
 def check_network() -> dict:
     return row("Network", "OK", "not required; every workflow runs offline against example-system/")
 
@@ -129,6 +137,7 @@ def run_all() -> list[dict]:
         check_mcp_config(),
         check_outputs_writable(),
         check_c_toolchain(),
+        check_optional_tools(),
         check_network(),
     ]
 

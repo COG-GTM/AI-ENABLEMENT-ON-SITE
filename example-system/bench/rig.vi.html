@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<!--
+  Synthetic stand-in for what LabVIEW writes with File > Print... > HTML (VI documentation).
+  Real exports embed front-panel and block-diagram PNGs next to the .html; here those are
+  replaced by text so the file stays reviewable in a diff. Everything below is invented for the
+  synthetic sensor node in example-system/. It is the input to /labview-to-python.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Thermal Soak Test.vi</title>
+<style>body{font-family:sans-serif;max-width:60em}table{border-collapse:collapse}td,th{border:1px solid #999;padding:2px 6px;text-align:left}pre{background:#f4f4f4;padding:6px}</style>
+</head>
+<body>
+
+<h1>Thermal Soak Test.vi</h1>
+<p>Steps a thermal chamber through a list of setpoints. At each setpoint it lets the chamber settle,
+reads N uplink packets from the sensor node under test, computes the mean and maximum deviation of the
+reported temperature and the mean of the stationary Z-axis acceleration, judges the step, and appends a
+row to the results log.</p>
+
+<h2>Connector Pane</h2>
+<p>[image: Thermal Soak Test_cp.png - omitted in this synthetic export]</p>
+<table>
+<tr><th>Terminal</th><th>Direction</th><th>Type</th><th>Default</th></tr>
+<tr><td>VISA resource (chamber)</td><td>in</td><td>VISA resource name</td><td>ASRL1::INSTR</td></tr>
+<tr><td>VISA resource (node UART)</td><td>in</td><td>VISA resource name</td><td>ASRL2::INSTR</td></tr>
+<tr><td>Setpoints (degC)</td><td>in</td><td>1-D array of I32</td><td>[25, 50, 75]</td></tr>
+<tr><td>Samples per step</td><td>in</td><td>I32</td><td>8</td></tr>
+<tr><td>Settle time (ms)</td><td>in</td><td>U32</td><td>120000</td></tr>
+<tr><td>Temp tolerance (0.01 degC)</td><td>in</td><td>I32</td><td>150</td></tr>
+<tr><td>Acc Z nominal (LSB)</td><td>in</td><td>I32</td><td>8192</td></tr>
+<tr><td>Acc Z tolerance (LSB)</td><td>in</td><td>I32</td><td>200</td></tr>
+<tr><td>Results log path</td><td>in</td><td>Path</td><td>&lt;Not A Path&gt;</td></tr>
+<tr><td>error in (no error)</td><td>in</td><td>Error cluster</td><td></td></tr>
+<tr><td>Results</td><td>out</td><td>1-D array of cluster (see Indicators)</td><td></td></tr>
+<tr><td>Overall verdict</td><td>out</td><td>Boolean</td><td></td></tr>
+<tr><td>error out</td><td>out</td><td>Error cluster</td><td></td></tr>
+</table>
+
+<h2>Front Panel</h2>
+<p>[image: Thermal Soak Test_fp.png - omitted in this synthetic export]</p>
+
+<h2>Controls and Indicators</h2>
+<table>
+<tr><th>Name</th><th>Kind</th><th>Type</th><th>Description</th></tr>
+<tr><td>Setpoints (degC)</td><td>Control</td><td>I32[]</td><td>Chamber targets, run in order.</td></tr>
+<tr><td>Samples per step</td><td>Control</td><td>I32</td><td>Packets read per setpoint after settle.</td></tr>
+<tr><td>Settle time (ms)</td><td>Control</td><td>U32</td><td>Wait before the first read at each setpoint.</td></tr>
+<tr><td>Results</td><td>Indicator</td><td>Cluster[]</td><td>step (I32), setpoint_c (I32), samples (I32), mean_temp_cc (I32), max_dev_cc (I32), acc_z_mean (I32), temp_ok (Bool), imu_ok (Bool), verdict (String "PASS"/"FAIL")</td></tr>
+<tr><td>Overall verdict</td><td>Indicator</td><td>Boolean</td><td>AND of every step's verdict.</td></tr>
+<tr><td>Chamber temp (degC)</td><td>Indicator</td><td>DBL</td><td>Live chamber readback (display only, not logged).</td></tr>
+</table>
+
+<h2>Block Diagram</h2>
+<p>[image: Thermal Soak Test_bd.png - omitted in this synthetic export]</p>
+<p>Structure, as read off the diagram:</p>
+<pre>
+Initialize:
+  VISA Open (chamber)  ->  Chamber Set Temp.vi (first setpoint)
+  VISA Open (node UART) 115200 8N1
+  Open/Create/Replace File (Results log path), write header row
+
+FOR each setpoint in Setpoints (degC)            [For Loop, auto-indexed]
+  Chamber Set Temp.vi (setpoint)
+  Wait (ms) [Settle time (ms)]
+  FOR i = 0 .. Samples per step - 1              [For Loop]
+    Read Node Packet.vi -> temp_cc (I16), acc_z (I16)   [16-byte frame, CRC-checked]
+    Build Array -> temps, accs
+  Compute Stats.vi:
+    mean_temp = Mean(temps)                      [DBL]
+    mean_temp_cc = Round To Nearest(mean_temp)   [I32]   <-- LabVIEW rounds x.5 to the EVEN integer
+    max_dev_cc   = Max( |temps - mean_temp_cc| ) [I32]
+    acc_z_mean   = Round To Nearest(Mean(accs))  [I32]
+  temp_ok = |mean_temp_cc - setpoint*100| <= Temp tolerance
+  imu_ok  = |acc_z_mean - Acc Z nominal| <= Acc Z tolerance
+  verdict = Select(temp_ok AND imu_ok, "PASS", "FAIL")
+  Log Row.vi -> append CSV row
+  Bundle -> Results (auto-indexed out)
+
+Cleanup:
+  Chamber Set Temp.vi (25)
+  VISA Close x2, Close File
+  Simple Error Handler.vi
+</pre>
+<p>Case structure on the error wire around each loop body: on error, the step is skipped and the error
+propagates to <code>error out</code>; no row is logged for a skipped step.</p>
+
+<h2>List of SubVIs and Express VIs</h2>
+<table>
+<tr><th>SubVI</th><th>Purpose</th></tr>
+<tr><td>Chamber Set Temp.vi</td><td>Writes <code>SET &lt;degC&gt;\n</code> to the chamber over VISA serial and reads back one line.</td></tr>
+<tr><td>Read Node Packet.vi</td><td>Reads one 16-byte uplink frame (0xA5 header, CRC-16/CCITT-FALSE) from the node UART; unpacks temp_cc and acc_z.</td></tr>
+<tr><td>Compute Stats.vi</td><td>Mean / Round To Nearest / max |deviation| as above.</td></tr>
+<tr><td>Log Row.vi</td><td>Formats the results cluster as one CSV line, TRUE/FALSE for Booleans.</td></tr>
+<tr><td>Simple Error Handler.vi</td><td>vi.lib</td></tr>
+</table>
+
+<h2>History</h2>
+<p>Revision 14. Last saved with LabVIEW 2020 SP1 (32-bit). Password protected block diagram: no.</p>
+
+</body>
+</html>

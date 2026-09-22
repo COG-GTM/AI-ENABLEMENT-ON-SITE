@@ -29,7 +29,7 @@ AGENTS = ROOT / "AGENTS.md"
 ROUTING_DOCS = ["README.md", "WORKFLOWS.md", "WALKTHROUGH.md"]
 # Frontmatter keys documented for Devin Local skills. Anything else is a typo or an unsupported field.
 FRONTMATTER_KEYS = {"name", "description", "argument-hint", "model", "allowed-tools", "permissions", "triggers"}
-MAX_SKILLS = 12
+MAX_SKILLS = 15
 
 # Words that must never appear (case-insensitive). Add customer/program names here before publishing.
 FORBIDDEN = [

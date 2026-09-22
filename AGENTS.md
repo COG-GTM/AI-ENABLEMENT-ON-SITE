@@ -20,6 +20,9 @@ When the user's request matches a row, invoke that skill (or tell them the slash
 | bugs, defects, capabilities, tracker, status report, burndown | `/track-and-report` |
 | connect to Jira, GitLab, Confluence, GitHub, Azure DevOps; CLI, API, token, PAT | `/connect-tools` |
 | MCP server, add a server by hand, expose a tool, mcp_config | `/mcp-server` |
+| LabVIEW, VI, .vi, TestStand, test rig, bench, instrument, "get out of LabVIEW", port to Python | `/labview-to-python` |
+| MATLAB, Simulink, .m, .slx, model, algorithm to C, Embedded Coder output, equivalence | `/matlab-to-code` |
+| my firmware, our C/C++ tree, HAL, host build, GoogleTest, Unity, Ceedling, MISRA, run this on our code | `/bring-your-firmware` |
 
 Multi-step requests ("swap the part and brief leadership") follow the pipelines in `WORKFLOWS.md`: run the
 skills in the listed order and hand each stage's output file to the next.

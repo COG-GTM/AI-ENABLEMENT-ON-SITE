@@ -192,12 +192,45 @@ class GoldenPathTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         stages = {s["stage"] for s in data["stages"]}
         self.assertEqual(stages, {"doctor", "research-brief", "what-if", "tracker", "trace-matrix", "exec-deck",
-                                  "exec-deck-pptx", "spec-example", "mcp-server"})
+                                  "exec-deck-pptx", "spec-example", "mcp-server", "model-to-code",
+                                  "labview-to-python", "host-harness"})
         report = (golden_path.OUT / "REPORT.md").read_text(encoding="utf-8")
         self.assertIn(f"{len(stages)}/{len(stages)} stages passed", report)
         for name in ("brief.md", "brief.html", "what-if-baseline.md", "what-if-imu-c-can.md", "status.md",
-                     "trace-matrix.md", "deck.html", "mcp-handshake.jsonl"):
+                     "trace-matrix.md", "deck.html", "mcp-handshake.jsonl", "model-python.csv", "model-compare.md",
+                     "rig-python.csv", "rig-compare.md"):
             self.assertTrue((golden_path.OUT / name).exists(), name)
+
+    def test_docs_quote_the_counts_the_stages_measure(self):
+        # README and the three skills quote sizes of the example lanes; pin them to the files and stage output.
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            golden_path.stage_model()
+            golden_path.stage_bench()
+            golden_path.stage_host_harness()
+        detail = {r["stage"]: r["detail"] for r in golden_path.results}
+        vectors = len((SYSTEM / "model" / "filter_vectors.csv").read_text(encoding="utf-8").splitlines()) - 1
+        samples = len((SYSTEM / "bench" / "rig_samples.csv").read_text(encoding="utf-8").splitlines()) - 1
+        recording = (SYSTEM / "bench" / "rig_recording.csv").read_text(encoding="utf-8").splitlines()
+        steps, columns = len(recording) - 1, len(recording[0].split(","))
+        self.assertIn(f"{vectors} vectors", detail["model-to-code"])
+        self.assertIn(f"{steps} soak steps", detail["labview-to-python"])
+        self.assertIn(f"{columns}/{columns} columns", detail["labview-to-python"])
+        docs = {p: (ROOT / p).read_text(encoding="utf-8") for p in (
+            "README.md", ".devin/skills/matlab-to-code/SKILL.md", ".devin/skills/labview-to-python/SKILL.md",
+            "example-system/model/MODEL-NOTES.md", "example-system/bench/RIG-REVIEW.md")}
+        self.assertIn(f"{vectors} rows", docs["README.md"])
+        self.assertIn(f"{vectors} rows", docs["example-system/model/MODEL-NOTES.md"])
+        self.assertIn(f"{vectors} vectors", docs[".devin/skills/matlab-to-code/SKILL.md"])
+        self.assertIn(f"{samples} raw readings", docs["README.md"])
+        self.assertIn(f"{samples} packets", docs["example-system/bench/RIG-REVIEW.md"])
+        self.assertIn(f"{samples} samples into {steps} step", docs[".devin/skills/labview-to-python/SKILL.md"])
+        self.assertIn(f"{columns} of {columns} columns", docs["README.md"])
+        self.assertIn(f"{columns}/{columns} columns", docs[".devin/skills/labview-to-python/SKILL.md"])
+        m = re.search(r"(\d+) checks against", detail["host-harness"])
+        if m:  # only when a C compiler ran the harness
+            checks = m.group(1)
+            self.assertEqual(docs["README.md"].count(f"{checks} checks"), 2)
+            self.assertIn(f"{checks} checks pass", (ROOT / ".devin/skills/bring-your-firmware/SKILL.md").read_text(encoding="utf-8"))
 
     def test_doctor_failures_are_named(self):
         original = golden_path.run
