@@ -32,7 +32,7 @@ If nothing matches, read `README.md` and ask one clarifying question.
 ## Rules
 
 - Customer-neutral: never add organization, program, project, person, site, or system identifiers. Use the synthetic system in `example-system/`.
-- Synthetic data only. Never add secrets, tokens, keys, PII, CUI, export-controlled, production, or proprietary data. Secrets come from environment variables only.
+- Synthetic data only, plus permissively licensed public open-source files recorded with licence, commit, and hash in a `sources.json` (see `example-system/real-vi/`). Never add secrets, tokens, keys, PII, CUI, export-controlled, production, or proprietary data. Secrets come from environment variables only.
 - Least privilege: prefer Plan mode for first runs; ask before network access, external integrations, or writes outside this repository.
 - No destructive or real-world side effects during demonstrations (no deletes, deployments, external posts, ticket writes).
 - Do not claim a service is inside a FedRAMP boundary unless the user's administrator confirmed it.

@@ -248,6 +248,30 @@ def stage_bench() -> None:
            + f"verdicts {'/'.join(verdicts)}")
 
 
+def stage_real_vi() -> None:
+    # Real open-source VIs -> Python: replay the diagram-derived cases, compare with the reconstruction row by row.
+    # Static + specification-level evidence only; the original VIs were never executed (see example-system/real-vi/VI-REVIEW.md).
+    real = SYSTEM / "real-vi"
+    cases = real / "cases.csv"
+    n_cases = len(cases.read_text(encoding="utf-8").splitlines()) - 1
+    out = OUT / "topic-filter-python.csv"
+    n_vis = len(json.loads((real / "sources.json").read_text(encoding="utf-8"))["files"])
+    r = run([PY, "example-system/real-vi/inventory.py", "--check"])
+    if r.returncode:
+        record("real-vi", False, (r.stdout + r.stderr)[-300:])
+        return
+    r = run([PY, "example-system/real-vi/topic_filter.py", "--replay", str(cases), "--out", str(out)])
+    if r.returncode:
+        record("real-vi", False, (r.stdout + r.stderr)[-300:])
+        return
+    m = re.search(r"(\d+) differ from MQTT", r.stdout)
+    c, j = compare(cases, out, "topic-filter")
+    ok = c.returncode == 0 and j is not None and j["verdict"] == "PASS" and j["rows_expected"] == j["rows_actual"] == n_cases and m is not None
+    record("real-vi", ok, f"{n_vis} real VIs checked against sources.json; {n_cases} cases replayed; "
+           + (f"{sum(x['pass'] for x in j['columns'])}/{len(j['columns'])} columns match the diagram-derived table; " if j else f"compare exit {c.returncode}; ")
+           + (f"{m.group(1)} rows differ from MQTT 3.1.1 (documented)" if m else "spec-diff summary missing"))
+
+
 def stage_host_harness() -> None:
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     if not (cc and shutil.which("make")):
@@ -298,7 +322,7 @@ def main(argv=None) -> int:
     results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
-              stage_model, stage_bench, stage_host_harness]
+              stage_model, stage_bench, stage_real_vi, stage_host_harness]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:

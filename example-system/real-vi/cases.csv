@@ -1,0 +1,40 @@
+case,topic_filter,topic,valid,error_code,match,spec_valid,spec_match,source,note
+U2a,+,sport,TRUE,0,TRUE,TRUE,TRUE,Test MQTT-4.7.1-2.vi frame 1; spec 4.7.1.3,upstream test expects no error
+U2b,MQTT/+/Topic,MQTT/x/Topic,FALSE,55043,-,TRUE,TRUE,Test MQTT-4.7.1-2.vi frame 2; spec 4.7.1.3,DEVIATION: upstream test expects error 55043 ('+' must be last) - spec allows '+' at any level
+U2c,MQTT+,MQTT,FALSE,55044,-,FALSE,-,Test MQTT-4.7.1-2.vi frame 3; spec 4.7.1.3 'sport+' is not valid,upstream test expects error 55044; spec rejects for a different reason ('+' must occupy a whole level)
+U2d,MQTT/+,MQTT/x,TRUE,0,TRUE,TRUE,TRUE,Test MQTT-4.7.1-2.vi frame 4; spec 4.7.1.3,upstream test expects no error
+U3a,#,sport/tennis,TRUE,0,TRUE,TRUE,TRUE,Test MQTT-4.7.1-3.vi frame 1; spec 4.7.1.2 '#' is valid,upstream test expects no error
+U3b,MQTT/#/Topic,MQTT/x/Topic,TRUE,0,TRUE,FALSE,-,Test MQTT-4.7.1-3.vi frame 2; spec 4.7.1.2 '#' must be last,DEVIATION: upstream test expects no error - spec says '#' must be the last character
+U3c,MQTT/#,MQTT/a/b,TRUE,0,TRUE,TRUE,TRUE,Test MQTT-4.7.1-3.vi frame 3; spec 4.7.1.2,upstream test expects no error
+U3d,MQTT#,MQTT,FALSE,55045,-,FALSE,-,Test MQTT-4.7.1-3.vi frame 4; spec 4.7.1.2 'sport/tennis#' is not valid,upstream test expects error 55045
+U3e,MQTT#FILTER,MQTT,FALSE,55045,-,FALSE,-,Test MQTT-4.7.1-3.vi frame 5; spec 4.7.1.2,upstream test expects error 55045
+S01,sport/tennis/player1/#,sport/tennis/player1,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.2 non-normative example,'#' includes the parent level
+S02,sport/tennis/player1/#,sport/tennis/player1/ranking,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.2 non-normative example,
+S03,sport/tennis/player1/#,sport/tennis/player1/score/wimbledon,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.2 non-normative example,
+S04,sport/tennis/player1/#,sport/tennis/player2,TRUE,0,FALSE,TRUE,FALSE,spec 4.7.1.2 (derived),literal level differs
+S05,sport/#,sport,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.2 non-normative example,
+S06,#,$SYS/broker,TRUE,0,FALSE,TRUE,FALSE,spec 4.7.2 non-normative example,'#' must not match topics starting with '$'
+S07,sport/tennis/#,sport/tennis/x,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.2 non-normative example,
+S08,sport/tennis#,sport/tennis,FALSE,55045,-,FALSE,-,spec 4.7.1.2 non-normative example,
+S09,sport/tennis/#/ranking,sport/tennis/x/ranking,TRUE,0,TRUE,FALSE,-,spec 4.7.1.2 non-normative example,DEVIATION: diagram accepts '#' in the middle of a filter - spec says it must be last
+S10,sport/tennis/+,sport/tennis/player1,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.3 non-normative example,
+S11,sport/tennis/+,sport/tennis/player1/ranking,TRUE,0,TRUE,TRUE,FALSE,spec 4.7.1.3 non-normative example,DEVIATION: diagram only compares the filter's own levels so a longer topic matches - spec says '+' matches one level
+S12,sport/+,sport,TRUE,0,TRUE,TRUE,FALSE,spec 4.7.1.3 non-normative example,DEVIATION: diagram matches a topic with fewer levels than the filter (missing level reads as empty) - spec says no match
+S13,sport/+,sport/,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.3 non-normative example,
+S14,+/tennis/#,x/tennis/y,FALSE,55043,-,TRUE,TRUE,spec 4.7.1.3 non-normative example '+/tennis/#' is valid,DEVIATION: diagram rejects '+' anywhere but the end - spec allows it at any level
+S15,sport+,sport,FALSE,55044,-,FALSE,-,spec 4.7.1.3 non-normative example,both reject; diagram code is 55044 because the byte before the final '+' is not '/' (same path as U2c)
+S16,sport/+/player1,sport/x/player1,FALSE,55043,-,TRUE,TRUE,spec 4.7.1.3 non-normative example 'sport/+/player1' is valid,DEVIATION: diagram rejects '+' anywhere but the end - spec allows it at any level
+S17,+/+,/finance,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.3 non-normative example,
+S18,/+,/finance,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.1.3 non-normative example,
+S19,+,/finance,TRUE,0,TRUE,TRUE,FALSE,spec 4.7.1.3 non-normative example,DEVIATION: diagram only compares the filter's own levels so a longer topic matches - spec says '+' alone does not match '/finance'
+S20,+/monitor/Clients,$SYS/monitor/Clients,FALSE,55043,-,TRUE,FALSE,spec 4.7.2 non-normative example,DEVIATION: diagram rejects '+' anywhere but the end - spec allows it and then refuses the '$' topic
+S21,$SYS/#,$SYS/monitor/Clients,TRUE,0,FALSE,TRUE,TRUE,spec 4.7.2 non-normative example,DEVIATION: diagram refuses any '$' topic at every wildcard level - spec only refuses when the filter starts with a wildcard
+S22,$SYS/monitor/+,$SYS/monitor/Clients,TRUE,0,FALSE,TRUE,TRUE,spec 4.7.2 non-normative example,DEVIATION: diagram refuses any '$' topic at every wildcard level - spec only refuses when the filter starts with a wildcard
+S23,ACCOUNTS,Accounts,TRUE,0,FALSE,TRUE,FALSE,spec 4.7.3 case sensitive,
+S24,/finance,finance,TRUE,0,FALSE,TRUE,FALSE,spec 4.7.3 leading '/' creates a distinct topic,
+S25,finance,/finance,TRUE,0,FALSE,TRUE,FALSE,spec 4.7.3 leading '/' creates a distinct topic,
+S26,,sport,FALSE,55041,-,FALSE,-,spec 4.7.3 [MQTT-4.7.3-1] at least one character,
+S27,/,/,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.3 '/' alone is valid,
+S28,sport/tennis,sport/tennis/player1,TRUE,0,TRUE,TRUE,FALSE,spec 4.7.3 (derived) no wildcard means exact topic,DEVIATION: diagram only compares the filter's own levels so a longer topic matches - spec requires the same number of levels
+S29,sport/tennis/player1,sport/tennis,TRUE,0,FALSE,TRUE,FALSE,spec 4.7.3 (derived),missing topic level reads as empty and differs from 'player1'
+S30,sport/tennis,sport/tennis,TRUE,0,TRUE,TRUE,TRUE,spec 4.7.3 (derived) exact match,

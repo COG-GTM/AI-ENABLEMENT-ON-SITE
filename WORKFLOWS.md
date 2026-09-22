@@ -66,6 +66,12 @@ the rig's real output (CSV/TDMS). A bare `.vi` works only with the optional `lvk
 | Review | `Write the manual-review report: what matched, what did not, what stays in LabVIEW and why` | `outputs/<rig>-review.md` (shape: `example-system/bench/RIG-REVIEW.md`) |
 | Brief | `/exec-deck Migration readiness deck from the rig review in outputs/: retain / wrap / port per block, risks, next rig` | `outputs/<name>.deck.json` + `.html` |
 
+Same lane, real `.vi` files, no recording (`example-system/real-vi/`): `python example-system/real-vi/inventory.py --check`
+(binaries match `sources.json`; with `lvkit`, `VI-INVENTORY.md` is re-derived), then
+`python example-system/real-vi/topic_filter.py --replay example-system/real-vi/cases.csv --out outputs/topic-filter-python.csv`
+and `python tools/bench_compare.py example-system/real-vi/cases.csv outputs/topic-filter-python.csv`. PASS there means
+the port agrees with the diagram reading and the project's own test VIs; `VI-REVIEW.md` lists what only a recorded run can settle.
+
 ## 7. MATLAB / Simulink model to C or Python, proven equivalent
 
 Inputs: a `.m` function or `.slx` model, plus any vectors the model owner already has. If the team

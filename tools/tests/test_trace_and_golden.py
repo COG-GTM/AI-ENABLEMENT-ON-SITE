@@ -193,7 +193,7 @@ class GoldenPathTests(unittest.TestCase):
         stages = {s["stage"] for s in data["stages"]}
         self.assertEqual(stages, {"doctor", "research-brief", "what-if", "tracker", "trace-matrix", "exec-deck",
                                   "exec-deck-pptx", "spec-example", "mcp-server", "model-to-code",
-                                  "labview-to-python", "host-harness"})
+                                  "labview-to-python", "real-vi", "host-harness"})
         report = (golden_path.OUT / "REPORT.md").read_text(encoding="utf-8")
         self.assertIn(f"{len(stages)}/{len(stages)} stages passed", report)
         for name in ("brief.md", "brief.html", "what-if-baseline.md", "what-if-imu-c-can.md", "status.md",

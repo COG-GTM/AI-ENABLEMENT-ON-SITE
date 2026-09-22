@@ -152,6 +152,7 @@ Each lane has a finished example in this repository so you can see the shape bef
 | C/C++ firmware | `templates/host-harness/` | `Makefile`, `hal_stub.c/.h` (scripted SPI/I2C/UART/GPIO, deterministic clock, fault injection), `harness.h` (tiny assert macros), `test_main.c` (58 checks against `example-system/src`). Point `FW_SRC`/`FW_INC` at your tree and rewrite section 2 only |
 | MATLAB / Simulink | `example-system/model/` | `moving_avg.m` (the model), `export_vectors.m` (how the owner exports vectors), `filter_vectors.csv` (26 rows: warm-up, extremes, negatives, rounding), `run_vectors.py` (replays through the Python twin or the C via `vectors_driver.c`), `MODEL-NOTES.md` (the numeric-semantics table) |
 | LabVIEW / TestStand | `example-system/bench/` | `rig.vi.html` (what LabVIEW's own HTML export of a thermal-soak VI looks like), `rig_samples.csv` (24 raw readings), `rig_recording.csv` (the VI's own 3-step results, one step failing on purpose), `rig.py` (the Python port, instruments as callbacks, `--replay`), `RIG-REVIEW.md` (the manual review); its test is `example-system/tests/test_rig.py` |
+| LabVIEW, real `.vi` files | `example-system/real-vi/` | Four real VIs from a public open-source LabVIEW project (0BSD licence, provenance in `sources.json`), `VI-INVENTORY.md` (what `lvkit` read out of them, generated), `topic_filter.py` (the Python port of two of them), `cases.csv` (39 expected rows: 9 from the project's own test VIs, 30 from the MQTT specification), `VI-REVIEW.md` (what held, what did not, what is still unproven); its test is `example-system/tests/test_topic_filter.py` |
 | Shared | `tools/bench_compare.py` | Two CSVs in, PASS/FAIL per column out, with tolerance per column, max error, and the first divergent row. Standard library only |
 
 ### C/C++: run the workflows on your firmware
@@ -222,6 +223,18 @@ of screenshots; it is not evidence of behaviour. Details, install (online and of
 MCP registration are in `integrations/lvkit.md`. Not installed? Everything still works from the
 HTML export or screenshots.
 
+**Then we tried it on real VIs we did not write.** `example-system/real-vi/` holds four `.vi` files from
+a public open-source LabVIEW MQTT broker (0BSD licence): the two VIs that validate and match topic filters,
+and the project's own two requirement-test VIs. Only the binaries, no export, no recording. `lvkit`
+inventoried all four and rendered their diagrams; `lvkit generate` failed on all four. The
+Python port was written from the inventory and the drawing, and `bench_compare.py` says it agrees with
+the diagram on 39 of 39 rows, including the 9 verdicts recovered from the project's own tests. It also
+surfaced a finding: at that commit the project uses `+` and `#` the opposite way round from MQTT 3.1.1,
+consistently, in code and tests. What this does **not** show is runtime equivalence: nobody ran the
+original VIs, and `VI-REVIEW.md` lists the five diagram readings that one recorded run each would settle.
+That is the honest shape of a real port: inventory works, generation does not, the human reads the
+drawing, the compare proves agreement with the reading, the recording proves the reading.
+
 **Retain, wrap, or port.** The skill gives one of three answers per SubVI or block, and the review
 report records why:
 
@@ -240,8 +253,9 @@ downstream (skip the step, stop the run, or carry on). The example rig hits the 
 example-system/bench/rig_recording.csv`. The recording has step 3 failing (a 75 °C setpoint the node
 could not hold); the Python port reproduces that FAIL, and `bench_compare.py` shows 9 of 9 columns
 matching. A port that turned the FAIL into a PASS would be caught on the spot. The manual review is
-`example-system/bench/RIG-REVIEW.md`; yours will look like it. No `.vi`, TestStand, or TDMS file ships
-here; the example proves the method on synthetic data, and the skill says exactly that.
+`example-system/bench/RIG-REVIEW.md`; yours will look like it. The rig example is synthetic end to end and
+the skill says so; the real `.vi` files live in `example-system/real-vi/` and stop at the diagram reading.
+No TestStand or TDMS file ships here.
 
 ## Where things live
 
@@ -262,6 +276,7 @@ example-system/      the synthetic battery sensor node everything practises on
   tests/             test_node.py, test_packet.py, test_filter.py, test_firmware.c, test_model_equivalence.py, test_rig.py
   model/             MATLAB lane: moving_avg.m, export_vectors.m, filter_vectors.csv, run_vectors.py, MODEL-NOTES.md
   bench/             LabVIEW lane: rig.vi.html (exported VI docs), rig_samples.csv, rig_recording.csv, rig.py, RIG-REVIEW.md
+  real-vi/           LabVIEW lane on real VIs: 4 .vi files (public, 0BSD), sources.json, VI-INVENTORY.md, topic_filter.py, cases.csv, VI-REVIEW.md
   tracker.json       bugs (SN-BUG-*) and capabilities (SN-CAP-*) linked to requirement and hazard IDs
   Makefile           make test runs both twins
 specs/               001-diagnostics-packet/: a finished spec -> plan -> tasks example
@@ -295,6 +310,8 @@ make -C example-system test           # firmware twins: Python + C
 make -C templates/host-harness test   # host harness over the C firmware through stubbed hardware (58 checks)
 python example-system/bench/rig.py --replay example-system/bench/rig_samples.csv --out outputs/rig-python.csv
 python tools/bench_compare.py example-system/bench/rig_recording.csv outputs/rig-python.csv   # LabVIEW port vs recording
+python example-system/real-vi/topic_filter.py --replay example-system/real-vi/cases.csv --out outputs/topic-filter-python.csv
+python tools/bench_compare.py example-system/real-vi/cases.csv outputs/topic-filter-python.csv   # real-VI port vs the diagram reading
 python tools/build_deck.py templates/deck-outline-example.json outputs/example-deck.html
 python tools/export_pptx.py templates/deck-outline-example.json outputs/example-deck.pptx
 ```
