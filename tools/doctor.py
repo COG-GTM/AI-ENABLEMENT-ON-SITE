@@ -90,6 +90,8 @@ def resolve_command(cmd: str) -> bool:
 
 def check_outputs_writable() -> dict:
     d = ROOT / "outputs"
+    if d.exists() and not d.is_dir():
+        return row("outputs/ writable", "FAIL", "outputs exists but is not a directory")
     target = d if d.is_dir() else ROOT
     try:
         with tempfile.NamedTemporaryFile(dir=target, prefix=".doctor-", delete=True):

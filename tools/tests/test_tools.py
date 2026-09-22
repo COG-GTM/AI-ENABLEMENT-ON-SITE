@@ -91,6 +91,18 @@ class DoctorTests(unittest.TestCase):
             self.assertEqual(r["status"], "OK")
             self.assertFalse((Path(td) / "outputs").exists())
 
+    def test_outputs_as_a_file_fails(self):
+        real = doctor.ROOT
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "outputs").write_text("not a directory")
+            doctor.ROOT = Path(td)
+            try:
+                r = doctor.check_outputs_writable()
+            finally:
+                doctor.ROOT = real
+        self.assertEqual(r["status"], "FAIL")
+        self.assertIn("not a directory", r["detail"])
+
 
 class CheckRepoTests(unittest.TestCase):
     def _with_skills(self, skills: dict[str, str]):
@@ -138,10 +150,12 @@ class CheckRepoTests(unittest.TestCase):
             "/exec-deck Design review deck",
             "```",
             "then paste /tdd and wait",
+            "Run /research-brief. Or try \"/tour\", then /spec-driven; finally /mcp-server!",
             "see tools/build_deck.py and https://example.invalid/not-a-skill",
-            "outputs/x.md and example-system/docs/ICD.md",
+            "outputs/x.md and example-system/docs/ICD.md, /usr/bin/python3, ./relative/path, /config.json",
         ])
-        self.assertEqual(set(check_repo.SLASH_RE.findall(text)), {"what-if-part-swap", "exec-deck", "tdd"})
+        self.assertEqual(set(check_repo.SLASH_RE.findall(text)),
+                         {"what-if-part-swap", "exec-deck", "tdd", "research-brief", "tour", "spec-driven", "mcp-server"})
 
 
 class TrackerReportTests(unittest.TestCase):

@@ -54,8 +54,9 @@ TEXT_EXT = {".md", ".json", ".py", ".c", ".h", ".txt", ".sh", ".yaml", ".yml", "
 
 LINK_RE = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
 BACKTICK_PATH_RE = re.compile(r"`((?:\.devin|\.agents|example-system|integrations|templates|tools|outputs)/[^`\s*]+)`")
-# `/skill`, a fenced line starting with /skill, or "paste /skill ..."; not URL or path segments (preceded by a letter, `:` or `/`).
-SLASH_RE = re.compile(r"(?:^|(?<=[\s`(|]))/([a-z][a-z0-9-]*)(?=[\s`)|]|$)", re.M)
+# `/skill`, a fenced line starting with /skill, "paste /skill." or '"/skill"'; not URL or path segments
+# (a following `/` or `.`+letter is a path; a preceding letter, `.`, `:` or `/` is a URL/path).
+SLASH_RE = re.compile(r"(?:^|(?<=[\s`(|\"']))/([a-z][a-z0-9-]*)(?=[\s`)|\"'.,;:!?]|$)(?![.,]?[/a-z0-9])", re.M)
 
 problems: list[str] = []
 
