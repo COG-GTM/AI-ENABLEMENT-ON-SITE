@@ -57,6 +57,14 @@ BACKTICK_PATH_RE = re.compile(r"`((?:\.devin|\.agents|example-system|integration
 # `/skill`, a fenced line starting with /skill, "paste /skill." or '"/skill"'; not URL or path segments
 # (a following `/` or `.`+letter is a path; a preceding letter, `.`, `:` or `/` is a URL/path).
 SLASH_RE = re.compile(r"(?:^|(?<=[\s`(|\"']))/([a-z][a-z0-9-]*)(?=[\s`)|\"'.,;:!?]|$)(?![.,]?[/a-z0-9])", re.M)
+# Single-segment absolute paths that look like commands (`/tmp`, '/etc') are not skill references.
+PATH_ROOTS = {"bin", "boot", "dev", "etc", "home", "lib", "lib64", "mnt", "opt", "proc", "root", "run",
+              "sbin", "srv", "sys", "tmp", "usr", "var"}
+
+
+def slash_commands(text: str) -> set[str]:
+    return {s for s in SLASH_RE.findall(text) if s not in PATH_ROOTS and not (ROOT / s).exists()}
+
 
 problems: list[str] = []
 
@@ -116,7 +124,7 @@ def check_skills() -> set[str]:
 
 def check_agents(skill_names: set[str]) -> None:
     text = AGENTS.read_text()
-    listed = set(SLASH_RE.findall(text))
+    listed = slash_commands(text)
     for s in listed - skill_names:
         fail(f"AGENTS.md lists /{s} but .devin/skills/{s}/SKILL.md does not exist")
     for s in skill_names - listed:
@@ -128,7 +136,7 @@ def check_agents(skill_names: set[str]) -> None:
         if not p.exists():
             fail(f"{doc} is missing")
             continue
-        for s in set(SLASH_RE.findall(p.read_text())) - skill_names:
+        for s in slash_commands(p.read_text()) - skill_names:
             fail(f"{doc} mentions /{s} but .devin/skills/{s}/SKILL.md does not exist")
 
 

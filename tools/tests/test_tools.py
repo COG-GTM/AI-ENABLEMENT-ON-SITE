@@ -153,8 +153,9 @@ class CheckRepoTests(unittest.TestCase):
             "Run /research-brief. Or try \"/tour\", then /spec-driven; finally /mcp-server!",
             "see tools/build_deck.py and https://example.invalid/not-a-skill",
             "outputs/x.md and example-system/docs/ICD.md, /usr/bin/python3, ./relative/path, /config.json",
+            "Use '/tmp' for scratch, or /var, or \"/etc\"; scripts live in /tools.",
         ])
-        self.assertEqual(set(check_repo.SLASH_RE.findall(text)),
+        self.assertEqual(check_repo.slash_commands(text),
                          {"what-if-part-swap", "exec-deck", "tdd", "research-brief", "tour", "spec-driven", "mcp-server"})
 
 
