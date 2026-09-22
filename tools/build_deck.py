@@ -51,6 +51,14 @@ MODIFIER_BASE = (
     " 1F6CC-1F6CC 1F90C-1F90C 1F90F-1F90F 1F918-1F91F 1F926-1F926 1F930-1F939 1F93C-1F93E 1F977-1F977"
     " 1F9B5-1F9B6 1F9B8-1F9B9 1F9BB-1F9BB 1F9CD-1F9CF 1F9D1-1F9DD 1FAC3-1FAC5 1FAF0-1FAF8"
 )
+# Emoji outside _pictograph's ranges (Unicode 15.1 emoji-data.txt): Emoji_Presentation glyphs are always one em,
+# text-default ones (©, ↔, ™ ...) only with VS16 after them. # * 0-9 are emoji only as keycaps.
+EMOJI_DEFAULT = "231A-231B 23E9-23EC 23F0-23F0 23F3-23F3 25FD-25FE 2B1B-2B1C 2B50-2B50 2B55-2B55"
+EMOJI_TEXT = (
+    "00A9-00A9 00AE-00AE 203C-203C 2049-2049 2122-2122 2139-2139 2194-2199 21A9-21AA 2328-2328 23CF-23CF 23ED-23EF"
+    " 23F1-23F2 23F8-23FA 24C2-24C2 25AA-25AB 25B6-25B6 25C0-25C0 25FB-25FC 2934-2935 2B05-2B07 3030-3030 303D-303D"
+    " 3297-3297 3299-3299"
+)
 # All 254 RGI zero-width-joiner sequences of Unicode 15.1 emoji-zwj-sequences.txt with skin tones, VS16 and the
 # joiners removed. One line per pattern; [a b -] is a choice, "-" meaning nothing.
 ZWJ_SEQUENCES = """
@@ -96,6 +104,7 @@ ZWJ_SEQUENCES = {
     for line in ZWJ_SEQUENCES.replace("\n ", " ").strip().splitlines()
     for combo in itertools.product(*(t.strip("[]").split() for t in re.findall(r"\[[^]]*]|\S+", line)))
 }
+ZWJ_LONGEST = max(map(len, ZWJ_SEQUENCES))
 MAX_TEXT = 2000
 DEFAULT_ACCENT = "#2600FF"
 ACCENT_RE = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -198,6 +207,7 @@ def glyph_units(text: str) -> list:
     skin tone on an Emoji_Modifier_Base, the second half of a flag pair, and the components joined by ZWJ into
     an RGI sequence (longest match in ZWJ_SEQUENCES; a chain that is no RGI sequence shows every component).
     A keycap widens its digit to a full em; a keycap mark on anything else is an ordinary zero-width mark.
+    Linear in len(text): a chain is matched at most ZWJ_LONGEST components at a time.
     """
     units, i = [], 0
     while i < len(text):
@@ -218,17 +228,23 @@ def glyph_units(text: str) -> list:
         else:
             seg, k = [0] * (j - i), 0
             while k < len(heads):
-                comps = [text[h] for h in heads[k:]]
-                n = max((n for n in range(2, len(comps) + 1) if tuple(comps[:n]) in ZWJ_SEQUENCES), default=1)
-                seg[heads[k] - i] = _advance(text[heads[k]])  # the (sub)sequence's first component carries its width
+                n = 1  # components the (sub)sequence starting at heads[k] spans; its first one carries the width
+                for m in range(min(ZWJ_LONGEST, len(heads) - k), 1, -1):
+                    if tuple(text[h] for h in heads[k:k + m]) in ZWJ_SEQUENCES:
+                        n = m
+                        break
+                h = heads[k]
+                seg[h - i] = _advance(text[h], text[h + 1:h + 2] == "\ufe0f")
                 k += n
             units += seg
             i = j
     return units
 
 
-def _advance(ch: str) -> int:
+def _advance(ch: str, vs16: bool = False) -> int:
     if _pictograph(ch) or "\U0001F1E6" <= ch <= "\U0001F1FF" or unicodedata.east_asian_width(ch) in ("W", "F"):
+        return 10
+    if _in(ch, EMOJI_DEFAULT) or (vs16 and _in(ch, EMOJI_TEXT)):
         return 10
     if ch in NARROW:
         return 3

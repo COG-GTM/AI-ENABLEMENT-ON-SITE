@@ -6,6 +6,7 @@ import posixpath
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -180,6 +181,14 @@ class ExportPptxTests(unittest.TestCase):
         )
         self.assertEqual([sum(build_deck.glyph_units(s)) for s in loose], [14, 10, 16, 20, 20, 20, 17, 20, 20, 20, 20, 20, 20, 7, 0])
         self.assertEqual(len(build_deck.ZWJ_SEQUENCES), 254)  # every RGI ZWJ sequence, tones/VS16 stripped
+        variants = ("\u00a9\ufe0f", "\u2122\ufe0f", "\u2194\ufe0f", "\u2b05\ufe0f", "\u2b1b", "\u2b50")  # emoji below U+2600 / above U+27BF
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in variants], [10] * 6)
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in ("\u00a9", "\u2b05", "A\ufe0f")], [6, 6, 7])  # text presentation
+        chain = "\u200d".join(["\U0001F600"] * 1000)  # 1999 code points, no RGI sequence: 1000 glyphs, in linear time
+        start = time.monotonic()
+        self.assertEqual(sum(build_deck.glyph_units(chain)), 10000)
+        self.assertEqual(len(build_deck.table_lines(list("abcdefghijkl"), [[chain] * 12] * 12)), 13)
+        self.assertLess(time.monotonic() - start, 10)  # a superlinear scan takes minutes on this table
         cols = list("abcdefghijkl")
         emoji = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[thumbs] * 12] * 12}]}
         for build in (build_deck.build, export_pptx.build_parts):  # 13 lines: fits
@@ -187,7 +196,8 @@ class ExportPptxTests(unittest.TestCase):
         long = "Battery depletion mitigation remains open"  # 7 lines in a 12-column cell
         self.assertEqual(build_deck.table_lines(cols, [[long] + cols[1:]]), [1, 7])
         self.assertEqual(build_deck.table_lines([cjk] * 12, [[cjk] * 12]), [2, 2])
-        for rows in ([[long] + cols[1:]] * 2, [[cjk] * 12] * 12):  # 15 and 25 lines: too tall for either output
+        copyright = " ".join(["\u00a9\ufe0f"] * 4)  # four one-em emoji: two lines in a 12-column cell
+        for rows in ([[long] + cols[1:]] * 2, [[cjk] * 12] * 12, [[copyright] * 12] * 12):  # 15, 25, 25 lines: too tall for either output
             tall = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": rows}]}
             for build in (build_deck.build, export_pptx.build_parts):
                 with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
