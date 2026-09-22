@@ -48,5 +48,6 @@ user has their own system. When no system is given, work on the sensor node.
 3. Write the artifact into `example-system/docs/` (or the user's `docs/`).
 4. Cross-link: new requirements referenced from ICD/ADR/HAZARDS where relevant; new hazards into
    `tracker.json` if mitigation is open (use `/track-and-report`).
-5. Run `python tools/check_repo.py`; fix link and ID issues.
+5. Run `python tools/trace_matrix.py` (every requirement needs a test or an analysis artifact, every
+   risk >= 8 hazard needs a mitigation requirement) and `python tools/check_repo.py`; fix what they report.
 6. Summarise: what was created, IDs added, open items. Offer `/exec-deck` for a review deck.

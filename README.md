@@ -9,13 +9,23 @@ test-driven development, architecture docs, bug/capability tracking, and connect
 
 1. Clone or fork this repository and open the folder in Devin Desktop.
 2. Devin reads `AGENTS.md` automatically and finds the skills under `.devin/skills/`.
-3. Paste one of the prompts below. That is it.
+3. Paste these three prompts, in order:
 
-## Prompts to paste
+```
+Reference this repo. What can you do here? Run the checks and show me.
+/what-if-part-swap Replace the IMU with imu-c and move the uplink to CAN
+/exec-deck Design review deck for the imu-c + CAN change: verdict, budgets, hazards, open items
+```
+
+Two minutes later you have a readiness check, a go/no-go analysis with recomputed budgets, and a
+leadership deck open in the preview. Chained prompts like these are **workflows**; the five we ship
+are in `WORKFLOWS.md`. Showing this to a room? Follow `WALKTHROUGH.md`.
+
+## All prompts
 
 | You want | Paste this |
 | --- | --- |
-| A tour | `Reference this repo. What can you do here? Run the checks and show me.` |
+| A tour | `/tour` or `Reference this repo. What can you do here? Run the checks and show me.` |
 | Research | `/research-brief Should we swap IMU A for IMU B? --sources example-system/parts,example-system/docs` |
 | Executive deck (HTML) | `/exec-deck Build a leadership deck on the sensor node: requirements, top hazards, power budget, open bugs` |
 | Design artifacts | `/design-artifacts Add a requirement and hazard for low-battery shutdown at 3.0 V` |
@@ -33,13 +43,17 @@ Prompts can also be plain English; `AGENTS.md` maps phrases like "make me a deck
 ## What is in the box
 
 ```
-AGENTS.md            Devin reads this first: rules + which skill to use for what (30 lines)
-.devin/skills/       10 skills, one folder each, one SKILL.md each
+AGENTS.md            Devin reads this first: rules + which skill to use for what (under 40 lines)
+WORKFLOWS.md         5 pipelines: which skills to run in what order, and what each stage leaves behind
+WALKTHROUGH.md              25-minute speaker path for showing the repo live
+.devin/skills/       one folder per skill, one SKILL.md each (cap: 12)
 .devin/mcp_config.json  registers the offline reference MCP server
 example-system/      synthetic battery sensor node: C firmware + Python twin, requirements, ICD,
                      ADRs, hazards, power/timing budgets, parts data, bug tracker, tests
-tools/               small Python scripts the skills call (deck builder, research brief, what-if,
-                     tracker report, repo checker). Standard library only.
+specs/               one finished spec -> plan -> tasks example (the pattern /spec-driven follows)
+tools/               small Python scripts the skills call (doctor, deck builder, research brief,
+                     what-if, tracker report, traceability matrix, golden path, repo checker).
+                     Standard library only.
 integrations/        CLI, REST/curl, and MCP recipes for Jira, Confluence, GitLab, GitHub, Azure DevOps
 templates/           spec / plan templates and example inputs for the tools
 outputs/             where generated decks, briefs, and reports land (not committed)
@@ -48,7 +62,10 @@ outputs/             where generated decks, briefs, and reports land (not commit
 ## Prove it works (30 seconds, offline)
 
 ```bash
+python tools/doctor.py                # is this laptop ready? (2 seconds, prints READY)
 python tools/check_repo.py            # validates skills, links, content, runs every test
+python tools/golden_path.py           # runs every workflow end to end, leaves proof in outputs/golden/
+python tools/trace_matrix.py          # requirement -> hazard -> test -> tracker matrix (fails on gaps)
 make -C example-system test           # firmware twins: Python + C
 python tools/build_deck.py templates/deck-outline-example.json outputs/example-deck.html
 ```

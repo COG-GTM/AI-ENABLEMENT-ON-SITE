@@ -13,7 +13,7 @@ triggers:
 
 Spec-driven development for: `$ARGUMENTS`.
 Four stages. Stop after each stage and show the user the file before moving on. Work happens in
-`specs/<nnn>-<slug>/` (create `specs/` at the repository root if missing).
+`specs/<nnn>-<slug>/`. A finished example to copy the shape from: `specs/001-diagnostics-packet/`.
 
 ## Stage 1: specify (`spec.md`)
 
