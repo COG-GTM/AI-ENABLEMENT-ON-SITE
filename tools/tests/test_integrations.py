@@ -489,6 +489,8 @@ class TrackerImportTests(unittest.TestCase):
         src.write_bytes(b'{"issues": [\xff]}')
         msg = self.run_import("--from", "jira", "--in", str(src), "--out", str(self.dir / "o.json"), expect_fail=True)
         self.assertIn(f"cannot read {src}", msg)
+        msg = self.run_import("--from", "csv", "--in", str(FIXTURES / "csv_export.csv"), "--out", str(self.dir / "o.json"), "--merge", str(src), expect_fail=True)
+        self.assertIn(f"cannot read {src}", msg)
 
     def test_csv_owner_column_is_kept(self):
         items = tracker_report.load(self.import_fixture("csv", "csv_export.csv"))

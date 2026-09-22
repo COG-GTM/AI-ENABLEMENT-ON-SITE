@@ -344,8 +344,9 @@ def main(argv=None) -> int:
         fail("--out must differ from --merge; review the diff, then copy")
     existing, about = [], f"Tracker items imported with tools/tracker_import.py --from {a.mode}. Schema: templates/tracker-item.json."
     if a.merge is not None:
+        doc = read_json(a.merge)
         existing = tracker_report.load(a.merge)
-        about = json.loads(a.merge.read_text()).get("_about", about)
+        about = doc.get("_about", about) if isinstance(doc, dict) else about
     imported = list(READERS[a.mode](a.src))
     items, updated, added = merge(existing, imported, a.prefix, a.owner)
     tmp = a.out.with_name(a.out.name + ".tmp")  # validate the candidate first; --out is only ever replaced whole
