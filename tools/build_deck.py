@@ -37,7 +37,7 @@ from pathlib import Path
 ALLOWED_TYPES = {"title", "bullets", "two-column", "table", "stats", "bars", "quote", "section"}
 MAX_SLIDES = 60
 MAX_BULLETS = 8
-MAX_TABLE_COLS, MAX_TABLE_ROWS = 24, 60  # structural bound; export_pptx applies the tighter one-slide fit
+MAX_TABLE_COLS, MAX_TABLE_ROWS = 12, 12  # one slide's worth in both outputs (HTML clips past 13 rows at 1280x720)
 MAX_TEXT = 2000
 DEFAULT_ACCENT = "#2600FF"
 ACCENT_RE = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -145,7 +145,7 @@ def validate(outline) -> dict:
         if t == "table":
             _items(s["columns"], f"slide {n}.columns", limit=MAX_TABLE_COLS)
             if not isinstance(s["rows"], list) or not 1 <= len(s["rows"]) <= MAX_TABLE_ROWS:
-                raise SystemExit(f"slide {n}.rows: expected 1-{MAX_TABLE_ROWS} rows")
+                raise SystemExit(f"slide {n}.rows: expected 1-{MAX_TABLE_ROWS} rows: split the slide")
             for i, r in enumerate(s["rows"]):
                 if not isinstance(r, list) or len(r) != len(s["columns"]):
                     raise SystemExit(f"slide {n}.rows[{i}]: expected {len(s['columns'])} cells")

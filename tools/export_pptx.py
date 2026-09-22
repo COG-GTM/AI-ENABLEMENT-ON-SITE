@@ -93,7 +93,6 @@ W, H = 12192000, 6858000
 MX, MY = 685800, 457200          # page margins
 BODY_Y, BODY_H = 1676400, 4267200   # body ends where the footnote starts
 FOOT_Y = 6400800
-TABLE_MAX_COLS, TABLE_MAX_ROWS = 12, 12  # what still reads on one slide; the HTML deck allows more
 INK, MUTED, LINE, CARD, TRACK = "141414", "7D7D7D", "E7E7E7", "F7F6F5", "F3F3F3"
 CTRL_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
 EMPTY_PARA = '<a:p><a:endParaRPr lang="en-US"/></a:p>'
@@ -354,11 +353,8 @@ TABLE_STYLES = f'<a:tblStyleLst xmlns:a="{NS_A}" def="{{5C22544A-7EE6-4342-B048-
 def build_parts(outline: dict) -> dict[str, str]:
     """Return {part name: xml text} for a validated outline. Content types are derived from this map."""
     build_deck.validate(outline)
-    slides = outline["slides"]
-    for n, s in enumerate(slides, 1):
-        if s["type"] == "table" and (len(s["columns"]) > TABLE_MAX_COLS or len(s["rows"]) > TABLE_MAX_ROWS):
-            raise SystemExit(f"slide {n}: a PPTX table fits at most {TABLE_MAX_COLS} columns x {TABLE_MAX_ROWS} rows: split the slide")
     accent = outline.get("accent", build_deck.DEFAULT_ACCENT)[1:].upper()
+    slides = outline["slides"]
     total = len(slides)
     has_notes = any(s.get("notes") for s in slides)
     parts: dict[str, str] = {

@@ -149,12 +149,12 @@ class ExportPptxTests(unittest.TestCase):
             self.assertNotIn("\n", msg.strip())
             self.assertFalse((self.tmp / "bad.pptx").exists())
 
-    def test_table_fit_limit_is_pptx_only(self):
+    def test_table_limit_is_shared_with_the_html_deck(self):
         wide = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": ["a"], "rows": [["1"]] * 13}]}
-        self.assertIn("<table>", build_deck.build(wide))  # the HTML deck still renders it
-        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
-            export_pptx.build_parts(wide)
-        self.assertIn("split the slide", cm.exception.code)
+        for build in (build_deck.build, export_pptx.build_parts):  # both outputs clip past 12 rows
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                build(wide)
+            self.assertIn("split the slide", cm.exception.code)
 
     def test_concurrent_exports_to_one_destination(self):
         src = self.tmp / "deck.json"
