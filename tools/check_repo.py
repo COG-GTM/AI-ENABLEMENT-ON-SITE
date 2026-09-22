@@ -211,6 +211,8 @@ def check_tools() -> None:
     run([py, "tools/what_if.py", "--imu", "imu-b"], allowed_codes=frozenset({0, 2}))  # 2 = budget FAIL, a valid result
     run([py, "tools/build_deck.py", "templates/deck-outline-example.json", "outputs/example-deck.html"])
     run([py, "tools/research_brief.py", "--check"])
+    run([py, "tools/trace_matrix.py", "--out", "outputs/trace-matrix.md"])
+    run([py, "tools/golden_path.py", "--skip-tests"])  # the test suites run below
     run([py, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=ROOT / "example-system")
     run([py, "-m", "unittest", "discover", "-s", "tools/tests", "-q"])
     run([py, "-m", "unittest", "integrations/reference-mcp/test_server.py", "-q"])

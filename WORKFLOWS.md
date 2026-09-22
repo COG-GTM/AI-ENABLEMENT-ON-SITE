@@ -56,5 +56,6 @@ administrator approves the token and the network path.
 - Numbers come from tools (`what_if.py`, `tracker_report.py`, `make test`), never typed by hand.
 - Each stage names its input file explicitly so the next stage does not guess.
 - Generated files go to `outputs/` (not committed) unless the stage edits the reference system itself.
-- Finish any workflow with `python tools/check_repo.py`.
+- Finish any workflow with `python tools/check_repo.py`. `python tools/golden_path.py` runs every
+  deterministic stage above end to end and leaves the evidence in `outputs/golden/REPORT.md`.
 - To run a workflow on your own project: `Mimic workflow 1 on ../my-firmware; its docs are in ../my-firmware/docs`.

@@ -13,3 +13,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: python tools/check_repo.py
+      - run: python tools/golden_path.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: golden-path
+          path: outputs/golden/

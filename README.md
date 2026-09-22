@@ -50,8 +50,10 @@ WALKTHROUGH.md              25-minute speaker path for showing the repo live
 .devin/mcp_config.json  registers the offline reference MCP server
 example-system/      synthetic battery sensor node: C firmware + Python twin, requirements, ICD,
                      ADRs, hazards, power/timing budgets, parts data, bug tracker, tests
+specs/               one finished spec -> plan -> tasks example (the pattern /spec-driven follows)
 tools/               small Python scripts the skills call (doctor, deck builder, research brief,
-                     what-if, tracker report, repo checker). Standard library only.
+                     what-if, tracker report, traceability matrix, golden path, repo checker).
+                     Standard library only.
 integrations/        CLI, REST/curl, and MCP recipes for Jira, Confluence, GitLab, GitHub, Azure DevOps
 templates/           spec / plan templates and example inputs for the tools
 outputs/             where generated decks, briefs, and reports land (not committed)
@@ -62,6 +64,8 @@ outputs/             where generated decks, briefs, and reports land (not commit
 ```bash
 python tools/doctor.py                # is this laptop ready? (2 seconds, prints READY)
 python tools/check_repo.py            # validates skills, links, content, runs every test
+python tools/golden_path.py           # runs every workflow end to end, leaves proof in outputs/golden/
+python tools/trace_matrix.py          # requirement -> hazard -> test -> tracker matrix (fails on gaps)
 make -C example-system test           # firmware twins: Python + C
 python tools/build_deck.py templates/deck-outline-example.json outputs/example-deck.html
 ```
