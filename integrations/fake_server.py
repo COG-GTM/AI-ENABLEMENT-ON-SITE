@@ -289,8 +289,15 @@ class Handler(BaseHTTPRequestHandler):
     def jira(self, segs, q, issues):
         base = self.server.base_url
 
+        keep = JIRA_FIELDS
+        if q.get("fields") not in (None, "*all"):  # Jira returns only the requested fields (key and id are always present)
+            keep = set(q["fields"].split(",")) - {"key", "id"}
+            if not keep <= JIRA_FIELDS:
+                raise ApiError(400, f"unsupported fields; allowed: {sorted(JIRA_FIELDS)}")
+
         def with_self(i):
-            return {"expand": "", "id": i["id"], "self": f"{base}/rest/api/2/issue/{i['id']}", "key": i["key"], "fields": i["fields"]}
+            return {"expand": "", "id": i["id"], "self": f"{base}/rest/api/2/issue/{i['id']}", "key": i["key"],
+                    "fields": {k: v for k, v in i["fields"].items() if k in keep}}
 
         if segs == ["search"]:
             allow_keys(q, {"jql", "startAt", "maxResults", "fields", "expand", "validateQuery"})

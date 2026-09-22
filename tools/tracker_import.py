@@ -21,6 +21,7 @@ Validation is tools/tracker_report.load(); nothing here re-implements the schema
 
 import argparse
 import csv
+import datetime
 import json
 import re
 import sys
@@ -103,7 +104,15 @@ def date(value, where: str, what: str):
     m = DATE_RE.match(str(value))
     if not m:
         fail(f"{where}: {what} must start with YYYY-MM-DD, got {value!r}")
+    try:
+        datetime.date.fromisoformat(m.group(1))
+    except ValueError:
+        fail(f"{where}: {what} is not a calendar date: {m.group(1)}")
     return m.group(1)
+
+
+def kind_of(typ: str) -> str:
+    return "CAP" if typ == "capability" else "BUG"
 
 
 def component(value, where: str) -> str:
@@ -263,14 +272,17 @@ def merge(existing: list, imported: list, prefix: str, owner: str) -> tuple[list
             fail(f"duplicate external id {new['source']} in input")
         seen.add(new["source"])
         old = by_source.get(new["source"])
+        kind = kind_of(new["type"])
         if old is None:
-            kind = "CAP" if new["type"] == "capability" else "BUG"
             counters[kind] += 1
             if counters[kind] > 999:
                 fail(f"no free {prefix}-{kind}-nnn id left")
             old = {"id": f"{prefix}-{kind}-{counters[kind]:03d}", "owner": owner}
             existing.append(old)
             added += 1
+        elif old["id"].rsplit("-", 2)[1] != kind:
+            fail(f"{new['source']}: type changed to {new['type']} but {old['id']} is a {old['id'].rsplit('-', 2)[1]} id; "
+                 "ids are never renamed - close the old item and re-file it under a new external id")
         else:
             updated += 1
         merged = {**old, **{k: v for k, v in new.items() if k != "owner"}, "owner": new["owner"] or old.get("owner") or owner}

@@ -75,7 +75,7 @@ ADO_ORG=http://127.0.0.1:$PORT/sn-org ADO_PROJECT=sensor-node ADO_TOKEN=$FAKE_TR
 ```
 
 Import what you fetched (or a fixture directly), then report on it exactly like the offline tracker.
-Fetch every page before importing; the importer works on what it is given and does not page for you.
+`rest_client.py jira search` and `gitlab issues` fetch every page (open and closed) before printing and stop with an error past 20 pages instead of writing a partial file; with `curl`, fetch every page yourself before importing. The importer works on what it is given and does not page.
 
 ```bash
 python tools/tracker_import.py --from jira   --in outputs/jira-all.json                    --out outputs/tracker-jira.json
@@ -90,7 +90,7 @@ What the fake does and does not do:
 
 - Binds `127.0.0.1` only; `--port` defaults to an ephemeral port (0) and is printed as the only line on stdout.
 - Auth: Jira and Azure DevOps paths take `Authorization: Bearer <token>` or `Authorization: Basic base64(user:token)`; GitLab paths take `PRIVATE-TOKEN`. The accepted value is `$FAKE_TRACKER_TOKEN` (default in `fake_server.py`). Missing or wrong -> `401` JSON, and the value is never echoed or logged.
-- Endpoints: `/rest/api/2/search` (`jql`, `startAt`, `maxResults`), `/rest/api/2/issue/{key}`, `/api/v4/projects/{id}/issues` (`page`, `per_page`, `state`), `/api/v4/projects/{id}/issues/{iid}`, `/{org}/{project}/_apis/wit/workitems` (`ids`, `api-version`, `fields`), `/{org}/{project}/_apis/wit/wiql/{query-id}` (`api-version`, `$top`).
+- Endpoints: `/rest/api/2/search` (`jql`, `startAt`, `maxResults`, `fields`), `/rest/api/2/issue/{key}`, `/api/v4/projects/{id}/issues` (`page`, `per_page`, `state`), `/api/v4/projects/{id}/issues/{iid}`, `/{org}/{project}/_apis/wit/workitems` (`ids`, `api-version`, `fields`), `/{org}/{project}/_apis/wit/wiql/{query-id}` (`api-version`, `$top`).
 - Unknown path or id -> `404` JSON. Unknown, non-integer, negative, or oversized query parameters -> `400` JSON. Any method other than GET -> `405` with `Allow: GET`; there is no write path, and `test_integrations.py` asserts that.
 - Azure DevOps ad-hoc WIQL is a POST in the real API, so the fake (and `rest_client.py ado query`) serve only the GET saved-query-by-id form. Save the query in Azure DevOps first.
 - Field names and pagination follow the public vendor docs cited at the top of `fake_server.py`. Only the read-only subset above exists; anything else is `404`.

@@ -5,9 +5,11 @@ The fake server is started in-process on 127.0.0.1 with an ephemeral port; nothi
 
 import base64
 import contextlib
+import inspect
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -252,6 +254,50 @@ class FakeServerTests(unittest.TestCase):
             self.assertIn("HTTP 404", str(cm.exception.code))
             self.assertNotIn(CRED, str(cm.exception.code))
 
+    def test_rest_client_walks_every_page_then_output_imports(self):
+        env = {"JIRA_BASE": self.c.base, "JIRA_TOKEN": CRED, "GITLAB_BASE": self.c.base, "GITLAB_TOKEN": CRED}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(rest_client, "MAX_RESULTS", 5), tempfile.TemporaryDirectory() as d:
+            self.log.truncate(0)
+            self.log.seek(0)
+            for system, action, query, name, count in (("jira", "search", "project = SN", "jira.json", "issues"),
+                                                      ("gitlab", "issues", "123", "gitlab.json", None)):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    rest_client.main([system, action, query])
+                body = json.loads(out.getvalue())
+                items = body[count] if count else body
+                self.assertEqual(len(items), 12, system)  # 3 pages of 5, open and closed alike
+                if count:
+                    self.assertEqual((body["total"], body["startAt"]), (12, 0))
+                    self.assertEqual({"key", "id", "self", "expand", "fields"}, set(items[0]))
+                (Path(d) / name).write_text(out.getvalue())
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(tracker_import.main(["--from", system, "--in", str(Path(d) / name), "--out", str(Path(d) / f"t-{name}")]), 0)
+                self.assertEqual(len(tracker_report.load(Path(d) / f"t-{name}")), 12)
+            log = self.log.getvalue()
+            self.assertEqual(log.count("startAt="), 3)
+            self.assertEqual(log.count("state=all"), 3)
+            self.assertEqual([f"page={n}" in log for n in (1, 2, 3, 4)], [True, True, True, False])
+
+    def test_rest_client_refuses_partial_export_past_page_cap(self):
+        env = {"GITLAB_BASE": self.c.base, "GITLAB_TOKEN": CRED, "JIRA_BASE": self.c.base, "JIRA_TOKEN": CRED}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(rest_client, "MAX_RESULTS", 5), mock.patch.object(rest_client, "MAX_PAGES", 2):
+            for argv in (["gitlab", "issues", "123"], ["jira", "search", "project = SN"]):
+                with self.assertRaises(SystemExit) as cm, contextlib.redirect_stdout(io.StringIO()):
+                    rest_client.main(argv)
+                self.assertIn("more than 2 pages (10 items so far)", str(cm.exception.code))
+
+    def test_jira_fields_projection(self):
+        status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "project = SN", "fields": "key,summary,status"}), bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual({"summary", "status"}, set(body["issues"][0]["fields"]))
+        status, _, issue = self.c.get("/rest/api/2/issue/SN-101?" + urllib.parse.urlencode({"fields": rest_client.JIRA_FIELDS}), bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual(set(rest_client.JIRA_FIELDS.split(",")) - {"key"}, set(issue["fields"]))
+        status, _, err = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "project = SN", "fields": "summary,customfield_1"}), bearer())
+        self.assertEqual(status, 400)
+        self.assertIn("unsupported fields", err["errorMessages"][0])
+
 
 class FakeServerCliTests(unittest.TestCase):
     def test_fixture_validation_refuses_unknown_keys(self):
@@ -308,6 +354,13 @@ class DocsInSyncTests(unittest.TestCase):
         self.assertIn("ado query", self.README)
         self.assertIn("ado workitems", self.README)
         self.assertEqual({("ado", "query"), ("ado", "workitems")}, {k for k in rest_client.COMMANDS if k[0] == "ado"})
+        self.assertIn(f"past {rest_client.MAX_PAGES} pages", self.README)
+
+    def test_client_requests_exactly_the_jira_fields_the_importer_reads(self):
+        read = set(re.findall(r'(?:f\.get|named\(f, )\(?"([a-z]+)"', inspect.getsource(tracker_import.from_jira)))
+        asked = set(rest_client.JIRA_FIELDS.split(",")) - {"key"}
+        self.assertEqual(asked, read)
+        self.assertLessEqual(asked, fake_server.JIRA_FIELDS)
 
 
 class TrackerImportTests(unittest.TestCase):
@@ -387,6 +440,27 @@ class TrackerImportTests(unittest.TestCase):
         sn103 = [i for i in items if i["source"] == "jira:SN-103"]
         self.assertEqual(len(sn103), 1)
         self.assertEqual((sn103[0]["id"], sn103[0]["status"], sn103[0]["closed"], sn103[0]["owner"]), ("SN-BUG-003", "closed", "2026-04-01", "firmware"))
+
+    def test_merge_refuses_type_change_that_would_mislabel_the_id(self):
+        first = self.import_fixture("jira", "jira_issues.json")
+        data = json.loads((FIXTURES / "jira_issues.json").read_text())
+        self.assertEqual(data["issues"][0]["fields"]["issuetype"]["name"], "Bug")
+        data["issues"][0]["fields"]["issuetype"]["name"] = "Story"
+        changed = self.dir / "changed.json"
+        changed.write_text(json.dumps(data))
+        err = self.run_import("--from", "jira", "--in", str(changed), "--out", str(self.dir / "out.json"), "--merge", str(first), expect_fail=True)
+        self.assertIn("jira:SN-101: type changed to capability but SN-BUG-001 is a BUG id", err)
+        self.assertFalse((self.dir / "out.json").exists())
+
+    def test_impossible_calendar_dates_rejected(self):
+        data = json.loads((FIXTURES / "jira_issues.json").read_text())
+        data["issues"][0]["fields"]["created"] = "2026-02-31T09:00:00.000+0000"
+        bad = self.dir / "bad.json"
+        bad.write_text(json.dumps(data))
+        err = self.run_import("--from", "jira", "--in", str(bad), "--out", str(self.dir / "out.json"), expect_fail=True)
+        self.assertIn("created is not a calendar date: 2026-02-31", err)
+        self.assertEqual(tracker_import.date("2026-02-28T09:00:00.000+0000", "x", "y"), "2026-02-28")
+        self.assertEqual(tracker_import.date("2026-03-01", "x", "y"), "2026-03-01")
 
     def test_merge_into_example_tracker_appends_after_existing_ids(self):
         out = self.dir / "merged.json"

@@ -18,6 +18,8 @@ Configuration is environment variables only (see integrations/README.md):
 Optional: REST_CA_BUNDLE=/path/to/ca.pem for a private certificate authority.
 
 Only GET is used. Azure DevOps ad-hoc WIQL is a POST, so it is not offered; run a saved query by id instead.
+List commands (jira search, gitlab issues/mrs) fetch every page before returning, so the output is complete
+or the command fails; nothing is filtered on page 1.
 HTTPS is required, except plain HTTP to 127.0.0.1 for the offline fake (integrations/fake_server.py).
 Output is JSON on stdout. Extend by adding a function to COMMANDS; keep it GET-only.
 """
@@ -35,6 +37,8 @@ import urllib.request
 
 TIMEOUT_S = 30
 MAX_RESULTS = 50
+MAX_PAGES = 20  # list commands walk every page up to this many, then stop with an error rather than a partial file
+JIRA_FIELDS = "key,summary,description,status,priority,issuetype,components,labels,created,resolutiondate"  # what tracker_import reads
 ID_RE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
 PROJECT_NAME_RE = re.compile(r"^[A-Za-z0-9._ -]{1,64}$")  # Azure DevOps project names may contain spaces
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -63,13 +67,14 @@ def local_http(url: str) -> bool:
     return u.scheme == "http" and u.hostname == "127.0.0.1"
 
 
-def request(url: str, headers: dict, dry_run: bool):
+def fetch(url: str, headers: dict, dry_run: bool):
+    """GET url; return (json body, response headers). Dry run prints the request and returns (None, {})."""
     if not url.startswith("https://") and not local_http(url):
         sys.exit("refusing non-HTTPS URL; TLS is required (plain HTTP is allowed only to 127.0.0.1)")
     if dry_run:
         shown = {k: ("<redacted>" if k.lower() in ("authorization", "private-token") else v) for k, v in headers.items()}
         print(json.dumps({"method": "GET", "url": url, "headers": shown, "body": None}, indent=2))
-        return None
+        return None, {}
     req = urllib.request.Request(url, method="GET", headers={**headers, "Accept": "application/json"})
     ctx = None
     if not local_http(url):
@@ -77,12 +82,22 @@ def request(url: str, headers: dict, dry_run: bool):
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_S, context=ctx) as r:
-            return json.load(r)
+            return json.load(r), dict(r.headers)
     except urllib.error.HTTPError as e:
         e.close()
         sys.exit(f"HTTP {e.code} from {urllib.parse.urlsplit(url).netloc}; check token scope and host")
     except urllib.error.URLError as e:
         sys.exit(f"connection failed: {e.reason}")
+    except ValueError:
+        sys.exit(f"non-JSON response from {urllib.parse.urlsplit(url).netloc}")
+
+
+def request(url: str, headers: dict, dry_run: bool):
+    return fetch(url, headers, dry_run)[0]
+
+
+def too_many_pages(what: str, got: int):
+    sys.exit(f"{what}: more than {MAX_PAGES} pages ({got} items so far); narrow the query instead of importing a partial list")
 
 
 # ---- Jira -------------------------------------------------------------------------------------
@@ -94,10 +109,38 @@ def jira_headers() -> dict:
 
 
 def jira_search(args, dry):
+    """Walk every page and return one search response.
+
+    v2 (Data Center): startAt/total. Cloud v3 search/jql: nextPageToken/isLast, see
+    https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/
+    """
     cloud = bool(os.environ.get("JIRA_EMAIL"))
-    q = urllib.parse.urlencode({"jql": args.query, "maxResults": MAX_RESULTS, "fields": "key,summary,status,priority,issuetype"})
-    path = "/rest/api/3/search/jql?" if cloud else "/rest/api/2/search?"
-    return request(env("JIRA_BASE") + path + q, jira_headers(), dry)
+    base = env("JIRA_BASE") + ("/rest/api/3/search/jql?" if cloud else "/rest/api/2/search?")
+    params = {"jql": args.query, "maxResults": MAX_RESULTS, "fields": JIRA_FIELDS}
+    issues, token, start = [], None, 0
+    for _ in range(MAX_PAGES):
+        page_params = dict(params, **({"nextPageToken": token} if token else {})) if cloud else dict(params, startAt=start)
+        body = request(base + urllib.parse.urlencode(page_params), jira_headers(), dry)
+        if body is None:
+            return None
+        page = body.get("issues") if isinstance(body, dict) else None
+        if not isinstance(page, list):
+            sys.exit("unexpected Jira search response: no issues[]")
+        issues.extend(page)
+        if cloud:
+            token = body.get("nextPageToken")
+            if body.get("isLast", True) or not isinstance(token, str) or not page:
+                break
+        else:
+            total = body.get("total")
+            if not isinstance(total, int):
+                sys.exit("unexpected Jira search response: no integer total")
+            start += len(page)
+            if not page or start >= total:
+                break
+    else:
+        too_many_pages("jira search", len(issues))
+    return {"startAt": 0, "maxResults": len(issues), "total": len(issues), "issues": issues}
 
 
 def jira_issue(args, dry):
@@ -113,16 +156,33 @@ def confluence_search(args, dry):
 
 # ---- GitLab -----------------------------------------------------------------------------------
 
+def gitlab_list(project: str, kind: str, state: str, dry):
+    """Follow X-Next-Page until it is empty (https://docs.gitlab.com/api/rest/#pagination) and return the full list."""
+    project = urllib.parse.quote(check_id(project), safe="")
+    items, page = [], 1
+    for _ in range(MAX_PAGES):
+        q = urllib.parse.urlencode({"state": state, "per_page": MAX_RESULTS, "page": page})
+        body, hdrs = fetch(f"{env('GITLAB_BASE')}/api/v4/projects/{project}/{kind}?{q}", {"PRIVATE-TOKEN": env("GITLAB_TOKEN")}, dry)
+        if body is None:
+            return None
+        if not isinstance(body, list):
+            sys.exit(f"unexpected GitLab {kind} response: not a list")
+        items.extend(body)
+        nxt = hdrs.get("X-Next-Page", "")
+        if not nxt or not body:
+            return items
+        if not nxt.isdigit() or int(nxt) != page + 1:
+            sys.exit("unexpected X-Next-Page header from GitLab")
+        page += 1
+    too_many_pages(f"gitlab {kind}", len(items))
+
+
 def gitlab_issues(args, dry):
-    project = urllib.parse.quote(check_id(args.query), safe="")
-    q = urllib.parse.urlencode({"state": "opened", "per_page": MAX_RESULTS})
-    return request(f"{env('GITLAB_BASE')}/api/v4/projects/{project}/issues?{q}", {"PRIVATE-TOKEN": env("GITLAB_TOKEN")}, dry)
+    return gitlab_list(args.query, "issues", "all", dry)  # open and closed, so a tracker import sees both
 
 
 def gitlab_mrs(args, dry):
-    project = urllib.parse.quote(check_id(args.query), safe="")
-    q = urllib.parse.urlencode({"state": "opened", "per_page": MAX_RESULTS})
-    return request(f"{env('GITLAB_BASE')}/api/v4/projects/{project}/merge_requests?{q}", {"PRIVATE-TOKEN": env("GITLAB_TOKEN")}, dry)
+    return gitlab_list(args.query, "merge_requests", "opened", dry)
 
 
 # ---- GitHub -----------------------------------------------------------------------------------
