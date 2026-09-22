@@ -54,16 +54,26 @@ TEXT_EXT = {".md", ".json", ".py", ".c", ".h", ".txt", ".sh", ".yaml", ".yml", "
 
 LINK_RE = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
 BACKTICK_PATH_RE = re.compile(r"`((?:\.devin|\.agents|example-system|integrations|templates|tools|outputs)/[^`\s*]+)`")
-# `/skill`, a fenced line starting with /skill, "paste /skill." or '"/skill"'; not URL or path segments
-# (a following `/` or `.`+letter is a path; a preceding letter, `.`, `:` or `/` is a URL/path).
-SLASH_RE = re.compile(r"(?:^|(?<=[\s`(|\"']))/([a-z][a-z0-9-]*)(?=[\s`)|\"'.,;:!?]|$)(?![.,]?[/a-z0-9])", re.M)
-# Single-segment absolute paths that look like commands (`/tmp`, '/etc') are not skill references.
-PATH_ROOTS = {"bin", "boot", "dev", "etc", "home", "lib", "lib64", "mnt", "opt", "proc", "root", "run",
-              "sbin", "srv", "sys", "tmp", "usr", "var"}
+# Skill references in routing docs are code: `/skill ...` inline, or a fenced line starting with /skill.
+# Absolute paths in code spans need a second segment or a trailing slash (`/tmp/`, `/usr/bin`), see CONTRIBUTING.md.
+INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
+SLASH_CMD_RE = re.compile(r"^/([a-z][a-z0-9-]*)(?=\s|$|[.,;:!?](?:\s|$))")
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
 
 
 def slash_commands(text: str) -> set[str]:
-    return {s for s in SLASH_RE.findall(text) if s not in PATH_ROOTS and not (ROOT / s).exists()}
+    found = set()
+    in_fence = False
+    for line in text.splitlines():
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        spans = [line.strip()] if in_fence else INLINE_CODE_RE.findall(line)
+        for span in spans:
+            m = SLASH_CMD_RE.match(span.strip())
+            if m:
+                found.add(m.group(1))
+    return found
 
 
 problems: list[str] = []

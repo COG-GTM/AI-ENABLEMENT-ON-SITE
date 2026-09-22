@@ -142,21 +142,23 @@ class CheckRepoTests(unittest.TestCase):
         self.assertTrue(any("README.md mentions /exec-deck" in p for p in check_repo.problems))
         check_repo.problems = []
 
-    def test_slash_regex_sees_fenced_and_plain_forms_but_not_paths(self):
+    def test_slash_commands_are_code_spans_or_fenced_lines_not_prose_or_paths(self):
         import check_repo
         text = "\n".join([
             "| swap a part | `/what-if-part-swap` |",
             "```text",
             "/exec-deck Design review deck",
             "```",
-            "then paste /tdd and wait",
-            "Run /research-brief. Or try \"/tour\", then /spec-driven; finally /mcp-server!",
-            "see tools/build_deck.py and https://example.invalid/not-a-skill",
-            "outputs/x.md and example-system/docs/ICD.md, /usr/bin/python3, ./relative/path, /config.json",
-            "Use '/tmp' for scratch, or /var, or \"/etc\"; scripts live in /tools.",
+            "then paste `/tdd` and wait; `/research-brief.` or `/tour!` also count",
+            "~~~",
+            "  /spec-driven Add a diagnostics packet",
+            "~~~",
+            "prose mentions like /not-a-command or \"/quoted\" are not references",
+            "paths in code: `/tmp/`, `/usr/bin/python3`, `/config.json`, `/workspace/`, `./relative`, `outputs/x.md`",
+            "URLs: `https://example.invalid/not-a-skill` and prompts: `Mimic the /design-artifacts workflow`",
         ])
         self.assertEqual(check_repo.slash_commands(text),
-                         {"what-if-part-swap", "exec-deck", "tdd", "research-brief", "tour", "spec-driven", "mcp-server"})
+                         {"what-if-part-swap", "exec-deck", "tdd", "research-brief", "tour", "spec-driven"})
 
 
 class TrackerReportTests(unittest.TestCase):
