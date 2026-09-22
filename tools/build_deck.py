@@ -29,6 +29,7 @@ validate() is the single shape check shared by this tool and export_pptx.py.
 import argparse
 import html
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -36,6 +37,7 @@ from pathlib import Path
 ALLOWED_TYPES = {"title", "bullets", "two-column", "table", "stats", "bars", "quote", "section"}
 MAX_SLIDES = 60
 MAX_BULLETS = 8
+MAX_TABLE_ROWS = 12  # what still fits on one PPTX slide
 MAX_TEXT = 2000
 DEFAULT_ACCENT = "#2600FF"
 ACCENT_RE = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -88,6 +90,10 @@ def _scalar(v, where: str) -> None:
         raise SystemExit(f"{where}: expected text or a number, got {type(v).__name__}")
     if len(str(v)) > MAX_TEXT:
         raise SystemExit(f"{where}: text longer than {MAX_TEXT} characters")
+    try:
+        str(v).encode("utf-8")  # JSON allows lone surrogates; UTF-8 output does not
+    except UnicodeEncodeError:
+        raise SystemExit(f"{where}: text is not valid Unicode")
 
 
 def _items(v, where: str, limit: int = MAX_BULLETS) -> None:
@@ -100,8 +106,8 @@ def _items(v, where: str, limit: int = MAX_BULLETS) -> None:
 
 
 def _number(v, where: str) -> None:
-    if isinstance(v, bool) or not isinstance(v, (int, float)):
-        raise SystemExit(f"{where}: expected a number")
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+        raise SystemExit(f"{where}: expected a finite number")
 
 
 def validate(outline) -> dict:
@@ -134,8 +140,8 @@ def validate(outline) -> dict:
                 _items(s[k], f"slide {n}.{k}")
         if t == "table":
             _items(s["columns"], f"slide {n}.columns", limit=12)
-            if not isinstance(s["rows"], list) or not 1 <= len(s["rows"]) <= 20:
-                raise SystemExit(f"slide {n}.rows: expected 1-20 rows")
+            if not isinstance(s["rows"], list) or not 1 <= len(s["rows"]) <= MAX_TABLE_ROWS:
+                raise SystemExit(f"slide {n}.rows: expected 1-{MAX_TABLE_ROWS} rows: split the slide")
             for i, r in enumerate(s["rows"]):
                 if not isinstance(r, list) or len(r) != len(s["columns"]):
                     raise SystemExit(f"slide {n}.rows[{i}]: expected {len(s['columns'])} cells")

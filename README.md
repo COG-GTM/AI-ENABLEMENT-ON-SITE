@@ -55,7 +55,7 @@ python tools/export_pptx.py templates/deck-outline-example.json outputs/example-
 ```
 
 Open `outputs/example-deck.html` in the browser preview to see a finished deck, or
-`outputs/example-deck.pptx` in PowerPoint, LibreOffice Impress, or Keynote.
+`outputs/example-deck.pptx` in a PowerPoint-compatible viewer (checked with LibreOffice Impress).
 
 Requirements: Python 3.10+. Optional: a C compiler and `make` for the C tests. No packages to install.
 

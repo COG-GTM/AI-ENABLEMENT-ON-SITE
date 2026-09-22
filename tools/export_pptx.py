@@ -36,6 +36,7 @@ Two places where the 1st-edition text and shipping files differ; this tool follo
 
 import argparse
 import json
+import os
 import re
 import sys
 import zipfile
@@ -137,7 +138,8 @@ def sp(sid: int, name: str, x: int, y: int, w: int, h: int, paras: str = "", fil
 def table(sid: int, x: int, y: int, w: int, columns: list, rows: list) -> str:
     ncol = len(columns)
     col_w = w // ncol
-    row_h = 457200
+    row_h = min(457200, BODY_H // (len(rows) + 1))  # shrink rows so the whole table stays in the body area
+    body_sz, head_sz = (1400, 1200) if row_h == 457200 else (1100, 1000)
     grid = "".join(f'<a:gridCol w="{col_w}"/>' for _ in columns)
 
     def cell(text, sz, color, bold, upper=False):
@@ -146,8 +148,8 @@ def table(sid: int, x: int, y: int, w: int, columns: list, rows: list) -> str:
                 f'<a:tcPr marL="91440" marR="91440" marT="45720" marB="45720"><a:lnB w="9525"><a:solidFill>'
                 f'<a:srgbClr val="{LINE}"/></a:solidFill></a:lnB><a:noFill/></a:tcPr></a:tc>')
 
-    head = f'<a:tr h="{row_h}">' + "".join(cell(c, 1200, MUTED, True, upper=True) for c in columns) + "</a:tr>"
-    body = "".join(f'<a:tr h="{row_h}">' + "".join(cell(c, 1400, INK, False) for c in r) + "</a:tr>" for r in rows)
+    head = f'<a:tr h="{row_h}">' + "".join(cell(c, head_sz, MUTED, True, upper=True) for c in columns) + "</a:tr>"
+    body = "".join(f'<a:tr h="{row_h}">' + "".join(cell(c, body_sz, INK, False) for c in r) + "</a:tr>" for r in rows)
     return (f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="{sid}" name="Table"/>'
             f'<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>'
             f'<p:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{col_w * ncol}" cy="{row_h * (len(rows) + 1)}"/></p:xfrm>'
@@ -205,10 +207,11 @@ def slide_shapes(s: dict, deck: dict, n: int, total: int, accent: str) -> str:
                 out.append(sp(sid + i, f"Stat {i + 1}", MX + i * (card_w + gap), y, card_w, card_h, paras, fill=CARD, line=LINE, anchor="ctr"))
         elif t == "bars":
             unit = s.get("unit", "")
-            label_w, val_w, gap, row_h, row_gap = 2743200, 1097280, 182880, 457200, 182880
+            label_w, val_w, gap, row_gap = 2743200, 1097280, 182880, 182880
             track_x = MX + label_w + gap
             track_w = cw - label_w - val_w - 2 * gap
             k = len(s["bars"])
+            row_h = min(457200, (BODY_H - (k - 1) * row_gap) // k)
             y = BODY_Y + (BODY_H - (k * row_h + (k - 1) * row_gap)) // 2
             default_max = max(float(b["value"]) for b in s["bars"])
             for i, b in enumerate(s["bars"]):
@@ -409,13 +412,21 @@ def content_types(parts: dict[str, str]) -> str:
 
 
 def write_pptx(parts: dict[str, str], out: Path) -> None:
+    """Encode everything first, then write a sibling temp file and swap it in, so a failure never leaves a half-written deck."""
+    encoded = {n: ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + x).encode("utf-8") for n, x in parts.items()}
     out.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        for name in sorted(parts):
-            info = zipfile.ZipInfo(name, date_time=ZIP_DATE)
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o644 << 16
-            z.writestr(info, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + parts[name])
+    tmp = out.with_name(out.name + ".tmp")
+    try:
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+            for name in sorted(encoded):
+                info = zipfile.ZipInfo(name, date_time=ZIP_DATE)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = 0o644 << 16
+                z.writestr(info, encoded[name])
+        os.replace(tmp, out)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
 
 
 def main(argv=None) -> int:

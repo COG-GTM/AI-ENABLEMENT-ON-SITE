@@ -28,8 +28,8 @@ Default source when none is given: `example-system/` (SRS, HAZARDS, POWER-BUDGET
   asks for leadership, sources.
 - No organization, program, person, or site names. Footer must say the content is synthetic when it is.
 - The deck is plain HTML with no external assets, so it opens anywhere and prints to PDF with `P`.
-  The same outline also exports to `.pptx` (standard library only, no network) for PowerPoint,
-  LibreOffice Impress, or Keynote. Put speaker notes in a slide's `notes` field; they land in the PPTX.
+  The same outline also exports to `.pptx` (standard library only, no network) for PowerPoint-compatible
+  viewers; checked with LibreOffice Impress. Put speaker notes in a slide's `notes` field; they land in the PPTX.
 
 ## Steps
 

@@ -19,6 +19,7 @@ import export_pptx  # noqa: E402
 
 EXAMPLE = ROOT / "templates" / "deck-outline-example.json"
 NS_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+NS_P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 NS_REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 NS_CT = "{http://schemas.openxmlformats.org/package/2006/content-types}"
 
@@ -128,16 +129,69 @@ class ExportPptxTests(unittest.TestCase):
             {"title": "t", "slides": [{"type": "title", "notes": ["not", "text"]}]},
             {"title": "t", "accent": "blue", "slides": [{"type": "title"}]},
             {"title": {"nested": 1}, "slides": [{"type": "title"}]},
+            {"title": "t", "slides": [{"type": "table", "title": "t", "columns": ["a"], "rows": [["1"]] * 13}]},
+            {"title": "\ud800", "slides": [{"type": "title"}]},  # lone surrogate: legal JSON, not encodable
+        ] + [
+            {"title": "t", "slides": [{"type": "bars", "title": "t", "bars": [{"label": "a", "value": 1, k: v}]}]}
+            for k in ("value", "max") for v in (float("nan"), float("inf"), float("-inf"))
         ]
         for i, outline in enumerate(bad):
             src = self.tmp / f"bad{i}.json"
-            src.write_text(json.dumps(outline))
+            src.write_text(json.dumps(outline))  # json.dumps emits NaN/Infinity, which json.loads accepts
             with self.subTest(i=i), redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit) as cm:
                 export_pptx.main([str(src), str(self.tmp / "bad.pptx")])
             msg = cm.exception.code
             self.assertIsInstance(msg, str)  # one-line reason, not a traceback
             self.assertNotIn("\n", msg.strip())
             self.assertFalse((self.tmp / "bad.pptx").exists())
+
+    def test_failed_export_keeps_previous_file(self):
+        good = export({"title": "t", "slides": [{"type": "title"}]}, self.tmp)
+        before = good.read_bytes()
+        src = self.tmp / "bad.json"
+        src.write_text(json.dumps({"title": "t", "slides": [{"type": "video"}]}))
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            export_pptx.main([str(src), str(good)])
+        self.assertEqual(good.read_bytes(), before)
+        self.assertEqual([p.name for p in good.parent.iterdir()], [good.name])  # no temp file left behind
+
+    def test_shapes_stay_inside_the_slide(self):
+        """Largest allowed slide of every type: every shape and table must fit the 16:9 canvas."""
+        eight = [f"item {i}" for i in range(8)]
+        full = {"title": "t", "footer": "f", "slides": [
+            {"type": "title"}, {"type": "section", "title": "s", "subtitle": "x"},
+            {"type": "bullets", "title": "b", "bullets": eight, "note": "n"},
+            {"type": "two-column", "title": "c", "left": eight, "right": eight, "note": "n"},
+            {"type": "table", "title": "t", "columns": list("abcdefghijkl"), "rows": [list("abcdefghijkl")] * 12, "note": "n"},
+            {"type": "stats", "title": "s", "stats": [{"value": "99.9", "label": "l"}] * 6, "note": "n"},
+            {"type": "bars", "title": "b", "bars": [{"label": "l", "value": 1}] * 8, "unit": "u", "note": "n"},
+            {"type": "quote", "text": "q", "source": "s"},
+        ]}
+        out = export(full, self.tmp)
+        with zipfile.ZipFile(out) as z:
+            for n in z.namelist():
+                if not (n.startswith("ppt/slides/slide") and n.endswith(".xml")):
+                    continue
+                root = ET.fromstring(z.read(n))
+                boxes = 0
+                for shape in root.find(f".//{NS_P}spTree"):
+                    xfrm = next((e for e in shape.iter() if e.tag.endswith("}xfrm")), None)
+                    cnv = shape.find(f".//{NS_P}cNvPr")
+                    if xfrm is None or cnv is None:
+                        continue  # group-level properties, not a shape
+                    name = cnv.get("name")
+                    x, y = (int(xfrm.find(f"{NS_A}off").get(k)) for k in ("x", "y"))
+                    w, h = (int(xfrm.find(f"{NS_A}ext").get(k)) for k in ("cx", "cy"))
+                    boxes += 1
+                    self.assertTrue(0 <= x and 0 <= y and x + w <= export_pptx.W and y + h <= export_pptx.H, f"{n}: {name} {x},{y} {w}x{h}")
+                    if name not in ("Title", "Rule", "Subtitle"):
+                        self.assertGreaterEqual(y, export_pptx.BODY_Y, f"{n}: {name} overlaps the heading")
+                    if name not in ("Footer", "Page"):
+                        self.assertLessEqual(y + h, export_pptx.FOOT_Y, f"{n}: {name} overlaps the footer")
+                self.assertGreater(boxes, 1, n)
+                rows = root.findall(f".//{NS_A}tr")
+                if rows:
+                    self.assertLessEqual(sum(int(r.get("h")) for r in rows), export_pptx.BODY_H, n)
 
     def test_cli_exit_codes(self):
         src = self.tmp / "bad.json"
