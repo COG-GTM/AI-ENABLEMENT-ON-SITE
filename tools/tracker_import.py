@@ -56,7 +56,7 @@ ADF_CONTAINERS = {"doc", "bulletList", "orderedList", "listItem", "blockquote", 
 
 JIRA_TYPE = {"bug": "bug", "defect": "defect", "story": "capability", "task": "capability", "new feature": "capability",
              "improvement": "capability", "epic": "capability"}
-JIRA_SEVERITY = {"highest": "critical", "blocker": "critical", "critical": "high", "high": "high", "medium": "medium",
+JIRA_SEVERITY = {"highest": "critical", "blocker": "critical", "critical": "critical", "high": "high", "medium": "medium",
                  "major": "medium", "low": "low", "lowest": "low", "minor": "low", "trivial": "low"}
 JIRA_STATUS = {"backlog": "proposed", "proposed": "proposed", "open": "open", "to do": "open", "reopened": "open",
                "in progress": "open", "selected for development": "open", "in review": "in_review", "code review": "in_review",
@@ -170,10 +170,19 @@ def make(source: str, where: str, *, title, typ, severity, status, comp, tags, o
 
 # ---- readers -------------------------------------------------------------------------------------
 
+def links(value: str, pattern: re.Pattern, where: str, what: str) -> list:
+    """CSV requirements/hazards are explicit links: every non-empty entry must match, unlike vendor labels."""
+    out = [t.strip() for t in value.split(";") if t.strip()]
+    bad = [t for t in out if not pattern.match(t)]
+    if bad:
+        fail(f"{where}: {what} {bad} must match {pattern.pattern}")
+    return out
+
+
 def read_json(path: Path):
     try:
         return json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as e:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         fail(f"cannot read {path}: {e}")
 
 
@@ -255,9 +264,9 @@ def from_csv(path: Path):
         rows = list(reader)
     except (OSError, UnicodeDecodeError, csv.Error) as e:
         fail(f"cannot read {path}: {e}")
-    columns = set(reader.fieldnames or [])
-    if columns != CSV_COLUMNS:
-        fail(f"csv header must be exactly {sorted(CSV_COLUMNS)}; got {sorted(columns)}")
+    fieldnames = reader.fieldnames or []
+    if len(fieldnames) != len(CSV_COLUMNS) or set(fieldnames) != CSV_COLUMNS:
+        fail(f"csv header must be exactly {sorted(CSV_COLUMNS)}, each once; got {fieldnames}")
     enums = {"type": dict(zip(TYPES, TYPES)), "severity": dict(zip(SEVERITIES, SEVERITIES)), "status": dict(zip(STATUSES, STATUSES))}
     for n, row in enumerate(rows, start=2):
         where = f"csv line {n}"
@@ -268,7 +277,7 @@ def from_csv(path: Path):
         yield make(f"csv:{row['id']}", where, title=row["title"].strip(),
                    typ=pick(enums["type"], row["type"], "type", where), severity=pick(enums["severity"], row["severity"], "severity", where),
                    status=pick(enums["status"], row["status"], "status", where), comp=component(row["component"], where),
-                   tags=[t.strip() for t in (row["requirements"] + ";" + row["hazards"]).split(";")],
+                   tags=links(row["requirements"], REQ_RE, where, "requirements") + links(row["hazards"], HAZ_RE, where, "hazards"),
                    opened=date(row["opened"], where, "opened"), closed=date(row["closed"], where, "closed"),
                    notes=row["notes"].strip(), owner=row["owner"].strip().lower() or None)
 

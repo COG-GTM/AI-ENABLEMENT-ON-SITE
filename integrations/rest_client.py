@@ -19,7 +19,8 @@ Optional: REST_CA_BUNDLE=/path/to/ca.pem for a private certificate authority.
 
 Only GET is used. Azure DevOps ad-hoc WIQL is a POST, so it is not offered; run a saved query by id instead.
 List commands (jira search, gitlab issues/mrs) fetch every page before returning, so the output is complete
-or the command fails; nothing is filtered on page 1.
+or the command fails; nothing is filtered on page 1. github issues returns the first MAX_RESULTS open issues only
+(there is no offline fake for GitHub, so its page walk is not exercised here).
 HTTPS is required, except plain HTTP to 127.0.0.1 for the offline fake (integrations/fake_server.py).
 Output is JSON on stdout. Extend by adding a function to COMMANDS; keep it GET-only.
 """
@@ -41,7 +42,7 @@ MAX_PAGES = 20  # list commands walk every page up to this many, then stop with 
 JIRA_FIELDS = "key,summary,description,status,priority,issuetype,components,labels,created,resolutiondate"  # what tracker_import reads
 ID_RE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
 PROJECT_NAME_RE = re.compile(r"^[A-Za-z0-9._ -]{1,64}$")  # Azure DevOps project names may contain spaces
-UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 IDS_RE = re.compile(r"^[0-9]{1,10}(,[0-9]{1,10}){0,199}$")  # Azure DevOps work item ids are int32
 
 

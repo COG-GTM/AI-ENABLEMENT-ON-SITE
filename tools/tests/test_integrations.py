@@ -34,7 +34,7 @@ FIXTURES = ROOT / "integrations" / "fixtures"
 CRED = "unit-test-token-not-a-secret"
 WRONG = "unit-test-wrong-token-value"
 QUERY_ALL = "00000000-0000-4000-8000-000000000001"
-QUERY_OPEN_BUGS = "00000000-0000-4000-8000-000000000002"
+QUERY_OPEN_BUGS = "00000000-0000-4000-8000-0000000000a2"
 
 
 class Client:
@@ -311,6 +311,19 @@ class FakeServerTests(unittest.TestCase):
                 rest_client.main(["ado", "workitems", "101,1234567890"])
             self.assertIn("HTTP 404", str(cm.exception.code))
 
+    def test_uppercase_query_id_accepted(self):
+        upper = QUERY_OPEN_BUGS.upper()
+        self.assertNotEqual(upper, QUERY_OPEN_BUGS)
+        status, _, body = self.c.get(f"/sn-org/sensor-node/_apis/wit/wiql/{upper}?api-version=7.1", basic())
+        _, _, lower = self.c.get(f"/sn-org/sensor-node/_apis/wit/wiql/{QUERY_OPEN_BUGS}?api-version=7.1", basic())
+        self.assertEqual(status, 200)
+        self.assertEqual(body["workItems"], lower["workItems"])
+        with mock.patch.dict(os.environ, {"ADO_ORG": f"{self.c.base}/sn-org", "ADO_PROJECT": "sensor-node", "ADO_TOKEN": CRED}, clear=True):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rest_client.main(["ado", "query", upper])
+            self.assertEqual(json.loads(out.getvalue())["workItems"], lower["workItems"])
+
     def test_jira_fields_projection(self):
         status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "project = SN", "fields": "key,summary,status"}), bearer())
         self.assertEqual(status, 200)
@@ -334,6 +347,14 @@ class FakeServerCliTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as cm:
                 fake_server.load_fixtures(Path(d))
             self.assertIn("surprise", str(cm.exception.code))
+
+    def test_undecodable_fixture_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            shutil.copytree(FIXTURES, d, dirs_exist_ok=True)
+            (Path(d) / "jira_issues.json").write_bytes(b'{"issues": [\xff]}')
+            with self.assertRaises(SystemExit) as cm:
+                fake_server.load_fixtures(Path(d))
+            self.assertIn("cannot read jira_issues.json", str(cm.exception.code))
 
     def test_empty_fixture_sets_refused(self):
         for name, empty, expect in (("gitlab_issues.json", [], "at least one issue"),
@@ -440,6 +461,34 @@ class TrackerImportTests(unittest.TestCase):
         self.assertEqual({i["type"] for i in results["jira"]}, set(tracker_import.TYPES))
         self.assertEqual(results["jira"][0]["id"], "SN-BUG-001")
         self.assertEqual([i["id"] for i in results["jira"]][-1], "SN-CAP-006")
+
+    def test_jira_critical_priority_stays_critical(self):
+        data = json.loads((FIXTURES / "jira_issues.json").read_text())
+        data["issues"][0]["fields"]["priority"]["name"] = "Critical"
+        src = self.dir / "crit.json"
+        src.write_text(json.dumps(data))
+        out = self.dir / "crit-out.json"
+        self.run_import("--from", "jira", "--in", str(src), "--out", str(out))
+        self.assertEqual(tracker_report.load(out)[0]["severity"], "critical")
+        for table in (tracker_import.JIRA_SEVERITY, tracker_import.ADO_SEVERITY, tracker_import.GITLAB_SEVERITY):
+            self.assertEqual(set(table.values()), set(tracker_import.SEVERITIES))
+
+    def test_csv_bad_link_and_duplicate_header_refused(self):
+        rows = (FIXTURES / "csv_export.csv").read_text().splitlines()
+        bad = self.dir / "bad.csv"
+        bad.write_text("\n".join([rows[0], rows[1].replace(",SN-REQ-003,", ",SN-REQ-01O; SN-REQ-003,")]) + "\n")
+        msg = self.run_import("--from", "csv", "--in", str(bad), "--out", str(self.dir / "o.json"), expect_fail=True)
+        self.assertIn("csv line 2: requirements ['SN-REQ-01O'] must match", msg)
+        bad.write_text("\n".join([rows[0].replace("hazards", "requirements"), rows[1]]) + "\n")
+        msg = self.run_import("--from", "csv", "--in", str(bad), "--out", str(self.dir / "o.json"), expect_fail=True)
+        self.assertIn("each once", msg)
+        self.assertFalse((self.dir / "o.json").exists())
+
+    def test_undecodable_json_export_refused(self):
+        src = self.dir / "latin1.json"
+        src.write_bytes(b'{"issues": [\xff]}')
+        msg = self.run_import("--from", "jira", "--in", str(src), "--out", str(self.dir / "o.json"), expect_fail=True)
+        self.assertIn(f"cannot read {src}", msg)
 
     def test_csv_owner_column_is_kept(self):
         items = tracker_report.load(self.import_fixture("csv", "csv_export.csv"))

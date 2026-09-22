@@ -56,7 +56,7 @@ TOKEN_RE = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
 SEGMENT_RE = re.compile(r"^[A-Za-z0-9._%-]{1,64}$")
 INT_RE = re.compile(r"^[0-9]{1,6}$")
 IDS_RE = re.compile(r"^[0-9]{1,10}(,[0-9]{1,10}){0,199}$")  # Azure DevOps work item ids are int32
-UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 JIRA_KEY_RE = re.compile(r"^[A-Z]{2,6}-[0-9]{1,6}$")
 JQL_RE = re.compile(r"^[A-Za-z0-9 =!_'\"-]{1,200}$")
 JQL_CLAUSE_RE = re.compile(r"^(project|status|statusCategory|issuetype)\s*(=|!=)\s*(\"[^\"]{1,40}\"|'[^']{1,40}'|[A-Za-z0-9_-]{1,40})$")
@@ -104,7 +104,7 @@ def _check_shape(name: str, item: dict, allowed: set, required: set) -> None:
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as e:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         raise SystemExit(f"fixture error: cannot read {path.name}: {e}")
 
 
@@ -142,7 +142,7 @@ def load_fixtures(folder: Path) -> dict:
     _expect(len({i["fields"]["System.TeamProject"] for i in ado["value"]}) == 1, "ado: need at least one work item, all sharing one System.TeamProject")
     _expect(isinstance(ado["queries"], dict), "ado: queries must be an object keyed by query id")
     for qid, q in ado["queries"].items():
-        _expect(UUID_RE.match(qid) is not None, f"ado query {qid!r}: id must be a lowercase uuid")
+        _expect(UUID_RE.match(qid) is not None and qid == qid.lower(), f"ado query {qid!r}: id must be a lowercase uuid")
         _check_shape(f"ado query {qid}", q, {"name", "ids"}, {"name", "ids"})
         _expect(isinstance(q["ids"], list) and set(q["ids"]) <= ids, f"ado query {qid}: ids must exist in value[]")
     return {"jira": jira["issues"], "gitlab": gitlab, "ado": ado["value"], "ado_queries": ado["queries"]}
@@ -377,9 +377,10 @@ class Handler(BaseHTTPRequestHandler):
             allow_keys(q, {"api-version", "$top", "timePrecision"})
             self.api_version(q)
             top = int_param(q, "$top", 200, 1, 200)
-            if not UUID_RE.match(segs[5]) or segs[5] not in queries:
+            qid = segs[5].lower()
+            if not UUID_RE.match(qid) or qid not in queries:
                 raise ApiError(404, "query not found")
-            hits = queries[segs[5]]["ids"][:top]
+            hits = queries[qid]["ids"][:top]
             columns = [{"referenceName": c, "name": c.rsplit(".", 1)[1], "url": f"{base}/_apis/wit/fields/{c}"} for c in ADO_COLUMNS]
             return 200, {"queryType": "flat", "queryResultType": "workItem", "asOf": ASOF, "columns": columns,
                          "workItems": [{"id": i, "url": url(i)} for i in hits]}, {}
