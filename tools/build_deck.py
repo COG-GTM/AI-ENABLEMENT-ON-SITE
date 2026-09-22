@@ -38,6 +38,7 @@ ALLOWED_TYPES = {"title", "bullets", "two-column", "table", "stats", "bars", "qu
 MAX_SLIDES = 60
 MAX_BULLETS = 8
 MAX_TABLE_COLS, MAX_TABLE_ROWS = 12, 12  # one slide's worth in both outputs (HTML clips past 13 rows at 1280x720)
+TABLE_CHARS, TABLE_LINES = 72, 14  # characters across one table row, and wrapped lines (header included) both outputs can show
 MAX_TEXT = 2000
 DEFAULT_ACCENT = "#2600FF"
 ACCENT_RE = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -114,6 +115,24 @@ def _number(v, where: str) -> None:
         raise SystemExit(f"{where}: expected a finite number")
 
 
+def wrapped_lines(text, width: int) -> int:
+    """Greedy word wrap: lines a cell `width` characters wide needs for text."""
+    lines, used = 1, 0
+    for w in str(text).split():
+        if used and used + 1 + len(w) <= width:
+            used += 1 + len(w)
+        else:
+            lines += (used > 0) + (len(w) - 1) // width
+            used = (len(w) - 1) % width + 1
+    return lines
+
+
+def table_lines(columns: list, rows: list) -> list:
+    """Wrapped line count of the header and of each row, at TABLE_CHARS shared equally across the columns."""
+    width = max(1, TABLE_CHARS // len(columns))
+    return [max(wrapped_lines(c, width) for c in r) for r in (columns, *rows)]
+
+
 def validate(outline) -> dict:
     """Reject anything that is not a well-formed outline. Returns the outline unchanged."""
     if not isinstance(outline, dict) or not isinstance(outline.get("title"), str):
@@ -150,6 +169,8 @@ def validate(outline) -> dict:
                 if not isinstance(r, list) or len(r) != len(s["columns"]):
                     raise SystemExit(f"slide {n}.rows[{i}]: expected {len(s['columns'])} cells")
                 _items(r, f"slide {n}.rows[{i}]", limit=MAX_TABLE_COLS)
+            if sum(table_lines(s["columns"], s["rows"])) > TABLE_LINES:
+                raise SystemExit(f"slide {n}: table text wraps to more than {TABLE_LINES} lines: shorten cells or split the slide")
         if t == "stats":
             if not isinstance(s["stats"], list) or not 1 <= len(s["stats"]) <= 6:
                 raise SystemExit(f"slide {n}.stats: expected 1-6 items")

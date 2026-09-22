@@ -139,8 +139,12 @@ def sp(sid: int, name: str, x: int, y: int, w: int, h: int, paras: str = "", fil
 def table(sid: int, x: int, y: int, w: int, columns: list, rows: list) -> str:
     ncol = len(columns)
     col_w = w // ncol
-    row_h = min(457200, BODY_H // (len(rows) + 1))  # shrink rows so the whole table stays in the body area
-    body_sz, head_sz = (1400, 1200) if row_h == 457200 else (1100, 1000)
+    body_sz, head_sz = 1400, 1200
+    sizes = [head_sz] + [body_sz] * len(rows)
+    # row = cell margins + wrapped lines at 1.2 spacing (sz is in 1/100 pt, 12700 EMU per pt); spare height is shared out
+    heights = [91440 + lines * sz * 1524 // 10 for lines, sz in zip(build_deck.table_lines(columns, rows), sizes)]
+    slack = min(152400, max(0, BODY_H - sum(heights)) // len(heights))
+    heights = [h + slack for h in heights]
     grid = "".join(f'<a:gridCol w="{col_w}"/>' for _ in columns)
 
     def cell(text, sz, color, bold, upper=False):
@@ -149,11 +153,12 @@ def table(sid: int, x: int, y: int, w: int, columns: list, rows: list) -> str:
                 f'<a:tcPr marL="91440" marR="91440" marT="45720" marB="45720"><a:lnB w="9525"><a:solidFill>'
                 f'<a:srgbClr val="{LINE}"/></a:solidFill></a:lnB><a:noFill/></a:tcPr></a:tc>')
 
-    head = f'<a:tr h="{row_h}">' + "".join(cell(c, head_sz, MUTED, True, upper=True) for c in columns) + "</a:tr>"
-    body = "".join(f'<a:tr h="{row_h}">' + "".join(cell(c, body_sz, INK, False) for c in r) + "</a:tr>" for r in rows)
+    head = f'<a:tr h="{heights[0]}">' + "".join(cell(c, head_sz, MUTED, True, upper=True) for c in columns) + "</a:tr>"
+    body = "".join(f'<a:tr h="{h}">' + "".join(cell(c, body_sz, INK, False) for c in r) + "</a:tr>"
+                   for h, r in zip(heights[1:], rows))
     return (f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="{sid}" name="Table"/>'
             f'<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>'
-            f'<p:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{col_w * ncol}" cy="{row_h * (len(rows) + 1)}"/></p:xfrm>'
+            f'<p:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{col_w * ncol}" cy="{sum(heights)}"/></p:xfrm>'
             f'<a:graphic><a:graphicData uri="{URI_TABLE}"><a:tbl><a:tblPr firstRow="1" bandRow="1"/>'
             f"<a:tblGrid>{grid}</a:tblGrid>{head}{body}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>")
 

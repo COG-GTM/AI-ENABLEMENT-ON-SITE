@@ -156,6 +156,27 @@ class ExportPptxTests(unittest.TestCase):
                 build(wide)
             self.assertIn("split the slide", cm.exception.code)
 
+    def test_wrapped_table_text_is_bounded_in_both_outputs(self):
+        """Cells wrap in narrow columns; both renderers must refuse a table whose wrapped text cannot fit one slide."""
+        wrap = build_deck.wrapped_lines
+        self.assertEqual([wrap("", 6), wrap("abc def", 7), wrap("abc def", 6), wrap("abcdefghijkl", 6), wrap("abcdefg hi jk", 6)],
+                         [1, 1, 2, 2, 3])
+        cols = list("abcdefghijkl")
+        long = "Battery depletion mitigation remains open"  # 8 lines in a 12-column cell
+        self.assertEqual(build_deck.table_lines(cols, [[long] + cols[1:]]), [1, 8])
+        tall = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[long] + cols[1:]] * 2}]}
+        for build in (build_deck.build, export_pptx.build_parts):  # 17 lines: too tall for either output
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                build(tall)
+            self.assertIn("shorten cells or split the slide", cm.exception.code)
+        tall["slides"][0]["rows"].pop()  # 9 lines: fits, and the wrapped row gets the height its lines need
+        out = export(tall, self.tmp)
+        with zipfile.ZipFile(out) as z:
+            rows = ET.fromstring(z.read("ppt/slides/slide1.xml")).findall(f".//{NS_A}tr")
+        head_h, row_h = (int(r.get("h")) for r in rows)
+        self.assertGreaterEqual(row_h - head_h, 7 * 1400 * 1524 // 10)  # 7 extra lines of 14 pt text
+        self.assertLessEqual(head_h + row_h, export_pptx.BODY_H)
+
     def test_concurrent_exports_to_one_destination(self):
         src = self.tmp / "deck.json"
         src.write_text(json.dumps(self.outline))
@@ -184,7 +205,7 @@ class ExportPptxTests(unittest.TestCase):
             {"type": "title"}, {"type": "section", "title": "s", "subtitle": "x"},
             {"type": "bullets", "title": "b", "bullets": eight, "note": "n"},
             {"type": "two-column", "title": "c", "left": eight, "right": eight, "note": "n"},
-            {"type": "table", "title": "t", "columns": list("abcdefghijkl"), "rows": [list("abcdefghijkl")] * 12, "note": "n"},
+            {"type": "table", "title": "t", "columns": ["abcdef"] * 12, "rows": [["abcdef"] * 12] * 11 + [["abcdefghijkl"] * 12], "note": "n"},
             {"type": "stats", "title": "s", "stats": [{"value": "99.9", "label": "l"}] * 6, "note": "n"},
             {"type": "bars", "title": "b", "bars": [{"label": "l", "value": 1}] * 8, "unit": "u", "note": "n"},
             {"type": "quote", "text": "q", "source": "s"},
