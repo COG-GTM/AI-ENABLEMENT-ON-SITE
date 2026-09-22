@@ -151,7 +151,7 @@ Each lane has a finished example in this repository so you can see the shape bef
 | --- | --- | --- |
 | C/C++ firmware | `templates/host-harness/` | `Makefile`, `hal_stub.c/.h` (scripted SPI/I2C/UART/GPIO, deterministic clock, fault injection), `harness.h` (tiny assert macros), `test_main.c` (35 checks against `example-system/src`). Point `FW_SRC`/`FW_INC` at your tree and rewrite section 2 only |
 | MATLAB / Simulink | `example-system/model/` | `moving_avg.m` (the model), `export_vectors.m` (how the owner exports vectors), `filter_vectors.csv` (26 rows: warm-up, extremes, negatives, rounding), `run_vectors.py` (replays through the Python twin or the C via `vectors_driver.c`), `MODEL-NOTES.md` (the numeric-semantics table) |
-| LabVIEW / TestStand | `example-system/bench/` | `rig.vi.html` (what LabVIEW's own HTML export of a thermal-soak VI looks like), `rig_samples.csv` (24 raw readings), `rig_recording.csv` (the VI's own 3-step results, one step failing on purpose), `rig.py` (the Python port, instruments as callbacks, `--replay`), `test_rig.py`, `RIG-REVIEW.md` (the manual review) |
+| LabVIEW / TestStand | `example-system/bench/` | `rig.vi.html` (what LabVIEW's own HTML export of a thermal-soak VI looks like), `rig_samples.csv` (24 raw readings), `rig_recording.csv` (the VI's own 3-step results, one step failing on purpose), `rig.py` (the Python port, instruments as callbacks, `--replay`), `RIG-REVIEW.md` (the manual review); its test is `example-system/tests/test_rig.py` |
 | Shared | `tools/bench_compare.py` | Two CSVs in, PASS/FAIL per column out, with tolerance per column, max error, and the first divergent row. Standard library only |
 
 ### C/C++: run the workflows on your firmware
@@ -258,7 +258,7 @@ example-system/      the synthetic battery sensor node everything practises on
   README.md          how the node works and how to build and test it
   src/               C firmware: node.c, packet.c, filter.c and their .h headers (host-buildable, hardware via callbacks)
   sim/sensor_node/   Python twin of the same firmware (node.py, packet.py, filter.py, demo.py)
-  tests/             test_node.py, test_packet.py, test_filter.py, test_firmware.c, test_model_equivalence.py
+  tests/             test_node.py, test_packet.py, test_filter.py, test_firmware.c, test_model_equivalence.py, test_rig.py
   model/             MATLAB lane: moving_avg.m, export_vectors.m, filter_vectors.csv, run_vectors.py, MODEL-NOTES.md
   bench/             LabVIEW lane: rig.vi.html (exported VI docs), rig_samples.csv, rig_recording.csv, rig.py, RIG-REVIEW.md
   tracker.json       bugs (SN-BUG-*) and capabilities (SN-CAP-*) linked to requirement and hazard IDs
