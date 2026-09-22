@@ -214,7 +214,7 @@ def check_tools() -> None:
     run([py, "tools/trace_matrix.py", "--out", "outputs/trace-matrix.md"])
     run([py, "tools/golden_path.py", "--skip-tests"])  # the test suites run below
     run([py, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=ROOT / "example-system")
-    run([py, "-m", "unittest", "discover", "-s", "tools/tests", "-q"])
+    run([py, "-m", "unittest", "discover", "-s", "tools/tests", "-q"])  # includes test_integrations.py: fake server + importer on 127.0.0.1
     run([py, "-m", "unittest", "integrations/reference-mcp/test_server.py", "-q"])
     run([py, "-m", "unittest", "integrations/test_rest_client.py", "-q"])
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
