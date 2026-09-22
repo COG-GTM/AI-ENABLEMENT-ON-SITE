@@ -60,6 +60,13 @@ def lvkit_path() -> str | None:
     return shutil.which("lvkit")
 
 
+def lvkit_version(exe: str) -> str:
+    """The version string `lvkit --version` prints, e.g. `0.8.4`; empty when it cannot be read."""
+    r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=LVKIT_TIMEOUT_S, check=False)
+    m = re.search(r"(\d+\.\d+\.\d+\S*)", r.stdout + r.stderr)
+    return m.group(1) if r.returncode == 0 and m else ""
+
+
 def describe(exe: str, path: Path) -> str:
     r = subprocess.run([exe, "describe", str(path)], capture_output=True, text=True, timeout=LVKIT_TIMEOUT_S, check=False)
     if r.returncode != 0:
@@ -139,12 +146,25 @@ def main(argv: list[str] | None = None) -> int:
     if a.write:
         if exe is None:
             raise SystemExit("lvkit is not installed; see integrations/lvkit.md")
+        found = lvkit_version(exe)
+        if found != src["lvkit_version"]:
+            raise SystemExit(
+                f"lvkit {found or '(unknown version)'} on PATH but sources.json records {src['lvkit_version']}; "
+                "update lvkit_version in sources.json first so the inventory states which release produced it"
+            )
         INVENTORY.write_text(render(src, exe), encoding="utf-8")
         print(f"wrote {INVENTORY.relative_to(HERE.parent.parent)}")
         return 0
     print(f"{len(src['files'])} .vi files match sources.json")
     if exe is None:
         print("lvkit not installed: inventory text not re-derived (hashes only)")
+        return 0
+    found = lvkit_version(exe)
+    if found != src["lvkit_version"]:
+        print(
+            f"lvkit {found or '(unknown version)'} on PATH, inventory was made with {src['lvkit_version']}: "
+            "text not re-derived (hashes only)"
+        )
         return 0
     if not INVENTORY.is_file():
         print(f"{INVENTORY.name} missing; run --write")

@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MAX_CASE_ROWS = 1_000
-MAX_CSV_FIELD_CHARS = 1_024
+MAX_CSV_FIELD_CHARS = 1_024  # metadata columns (case, source, note, verdicts)
 CASE_ID = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
 TRI_STATE = ("TRUE", "FALSE", "-")
 
@@ -36,6 +36,8 @@ WHOLE_LEVEL_WILDCARD = b"#"  # ... and '#' as the wildcard that must fill one le
 DOLLAR = b"$"
 MAX_FILTER_BYTES = 65535
 MAX_TOPIC_BYTES = 65535  # port guard only: Evaluate.vi does not check the topic length (MQTT 3.1.1 section 4.7.3 does)
+# CSV data columns: a filter row may be one byte over the VI's limit (to exercise error 55042); a topic may not.
+MAX_FIELD_BYTES = {"topic_filter": MAX_FILTER_BYTES + 1, "topic": MAX_TOPIC_BYTES}
 
 # Error codes and messages, verbatim from `Create TopicFilter.vi` (Error Cluster From Error Code.vi frames 0..5).
 # The Build Array order on the diagram decides precedence: the first True check wins.
@@ -164,8 +166,12 @@ def read_cases(path: Path) -> list[dict[str, str]]:
             if not CASE_ID.match(row["case"]) or row["case"] in seen:
                 raise SystemExit(f"{path}:{n}: case id must be unique and match {CASE_ID.pattern}")
             seen.add(row["case"])
-            if any(len(v) > MAX_CSV_FIELD_CHARS for v in values):
-                raise SystemExit(f"{path}:{n}: field longer than {MAX_CSV_FIELD_CHARS} characters")
+            for col, v in row.items():
+                if col in MAX_FIELD_BYTES:
+                    if len(v.encode("utf-8")) > MAX_FIELD_BYTES[col]:
+                        raise SystemExit(f"{path}:{n}: {col} longer than {MAX_FIELD_BYTES[col]} bytes")
+                elif len(v) > MAX_CSV_FIELD_CHARS:
+                    raise SystemExit(f"{path}:{n}: {col} longer than {MAX_CSV_FIELD_CHARS} characters")
             for col in ("valid", "match", "spec_valid", "spec_match"):
                 if row[col] not in TRI_STATE:
                     raise SystemExit(f"{path}:{n}: {col} must be one of {'/'.join(TRI_STATE)}")

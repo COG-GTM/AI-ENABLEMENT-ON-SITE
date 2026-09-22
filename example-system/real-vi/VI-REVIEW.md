@@ -52,8 +52,10 @@ gives PASS on all 10 columns, 39 rows:
 - 9 rows (`U2a`-`U3e`) are the input strings and expected verdicts read out of the project's two
   requirement-test VIs. The port agrees with every one, including the two error codes they expect
   (55043 for `MQTT/+/Topic`, 55044 for `MQTT+`).
-- 30 rows (`S01`-`S30`) are the examples from MQTT 3.1.1 section 4.7 plus derived edge cases (empty,
-  null byte, 65535/65536 bytes, case sensitivity, `$SYS`, trailing separators). Their `valid`/`match`
+- 30 rows (`S01`-`S30`) are the examples from MQTT 3.1.1 section 4.7 plus derived edge cases (empty
+  filter, case sensitivity, `$SYS`, leading and trailing separators, topics with fewer or more levels
+  than the filter). The null-byte and 65535/65536-byte boundaries are exercised by
+  `example-system/tests/test_topic_filter.py`, not by rows in the table. Their `valid`/`match`
   columns are what the diagram reading says the VI does; `spec_valid`/`spec_match` are what the
   specification says, derived independently and kept in separate columns so the two never blur.
 

@@ -146,7 +146,10 @@ class CasesFile(unittest.TestCase):
             "bad id": head + "a b,a,a,TRUE,0,TRUE,TRUE,TRUE,s,\n",
             "bad tri-state": head + "A1,a,a,yes,0,TRUE,TRUE,TRUE,s,\n",
             "bad code": head + "A1,a,a,FALSE,1,-,FALSE,-,s,\n",
-            "too long": head + f"A1,{'x' * 2000},a,TRUE,0,TRUE,TRUE,TRUE,s,\n",
+            "note too long": head + f"A1,a,a,TRUE,0,TRUE,TRUE,TRUE,s,{'x' * 2000}\n",
+            "filter two over": head + f"A1,{'x' * (tf.MAX_FILTER_BYTES + 2)},a,FALSE,55042,-,FALSE,-,s,\n",
+            "topic one over": head + f"A1,a,{'x' * (tf.MAX_TOPIC_BYTES + 1)},TRUE,0,FALSE,TRUE,FALSE,s,\n",
+            "topic multibyte over": head + f"A1,a,{'\u00e9' * (tf.MAX_TOPIC_BYTES // 2 + 1)},TRUE,0,FALSE,TRUE,FALSE,s,\n",
             "too many": head + "".join(f"A{i},a,a,TRUE,0,TRUE,TRUE,TRUE,s,\n" for i in range(tf.MAX_CASE_ROWS + 1)),
         }
         for name, text in bad.items():
@@ -155,6 +158,22 @@ class CasesFile(unittest.TestCase):
                 p.write_text(text, encoding="utf-8")
                 with self.assertRaises(SystemExit, msg=name):
                     tf.read_cases(p)
+
+    def test_replay_reaches_the_length_boundaries(self):
+        head = "case,topic_filter,topic,valid,error_code,match,spec_valid,spec_match,source,note\n"
+        rows = (
+            f"L1,{'a' * tf.MAX_FILTER_BYTES},{'a' * tf.MAX_TOPIC_BYTES},TRUE,0,TRUE,TRUE,TRUE,spec 4.7.3,\n"
+            f"L2,{'a' * (tf.MAX_FILTER_BYTES + 1)},a,FALSE,55042,-,FALSE,-,spec 4.7.3,\n"
+        )
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.csv"
+            p.write_text(head + rows, encoding="utf-8")
+            out = Path(d) / "out.csv"
+            r = subprocess.run([PY, str(REAL / "topic_filter.py"), "--replay", str(p), "--out", str(out)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            got = {row["case"]: row for row in tf.read_cases(out)}
+            self.assertEqual((got["L1"]["valid"], got["L1"]["error_code"], got["L1"]["match"]), ("TRUE", "0", "TRUE"))
+            self.assertEqual((got["L2"]["valid"], got["L2"]["error_code"], got["L2"]["match"]), ("FALSE", "55042", "-"))
 
     def test_cli_replay_then_compare_passes(self):
         with tempfile.TemporaryDirectory() as d:
@@ -204,6 +223,19 @@ class Inventory(unittest.TestCase):
         r = subprocess.run([PY, str(REAL / "inventory.py"), "--check"], capture_output=True, text=True, env={"PATH": "/nonexistent"})
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("4 .vi files match", r.stdout)
+
+    def test_check_skips_text_compare_on_other_lvkit_release(self):
+        with tempfile.TemporaryDirectory() as d:
+            fake = Path(d) / "lvkit"
+            fake.write_text("#!/bin/sh\necho 'lvkit 9.9.9'\n", encoding="utf-8")
+            fake.chmod(0o755)
+            r = subprocess.run([PY, str(REAL / "inventory.py"), "--check"], capture_output=True, text=True, env={"PATH": d})
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("lvkit 9.9.9 on PATH, inventory was made with", r.stdout)
+            self.assertIn("hashes only", r.stdout)
+            w = subprocess.run([PY, str(REAL / "inventory.py"), "--write"], capture_output=True, text=True, env={"PATH": d})
+            self.assertEqual(w.returncode, 1)
+            self.assertIn("update lvkit_version in sources.json", w.stderr)
 
     def test_check_fails_on_tampered_binary(self):
         with tempfile.TemporaryDirectory() as d:
