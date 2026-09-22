@@ -173,11 +173,13 @@ class ExportPptxTests(unittest.TestCase):
         loose = (  # not emoji sequences, every glyph shows: letters round a joiner, modifier on nothing / a letter /
             "A\u200dB", "\U0001F3FD", "a\U0001F3FD", "\U0001F3E0\U0001F3FB",  # a house (not a modifier base),
             "\U0001F44D\U0001F3FD\U0001F3FD", "\U0001F3E0\u200d\U0001F3E0", "\U0001F44D\u200dZ",  # second modifier, joined houses
-            "\u26d3\ufe0f\u200d\U0001F600", "\U0001F468\u200d\U0001F600",  # joins that are not RGI pairs
+            "\u26d3\ufe0f\u200d\U0001F600", "\U0001F468\u200d\U0001F600",  # joins that are not RGI sequences,
+            "\U0001F466\u200d\U0001F466", "\U0001F468\u200d\U0001F469\u200d\U0001F467\u200d\U0001F600",  # even as fragments of one
             "\U0001F44D\u200c\U0001F3FD", "\U0001F44D\u200c\u200d\U0001F680",  # a non-joiner breaks the cluster
             "A\u20e3", "\u20e3",  # keycap on a letter / alone
         )
-        self.assertEqual([sum(build_deck.glyph_units(s)) for s in loose], [14, 10, 16, 20, 20, 20, 17, 20, 20, 20, 20, 7, 0])
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in loose], [14, 10, 16, 20, 20, 20, 17, 20, 20, 20, 20, 20, 20, 7, 0])
+        self.assertEqual(len(build_deck.ZWJ_SEQUENCES), 254)  # every RGI ZWJ sequence, tones/VS16 stripped
         cols = list("abcdefghijkl")
         emoji = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[thumbs] * 12] * 12}]}
         for build in (build_deck.build, export_pptx.build_parts):  # 13 lines: fits

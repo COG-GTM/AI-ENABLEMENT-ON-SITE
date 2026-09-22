@@ -28,6 +28,7 @@ validate() is the single shape check shared by this tool and export_pptx.py.
 
 import argparse
 import html
+import itertools
 import json
 import math
 import re
@@ -50,44 +51,50 @@ MODIFIER_BASE = (
     " 1F6CC-1F6CC 1F90C-1F90C 1F90F-1F90F 1F918-1F91F 1F926-1F926 1F930-1F939 1F93C-1F93E 1F977-1F977"
     " 1F9B5-1F9B6 1F9B8-1F9B9 1F9BB-1F9BB 1F9CD-1F9CF 1F9D1-1F9DD 1FAC3-1FAC5 1FAF0-1FAF8"
 )
-# Every "component > next component" pair joined by a zero-width joiner in Unicode 15.1 emoji-zwj-sequences.txt
-# (skin tones and VS16 stripped). One line per group of components sharing the same continuations.
-ZWJ_PAIRS = """
-26F9 1F3C4 1F3CA 1F3CB 1F3CC 1F46E 1F46F 1F470 1F471 1F473 1F477 1F481 1F482 1F486 1F487 1F575 1F645 1F646 1F647 1F64B
+# All 254 RGI zero-width-joiner sequences of Unicode 15.1 emoji-zwj-sequences.txt with skin tones, VS16 and the
+# joiners removed. One line per pattern; [a b -] is a choice, "-" meaning nothing.
+ZWJ_SEQUENCES = """
+[26F9 1F3C4 1F3CA 1F3CB 1F3CC 1F46E 1F46F 1F470 1F471 1F473 1F477 1F481 1F482 1F486 1F487 1F575 1F645 1F646 1F647 1F64B
  1F64D 1F64E 1F6A3 1F6B4 1F6B5 1F926 1F935 1F937 1F938 1F939 1F93C 1F93D 1F93E 1F9B8 1F9B9 1F9CD 1F9CF 1F9D4 1F9D6 1F9D7
- 1F9D8 1F9D9 1F9DA 1F9DB 1F9DC 1F9DD 1F9DE 1F9DF > 2640 2642
-1F3C3 1F6B6 1F9CE > 2640 2642 27A1
-2640 2642 1F9AF 1F9BC 1F9BD > 27A1
-1F468 1F469 > 2695 2696 2708 2764 1F33E 1F373 1F37C 1F393 1F3A4 1F3A8 1F3EB 1F3ED 1F466 1F467 1F468 1F469 1F4BB 1F4BC 1F527
- 1F52C 1F680 1F692 1F91D 1F9AF 1F9B0 1F9B1 1F9B2 1F9B3 1F9BC 1F9BD
-1F9D1 > 2695 2696 2708 2764 1F33E 1F373 1F37C 1F384 1F393 1F3A4 1F3A8 1F3EB 1F3ED 1F4BB 1F4BC 1F527 1F52C 1F680 1F692 1F91D
- 1F9AF 1F9B0 1F9B1 1F9B2 1F9B3 1F9BC 1F9BD 1F9D1 1F9D2
-1F48B 1F91D > 1F468 1F469 1F9D1
-2764 > 1F468 1F469 1F48B 1F525 1F9D1 1FA79
-1F466 > 1F466
-1F467 > 1F466 1F467
-1F9D2 > 1F9D2
-1FAF1 > 1FAF2
-26D3 > 1F4A5
-1F344 > 1F7EB
-1F34B > 1F7E9
-1F3F3 > 26A7 1F308
-1F3F4 > 2620
-1F408 > 2B1B
-1F415 > 1F9BA
-1F426 > 2B1B 1F525
-1F43B > 2744
-1F441 > 1F5E8
-1F62E > 1F4A8
-1F635 > 1F4AB
-1F636 > 1F32B
-1F642 > 2194 2195
+ 1F9D8 1F9D9 1F9DA 1F9DB 1F9DC 1F9DD 1F9DE 1F9DF] [2640 2642]
+[1F3C3 1F6B6 1F9CE] [2640 2642]
+[1F3C3 1F6B6 1F9CE] [2640 2642 -] 27A1
+[1F468 1F469 1F9D1] [1F9AF 1F9BC 1F9BD] [27A1 -]
+[1F468 1F469 1F9D1] [2695 2696 2708 1F33E 1F373 1F37C 1F393 1F3A4 1F3A8 1F3EB 1F3ED 1F4BB 1F4BC 1F527 1F52C 1F680 1F692
+ 1F9B0 1F9B1 1F9B2 1F9B3]
+1F468 2764 [1F48B -] 1F468
+1F469 2764 [1F48B -] [1F468 1F469]
+1F9D1 2764 [1F48B -] 1F9D1
+1F468 1F91D 1F468
+1F469 1F91D [1F468 1F469]
+1F9D1 1F91D 1F9D1
+1F468 [1F468 1F469 -] 1F466 [1F466 -]
+1F468 [1F468 1F469 -] 1F467 [1F466 1F467 -]
+1F469 [1F469 -] 1F466 [1F466 -]
+1F469 [1F469 -] 1F467 [1F466 1F467 -]
+1F9D1 [1F9D1 -] 1F9D2 [1F9D2 -]
+1F9D1 1F384
+2764 [1F525 1FA79]
+1FAF1 1FAF2
+26D3 1F4A5
+1F344 1F7EB
+1F34B 1F7E9
+1F3F3 [26A7 1F308]
+1F3F4 2620
+1F408 2B1B
+1F415 1F9BA
+1F426 [2B1B 1F525]
+1F43B 2744
+1F441 1F5E8
+1F62E 1F4A8
+1F635 1F4AB
+1F636 1F32B
+1F642 [2194 2195]
 """
-ZWJ_PAIRS = {
-    (chr(int(a, 16)), chr(int(b, 16)))
-    for line in ZWJ_PAIRS.replace("\n ", " ").strip().splitlines()
-    for a in line.split(">")[0].split()
-    for b in line.split(">")[1].split()
+ZWJ_SEQUENCES = {
+    tuple(chr(int(c, 16)) for c in combo if c != "-")
+    for line in ZWJ_SEQUENCES.replace("\n ", " ").strip().splitlines()
+    for combo in itertools.product(*(t.strip("[]").split() for t in re.findall(r"\[[^]]*]|\S+", line)))
 }
 MAX_TEXT = 2000
 DEFAULT_ACCENT = "#2600FF"
@@ -174,42 +181,54 @@ def _pictograph(ch: str) -> bool:
     return "\U0001F000" <= ch <= "\U0001FAFF" or "\u2600" <= ch <= "\u27bf"
 
 
+def _mark(ch: str) -> bool:
+    return unicodedata.category(ch) in ("Mn", "Me", "Cf")
+
+
+def _component(text: str, i: int) -> int:
+    """End of the emoji component at text[i]: the glyph, an optional VS16, and a skin tone if the glyph takes one."""
+    j = i + 1 + (text[i + 1:i + 2] == "\ufe0f")
+    return j + ("\U0001F3FB" <= text[j:j + 1] <= "\U0001F3FF" and _in(text[i], MODIFIER_BASE))
+
+
 def glyph_units(text: str) -> list:
     """Per code point advance width in tenths of an em, rounded up for an Arial-class sans font.
 
-    Marks and format characters are 0. So are the pieces of an RGI emoji sequence, which renders as one wide
-    glyph: a skin tone right after an Emoji_Modifier_Base, a component joined by a zero-width joiner to one it
-    may follow (ZWJ_PAIRS), and the second half of a flag pair. A keycap widens its digit to a full em. Tones,
-    joins and keycaps that are not part of such a sequence keep their own advance.
+    Marks and format characters are 0, and so is the rest of an emoji sequence that renders as one glyph: a
+    skin tone on an Emoji_Modifier_Base, the second half of a flag pair, and the components joined by ZWJ into
+    an RGI sequence (longest match in ZWJ_SEQUENCES; a chain that is no RGI sequence shows every component).
+    A keycap widens its digit to a full em; a keycap mark on anything else is an ordinary zero-width mark.
     """
-    units, prev, comp = [], "", ""  # prev: last code point other than VS16; comp: the cluster's latest emoji component
-    for ch in text:
-        if ch == "\ufe0f":  # presentation selector: never changes the cluster
+    units, i = [], 0
+    while i < len(text):
+        if _mark(text[i]):
             units.append(0)
+            i += 1
             continue
-        flag = "\U0001F1E6" <= ch <= "\U0001F1FF"
-        toned = "\U0001F3FB" <= prev <= "\U0001F3FF" and prev != comp  # prev is a tone merged into comp
-        if "\U0001F3FB" <= ch <= "\U0001F3FF" and prev == comp and _in(comp, MODIFIER_BASE):
-            units.append(0)
-        elif prev == "\u200d" and (comp, ch) in ZWJ_PAIRS:
-            units.append(0)
-            comp = ch
-        elif flag and prev == comp and "\U0001F1E6" <= comp <= "\U0001F1FF":
-            units.append(0)
-            comp = ""
-        elif unicodedata.category(ch) in ("Mn", "Me", "Cf"):
-            units.append(4 if ch == "\u20e3" and comp and prev == comp and comp in "#*0123456789" else 0)
-            if ch == "\u200d" and not (prev == comp or toned):
-                comp = ""  # a joiner may only continue a component (or its tone)
+        heads, j = [i], _component(text, i)  # start of each component in the ZWJ chain; end of the chain
+        while text[j:j + 1] == "\u200d" and j + 1 < len(text) and not _mark(text[j + 1]):
+            heads.append(j + 1)
+            j = _component(text, j + 1)
+        if len(heads) == 1 and text[j:j + 1] == "\u20e3" and text[i] in "#*0123456789":  # keycap: digit, VS16?, mark
+            units += [_advance(text[i])] + [0] * (j - i - 1) + [4]
+            i = j + 1
+        elif len(heads) == 1 and j == i + 1 and all("\U0001F1E6" <= c <= "\U0001F1FF" for c in text[i:j + 1]) and j < len(text):
+            units += [10, 0]  # flag: a regional-indicator pair
+            i = j + 1
         else:
-            comp = ch
-            units.append(_advance(ch, flag))
-        prev = ch
+            seg, k = [0] * (j - i), 0
+            while k < len(heads):
+                comps = [text[h] for h in heads[k:]]
+                n = max((n for n in range(2, len(comps) + 1) if tuple(comps[:n]) in ZWJ_SEQUENCES), default=1)
+                seg[heads[k] - i] = _advance(text[heads[k]])  # the (sub)sequence's first component carries its width
+                k += n
+            units += seg
+            i = j
     return units
 
 
-def _advance(ch: str, flag: bool) -> int:
-    if flag or _pictograph(ch) or unicodedata.east_asian_width(ch) in ("W", "F"):
+def _advance(ch: str) -> int:
+    if _pictograph(ch) or "\U0001F1E6" <= ch <= "\U0001F1FF" or unicodedata.east_asian_width(ch) in ("W", "F"):
         return 10
     if ch in NARROW:
         return 3
