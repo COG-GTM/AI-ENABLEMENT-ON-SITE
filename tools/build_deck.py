@@ -118,21 +118,28 @@ def _number(v, where: str) -> None:
         raise SystemExit(f"{where}: expected a finite number")
 
 
+def _pictograph(ch: str) -> bool:
+    return "\U0001F000" <= ch <= "\U0001FAFF" or "\u2600" <= ch <= "\u27bf"
+
+
 def glyph_units(text: str) -> list:
     """Per code point advance width in tenths of an em, rounded up for an Arial-class sans font.
 
-    Marks, format characters, skin-tone modifiers, the pictograph after a zero-width joiner and the second
-    half of a flag pair are 0, so an emoji sequence is one wide glyph.
+    Marks and format characters are 0. So are a skin-tone modifier on a pictograph, a pictograph joined to
+    another by a zero-width joiner and the second half of a flag pair: the emoji sequence is one wide glyph.
     """
-    units, prev = [], ""
+    units, prev, base = [], "", ""  # prev: last code point; base: glyph the current cluster started with
     for ch in text:
         flag = "\U0001F1E6" <= ch <= "\U0001F1FF"
-        if (unicodedata.category(ch) in ("Mn", "Me", "Cf") or "\U0001F3FB" <= ch <= "\U0001F3FF"
-                or prev == "\u200d" or (flag and "\U0001F1E6" <= prev <= "\U0001F1FF")):
+        if (unicodedata.category(ch) in ("Mn", "Me", "Cf")
+                or ("\U0001F3FB" <= ch <= "\U0001F3FF" and _pictograph(base))
+                or (prev == "\u200d" and _pictograph(ch) and _pictograph(base))
+                or (flag and "\U0001F1E6" <= base <= "\U0001F1FF")):
             units.append(0)
-            prev = "" if flag else ch
+            prev, base = ch, "" if flag else base
             continue
-        if flag or unicodedata.east_asian_width(ch) in ("W", "F"):
+        prev = base = ch
+        if flag or _pictograph(ch) or unicodedata.east_asian_width(ch) in ("W", "F"):
             units.append(10)
         elif ch in NARROW:
             units.append(3)

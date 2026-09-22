@@ -164,6 +164,8 @@ class ExportPptxTests(unittest.TestCase):
         self.assertEqual([wrap(cjk, w12), wrap("e\u0301" * 6, w12), wrap("abcdef", w12), wrap("ABCDEF", w12)], [2, 1, 1, 2])
         thumbs, family, flags = "\U0001F44D\U0001F3FD" * 2, "\U0001F468\u200d\U0001F469\u200d\U0001F467", "\U0001F1FA\U0001F1F8" * 2
         self.assertEqual([sum(build_deck.glyph_units(s)) for s in (thumbs, family, flags)], [20, 10, 20])  # one em per emoji
+        loose = ("A\u200dB", "\U0001F3FD", "a\U0001F3FD", "\U0001F44D\u200dZ")  # not emoji sequences: every glyph shows
+        self.assertEqual([sum(build_deck.glyph_units(s)) for s in loose], [14, 10, 16, 17])
         cols = list("abcdefghijkl")
         emoji = {"title": "t", "slides": [{"type": "table", "title": "t", "columns": cols, "rows": [[thumbs] * 12] * 12}]}
         for build in (build_deck.build, export_pptx.build_parts):  # 13 lines: fits
