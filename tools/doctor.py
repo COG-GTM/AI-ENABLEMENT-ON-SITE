@@ -129,8 +129,8 @@ def server_problems(servers: dict) -> list[str]:
                     problems.append(f"{name}: {field}.{k} uses {v}; the documented form is ${{env:VAR}}, not ${{VAR}}")
                 elif looks_like_literal_secret(k, v):
                     problems.append(f"{name}: {field}.{k} looks like a literal secret; use ${{env:VAR}} or ${{file:PATH}}")
-        url = entry.get("url")
-        if url is not None:
+        if "url" in entry:
+            url = entry["url"]
             if "command" in entry:
                 problems.append(f"{name}: use either url (remote) or command (local), not both")
             elif not isinstance(url, str) or not url.startswith("https://"):
