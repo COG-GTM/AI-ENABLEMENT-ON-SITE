@@ -138,6 +138,19 @@ class DoctorTests(unittest.TestCase):
                 r = doctor.check_mcp_config()
                 self.assertEqual(r["status"], "OK", r)
                 self.assertIn("reference-system, team", r["detail"])
+                # Model B: the override only adds a personal secret to the project entry
+                local.write_text('{"mcpServers": {"reference-system": {"env": {"JIRA_TOKEN": "${env:JIRA_TOKEN}"}}}}')
+                r = doctor.check_mcp_config()
+                self.assertEqual(r["status"], "OK", r)
+                self.assertIn("1 server(s)", r["detail"])
+                local.write_text('{"mcpServers": {"reference-system": {"env": {"JIRA_TOKEN": "hunter2hunter2"}}}}')
+                r = doctor.check_mcp_config()
+                self.assertEqual(r["status"], "FAIL")
+                self.assertIn("mcp_config.json+.devin/mcp_config.local.json: reference-system: env.JIRA_TOKEN looks like a literal secret", r["detail"])
+                local.write_text('{"mcpServers": {"orphan": {"env": {"JIRA_TOKEN": "${env:JIRA_TOKEN}"}}}}')
+                r = doctor.check_mcp_config()
+                self.assertEqual(r["status"], "FAIL")
+                self.assertIn("mcp_config.local.json: orphan: missing command", r["detail"])
             finally:
                 doctor.ROOT, doctor.USER_MCP_CONFIG = real_root, real_user
 

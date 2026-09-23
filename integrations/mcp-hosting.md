@@ -98,8 +98,12 @@ documentation recommends for teams:
 
 1. The entry lives in `.devin/mcp_config.json` in the repo, with no secret in it (either no `env`
    at all, or `"JIRA_TOKEN": "${env:JIRA_TOKEN}"`).
-2. Each person supplies their own credential: export it in their shell, or add a matching entry to
-   `.devin/mcp_config.local.json` (gitignored, so it never reaches the repo).
+2. Each person supplies their own credential: export it in their shell, or add an entry with the
+   same name to `.devin/mcp_config.local.json` (gitignored, so it never reaches the repo). Copy the
+   whole entry (`command`, `args`) and add the `env` line rather than writing `env` alone; that
+   works whether your build merges the two files field by field or lets the local entry replace
+   the project one. `python tools/doctor.py` checks each server as the combination of its entries
+   across files, so an `env`-only override is not reported as "missing command".
 3. The runtime the server needs (Python, Node, a binary) is still installed per laptop. Write down
    what it is in the entry's `_comment` so the next person does not have to guess.
 
