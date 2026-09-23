@@ -22,6 +22,15 @@ MIN_PYTHON = (3, 10)
 REQUIRED_FILES = ["AGENTS.md", "README.md", ".devin/mcp_config.json", "example-system/tracker.json"]
 
 
+def default_user_mcp_config() -> Path:
+    if platform.system() == "Windows":
+        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "devin" / "mcp_config.json"
+    return Path.home() / ".config" / "devin" / "mcp_config.json"
+
+
+USER_MCP_CONFIG = default_user_mcp_config()
+
+
 def row(name: str, status: str, detail: str) -> dict:
     return {"check": name, "status": status, "detail": detail}
 
@@ -50,19 +59,37 @@ def check_skills() -> dict:
     return row("Skills", "OK", f"{len(names)} found: " + ", ".join(names))
 
 
+def mcp_config_files() -> list[tuple[str, Path, bool]]:
+    """(label, path, required) for every MCP config file Devin may load for this repository."""
+    return [
+        (".devin/mcp_config.json", ROOT / ".devin" / "mcp_config.json", True),
+        (".devin/mcp_config.local.json", ROOT / ".devin" / "mcp_config.local.json", False),
+        ("user mcp_config.json", USER_MCP_CONFIG, False),
+    ]
+
+
 def check_mcp_config() -> dict:
-    f = ROOT / ".devin" / "mcp_config.json"
-    try:
-        cfg = json.loads(f.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        return row("MCP config", "FAIL", f"{f.relative_to(ROOT)} unreadable: {type(e).__name__}")
-    servers = cfg.get("mcpServers") if isinstance(cfg, dict) else None
-    if not isinstance(servers, dict) or not servers:
-        return row("MCP config", "FAIL", "mcpServers must be a non-empty object")
-    problems = server_problems(servers)
+    problems: list[str] = []
+    names: list[str] = []
+    checked: list[str] = []
+    for label, f, required in mcp_config_files():
+        if not required and not f.is_file():
+            continue
+        checked.append(label)
+        try:
+            cfg = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            problems.append(f"{label} unreadable: {type(e).__name__}")
+            continue
+        servers = cfg.get("mcpServers") if isinstance(cfg, dict) else None
+        if not isinstance(servers, dict) or (required and not servers):
+            problems.append(f"{label}: mcpServers must be a non-empty object")
+            continue
+        problems.extend(f"{label}: {p}" for p in server_problems(servers))
+        names.extend(servers)
     if problems:
         return row("MCP config", "FAIL", "; ".join(problems))
-    return row("MCP config", "OK", f"{len(servers)} server(s): " + ", ".join(servers))
+    return row("MCP config", "OK", f"{len(names)} server(s): " + ", ".join(names) + f" (checked {', '.join(checked)})")
 
 
 def server_problems(servers: dict) -> list[str]:
@@ -79,6 +106,7 @@ def server_problems(servers: dict) -> list[str]:
                 continue
             for k, v in values.items():
                 if not isinstance(v, str):
+                    problems.append(f"{name}: {field}.{k} must be a string")
                     continue
                 if BARE_VAR_RE.match(v.strip()):
                     problems.append(f"{name}: {field}.{k} uses {v}; the documented form is ${{env:VAR}}, not ${{VAR}}")

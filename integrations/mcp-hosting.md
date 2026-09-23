@@ -222,7 +222,8 @@ Copy this into the request. Each line is something they will ask anyway.
 ## Not verified in this repository
 
 Model A is exercised by `integrations/reference-mcp/test_server.py` and `tools/doctor.py` (which
-also validates `url` entries and rejects literal tokens in `headers` or `env`). The file locations,
+reads the project file, the local override, and the user file when present, validates `url`
+entries, and rejects literal tokens in `headers` or `env`). The file locations,
 `${env:...}`/`${file:...}` interpolation, `url`/`transport`/`headers` fields, the SSE fallback, and
 `devin mcp` commands above come from the Devin Local documentation
 (https://docs.devin.ai/cli/extensibility/mcp/configuration) and were not run here; confirm them

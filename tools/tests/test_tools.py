@@ -95,11 +95,51 @@ class DoctorTests(unittest.TestCase):
             "envlit": ({"command": "python3", "env": {"JIRA_TOKEN": "hunter2hunter2"}}, "literal secret"),
             "envbare": ({"command": "python3", "env": {"JIRA_TOKEN": "${JIRA_TOKEN}"}}, "not ${VAR}"),
             "shape": ({"command": "python3", "env": []}, "must be an object"),
+            "envnum": ({"command": "python3", "env": {"PORT": 8080}}, "env.PORT must be a string"),
+            "hdrnull": ({"url": "https://h/mcp", "headers": {"Authorization": None}}, "headers.Authorization must be a string"),
         }
         for name, (entry, expect) in bad.items():
             problems = doctor.server_problems({name: entry})
             self.assertTrue(problems, name)
             self.assertIn(expect, "; ".join(problems), name)
+
+    def test_local_override_and_user_file_are_validated_too(self):
+        good = '{"mcpServers": {"reference-system": {"command": "python3", "args": ["integrations/reference-mcp/server.py"]}}}'
+        real_root, real_user = doctor.ROOT, doctor.USER_MCP_CONFIG
+        with tempfile.TemporaryDirectory() as td:
+            fake = Path(td)
+            (fake / ".devin").mkdir()
+            (fake / "integrations" / "reference-mcp").mkdir(parents=True)
+            (fake / "integrations" / "reference-mcp" / "server.py").write_text("")
+            (fake / ".devin" / "mcp_config.json").write_text(good)
+            local = fake / ".devin" / "mcp_config.local.json"
+            user = fake / "home" / "mcp_config.json"
+            user.parent.mkdir()
+            doctor.ROOT, doctor.USER_MCP_CONFIG = fake, user
+            try:
+                r = doctor.check_mcp_config()
+                self.assertEqual(r["status"], "OK", r)
+                self.assertNotIn("local", r["detail"])
+                local.write_text('{"mcpServers": {}}')  # an empty override is fine
+                self.assertEqual(doctor.check_mcp_config()["status"], "OK")
+                local.write_text('{"mcpServers": {"team": {"url": "https://h/mcp", "headers": ["Authorization"]}}}')
+                r = doctor.check_mcp_config()
+                self.assertEqual(r["status"], "FAIL")
+                self.assertIn("mcp_config.local.json: team: headers must be an object", r["detail"])
+                local.write_text('{"mcpServers": {"team": {"url": "https://h/mcp", "disabled": true}}}')
+                user.write_text('{"mcpServers": {"u": {"command": "python3", "env": {"API_KEY": "sk-live-not-a-placeholder"}}}}')
+                r = doctor.check_mcp_config()
+                self.assertEqual(r["status"], "FAIL")
+                self.assertIn("user mcp_config.json: u: env.API_KEY looks like a literal secret", r["detail"])
+                self.assertNotIn("sk-live", r["detail"])
+                user.write_text("{not json")
+                self.assertIn("user mcp_config.json unreadable", doctor.check_mcp_config()["detail"])
+                user.unlink()
+                r = doctor.check_mcp_config()
+                self.assertEqual(r["status"], "OK", r)
+                self.assertIn("reference-system, team", r["detail"])
+            finally:
+                doctor.ROOT, doctor.USER_MCP_CONFIG = real_root, real_user
 
     def test_example_config_entries_pass_every_check_except_missing_runtimes(self):
         cfg = json.loads((ROOT / "integrations" / "mcp_config.example.json").read_text())
