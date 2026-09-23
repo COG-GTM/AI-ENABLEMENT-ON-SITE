@@ -155,9 +155,22 @@ class FakeServerTests(unittest.TestCase):
         self.assertEqual(total("(status = 'In Progress') AND project in (\"SN\")"), 6)
         self.assertEqual(total("((status = Done AND type = Bug)) AND project in (\"SN\")"), total("status = Done AND type = Bug"))
         self.assertEqual(total("(project = SN) AND project in (\"ZZ\")"), 0)
-        for bad in ("(status = Done", "status = Done)", "((status = Done) AND"):
+        for bad in ("(status = Done", "status = Done)", "((status = Done) AND", "status = \"Done"):
             with self.subTest(jql=bad):
                 self.assertEqual(self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": bad}), bearer())[0], 400)
+
+    def test_jira_jql_quotes_hide_parens_and_keywords(self):
+        def total(jql):
+            status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": jql}), bearer())
+            self.assertEqual(status, 200, jql)
+            return body["total"]
+        self.assertEqual(total('status = "Waiting (Support"'), 0)
+        self.assertEqual(total('status = "Waiting (Support)" AND project = SN'), 0)
+        self.assertEqual(total("status IN ('Done (x)', 'In Progress') AND project in (\"SN\")"), 6)
+        self.assertEqual(total("status != 'Ready AND Waiting'"), 12)
+        self.assertEqual(total("status = 'ORDER BY created'"), 0)
+        self.assertEqual(total("status = Done ORDER BY 'created (desc)'"), 3)
+        self.assertEqual(total("(status = Done) AND project in (\"SN\") ORDER BY created DESC"), 3)
 
     def test_gitlab_list_headers_and_single_issue(self):
         status, headers, body = self.c.get("/api/v4/projects/123/issues?state=all&per_page=100", gitlab())

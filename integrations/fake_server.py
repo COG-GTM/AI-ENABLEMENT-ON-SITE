@@ -210,23 +210,43 @@ def int_param(q: dict, name: str, default: int, lo: int, hi: int) -> int:
     return n
 
 
+JQL_SYNTAX_RE = re.compile(r"['\"()]|\s+AND\s+|\s+ORDER\s+BY\s+", re.I)
+
+
 def jql_clauses(jql: str) -> list:
-    """Split on top-level AND; a parenthesised group is unwrapped and split again, so `(a AND b) AND c` -> [a, b, c]."""
-    parts, depth, start = [], 0, 0
-    for m in re.finditer(r"\(|\)|\s+AND\s+", jql, flags=re.I):
+    """Split on top-level AND, drop a trailing ORDER BY, and unwrap parenthesised groups, so `(a AND b) AND c` -> [a, b, c].
+
+    Quotes are honoured throughout: `status = "Waiting (Support)"` and `status = 'Ready AND Waiting'` are single
+    clauses; nothing inside quotes counts as a parenthesis, an AND, or an ORDER BY. JQL_RE admits no backslash, so
+    there is no escaping to handle."""
+    parts, depth, start, quote = [], 0, 0, None
+    for m in JQL_SYNTAX_RE.finditer(jql):
         tok = m.group(0)
-        if tok == "(":
+        if quote:
+            if tok == quote:
+                quote = None
+            continue
+        if tok in "'\"":
+            quote = tok
+        elif tok == "(":
             depth += 1
         elif tok == ")":
             depth -= 1
             if depth < 0:
                 raise ApiError(400, "unbalanced parentheses in jql")
-        elif depth == 0:
+        elif depth == 0 and tok.strip().upper() == "AND":
             parts.append(jql[start:m.start()])
             start = m.end()
+        elif depth == 0:  # top-level ORDER BY: everything after it is sort order, which the fake ignores
+            parts.append(jql[start:m.start()])
+            start = None
+            break
+    if quote:
+        raise ApiError(400, "unterminated quote in jql")
     if depth:
         raise ApiError(400, "unbalanced parentheses in jql")
-    parts.append(jql[start:])
+    if start is not None:
+        parts.append(jql[start:])
     out = []
     for p in parts:
         p = p.strip()
@@ -243,7 +263,6 @@ def apply_jql(issues: list, jql: str) -> list:
         return issues
     if not JQL_RE.match(jql):
         raise ApiError(400, "jql contains unsupported characters or is too long")
-    jql = re.sub(r"\s+ORDER\s+BY\s+.*$", "", jql, flags=re.I)
     getters = {
         "project": lambda i: i["key"].rsplit("-", 1)[0],
         "status": lambda i: i["fields"]["status"]["name"],
