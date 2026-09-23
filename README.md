@@ -290,7 +290,8 @@ tools/               small Python scripts the skills call. Standard library only
   tracker_import.py  Jira / GitLab / Azure DevOps / CSV export -> tracker.json schema
   bench_compare.py   two CSVs -> PASS/FAIL per column (tolerances, max error, first divergent row)
 integrations/        README.md (which lane, which credential), curl-recipes.md, cli-recipes.md,
-                     jira-on-prem.md (Jira Data Center for a first-time user: every option, admin checklist, CLI how-to),
+                     jira-on-prem.md (Jira Data Center for a first-time user: every option, admin checklist, CLI how-to,
+                                      the self-hosted COG-GTM/jira-mcp connector as the MCP example),
                      rest_client.py (read-only, redacts tokens), mcp_config.example.json,
                      mcp-hosting.md (laptop vs shared vs team-hosted vs vendor-hosted MCP, and what Devin asks first),
                      fake_server.py (offline stand-in for Jira Data Center, GitLab, Azure DevOps; enough Jira for jira-cli; fixtures/ holds its data),
@@ -332,7 +333,7 @@ Requirements: Python 3.10+. Optional: a C compiler and `make` for the C tests. N
 - **Hazard / FMEA table** what can fail, how bad, how likely, what mitigates it, which test proves it.
 - **Twins** the same firmware written twice, in C and Python, sharing one test list.
 - **PAT / API token** a personal access token; the credential you use instead of a password. Never paste one into chat.
-- **Jira Data Center / on-prem** Jira your organisation hosts (any address that is not `*.atlassian.net`). It ships its REST API; no CLI to install on the server. `integrations/jira-on-prem.md`.
+- **Jira Data Center / on-prem** Jira your organisation hosts (any address that is not `*.atlassian.net`). It ships its REST API; no CLI to install on the server. `integrations/jira-on-prem.md`. For Devin tools against it, the self-hosted read-only connector `https://github.com/COG-GTM/jira-mcp` is the worked example (option 6 on that page).
 - **MCP** a small program Devin can call for tools and data; here, a single Python file on your laptop. It can also be a service your team or a vendor hosts (`integrations/mcp-hosting.md`).
 - **HAL** hardware abstraction layer: the thin set of functions (SPI, I2C, UART, GPIO, clock) between firmware logic and the chip. The host harness replaces it.
 - **Host tests / host harness** the firmware compiled and tested on a laptop with the HAL stubbed; no board.

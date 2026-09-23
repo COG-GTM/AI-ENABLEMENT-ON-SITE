@@ -8,9 +8,9 @@
       "env": {}
     },
     "jira-readonly": {
-      "_comment": "Model A or B. Read-only Jira Data Center connector (github.com/COG-GTM/jira-mcp): clone it next to this repo, pip install -r requirements.txt (mcp, httpx), PAT auth, project allowlist. Docker variant is in that repo's devin-desktop.example.json. Needs outbound HTTPS to your Jira host. Remove this block if not approved.",
-      "command": "python3",
-      "args": ["../jira-mcp/connector/server.py"],
+      "_comment": "Model A or B. Read-only Jira Data Center connector (github.com/COG-GTM/jira-mcp), seven GET-only tools, project allowlist; walkthrough in jira-on-prem.md option 6. Docker form, mirrors that repo's devin-desktop.example.json: clone it, `docker build -t onprem-jira-mcp:latest .` there first. Docker forwards only the variables named with -e, so args and env must agree. Basic auth: replace the JIRA_TOKEN pair in args and the JIRA_TOKEN entry in env with JIRA_USERNAME and JIRA_PASSWORD and set JIRA_AUTH_MODE to basic. Private CA: add `-e JIRA_CA_BUNDLE -v /path/on/laptop/ca.pem:/certs/ca.pem:ro` to args and JIRA_CA_BUNDLE=/certs/ca.pem to env. Without Docker: command python3, args [\"-m\", \"connector.server\"], started from the jira-mcp directory after pip install -r requirements.txt (running connector/server.py by path fails: relative imports). Needs outbound HTTPS to your Jira host. Remove this block if not approved.",
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "JIRA_URL", "-e", "JIRA_AUTH_MODE", "-e", "JIRA_TOKEN", "-e", "JIRA_PROJECTS", "-e", "JIRA_SSL_VERIFY", "onprem-jira-mcp:latest"],
       "env": {
         "JIRA_URL": "${env:JIRA_BASE}",
         "JIRA_AUTH_MODE": "token",

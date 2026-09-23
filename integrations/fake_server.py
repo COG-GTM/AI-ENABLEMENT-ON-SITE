@@ -28,7 +28,8 @@ Errors are JSON: 401 missing/wrong credential, 404 unknown path or id, 400 bad q
 Credential header values are never echoed; the request log prints them as <redacted>.
 
 The JQL the fake understands: project, status, statusCategory, issuetype (alias type) with =, !=, IN, NOT IN,
-joined by AND; an optional trailing ORDER BY is ignored. That is what jira-cli v1.7.0 sends for `issue list`.
+joined by AND, with parenthesised groups; an optional trailing ORDER BY is ignored. That covers what jira-cli
+v1.7.0 sends for `issue list` and the `(<jql>) AND project in (...)` the COG-GTM/jira-mcp connector injects.
 `jira init --installation local` made six GETs against this fake, in this order: myself, serverInfo, project,
 agile board, issue/createmeta/{key}/issuetypes, field. Nothing else is served; anything else is 404.
 
@@ -209,6 +210,33 @@ def int_param(q: dict, name: str, default: int, lo: int, hi: int) -> int:
     return n
 
 
+def jql_clauses(jql: str) -> list:
+    """Split on top-level AND; a parenthesised group is unwrapped and split again, so `(a AND b) AND c` -> [a, b, c]."""
+    parts, depth, start = [], 0, 0
+    for m in re.finditer(r"\(|\)|\s+AND\s+", jql, flags=re.I):
+        tok = m.group(0)
+        if tok == "(":
+            depth += 1
+        elif tok == ")":
+            depth -= 1
+            if depth < 0:
+                raise ApiError(400, "unbalanced parentheses in jql")
+        elif depth == 0:
+            parts.append(jql[start:m.start()])
+            start = m.end()
+    if depth:
+        raise ApiError(400, "unbalanced parentheses in jql")
+    parts.append(jql[start:])
+    out = []
+    for p in parts:
+        p = p.strip()
+        if p.startswith("(") and p.endswith(")") and not JQL_CLAUSE_RE.match(p):
+            out.extend(jql_clauses(p[1:-1]))
+        else:
+            out.append(p)
+    return out
+
+
 def apply_jql(issues: list, jql: str) -> list:
     jql = jql.strip()
     if not jql:
@@ -223,8 +251,8 @@ def apply_jql(issues: list, jql: str) -> list:
         "issuetype": lambda i: i["fields"]["issuetype"]["name"],
     }
     getters["type"] = getters["issuetype"]
-    for clause in re.split(r"\s+AND\s+", jql, flags=re.I):
-        m = JQL_CLAUSE_RE.match(clause.strip())
+    for clause in jql_clauses(jql):
+        m = JQL_CLAUSE_RE.match(clause)
         if not m:
             raise ApiError(400, f"unsupported jql clause; this fake accepts {sorted(getters)} with =, !=, IN, NOT IN joined by AND")
         field, op, raw = m.group(1), m.group(2).upper(), m.group(3)

@@ -109,7 +109,7 @@ Cheapest first. Start at the top and move down only when you have a reason.
 | 3 | **`jira-cli`** (open source, Go, single binary) | `jira issue list`, `jira issue view SN-101`, JSON/CSV output; supports Data Center with PAT (`bearer`), password (`basic`), or client certificates (`mtls`) | one binary from the releases page | nothing | PAT | yes: v1.7.0 `init`, `issue list`, `issue view` against the fake |
 | 4 | **Appfire Jira CLI** (commercial, formerly Bob Swift) | Vendor CLI for Server and Data Center with hundreds of actions | the CLI package (Java) | **yes**: ACLI Connector app, licensed | Jira user + PAT/password per Appfire docs | no: needs a licence and an admin-installed app |
 | 5 | **`go-jira`** (older open source, Go) | Command-line client for Jira Server/DC REST; smaller community than option 3 | Go toolchain to build, or a release binary | nothing | PAT or password | no: Go is not installed here |
-| 6 | **MCP server** (Devin tools) | A read-only Jira connector Devin calls as tools; four hosting models in `mcp-hosting.md` | A/B: Python + the connector; C/D: nothing | nothing | A/B: PAT from env; C: token header or SSO; D: OAuth | reference MCP server yes; a Jira MCP server no |
+| 6 | **MCP server** (Devin tools) | A read-only Jira connector Devin calls as tools; four hosting models in `mcp-hosting.md`; worked example `COG-GTM/jira-mcp` | A/B: Docker or Python + the connector; C/D: nothing | nothing | A/B: PAT from env; C: token header or SSO; D: OAuth | reference MCP server yes; `jira-mcp` against the fake yes; against real Jira no |
 | - | **Atlassian `acli`** | Atlassian's own CLI | | | | **Do not use for Data Center.** Atlassian documents it for Cloud sites (`*.atlassian.net`, email + API token) only. It is listed so you do not pick it by mistake. |
 | - | **Devin's hosted Jira integration** (Devin web app, Settings > Integrations) | Cognition-hosted sign-in to Atlassian | | | | Built around Atlassian Cloud sign-in. Not verified against a Data Center host in this repository; assume it does not reach a Jira behind your firewall unless Cognition confirms it for your deployment. |
 
@@ -350,16 +350,72 @@ asks first):
 
 | Model | Where the server runs | Token | Laptop install | Jira admin | Tested here |
 | --- | --- | --- | --- | --- | --- |
-| A. On your laptop | a Python/Node process Devin starts | your PAT via `${env:JIRA_TOKEN}` | runtime + connector | nothing | reference server yes; Jira connector no |
+| A. On your laptop | a Python/Node process Devin starts | your PAT via `${env:JIRA_TOKEN}` | runtime + connector | nothing | reference server yes; `jira-mcp` connector against the fake yes (below) |
 | B. Shared definition, personal secret | same as A, config committed, secret per person | `${env:JIRA_TOKEN}` / `${file:...}` | same as A | nothing | no |
 | C. Team-hosted | an internal host behind your reverse proxy | a service account **or** pass-through per user | nothing | host, certificate, and the audit question "who asked?" | no |
 | D. Vendor-hosted | on the internet | OAuth in the browser | nothing | authorisation-boundary decision; requests leave your network | no |
 
-`mcp_config.example.json` has a `jira-readonly` entry (model A/B) that expects a separate read-only Jira
-Data Center connector cloned next to this repository and configured with `JIRA_URL`, `JIRA_TOKEN`,
-`JIRA_PROJECTS` (allowlist), and `JIRA_SSL_VERIFY`. Whatever connector you use, the handover checklist
-applies: every tool GET-only, allowlist applied on every endpoint (Agile ones included), pagination
-completed before filtering, no token in the file. `/mcp-server` walks through registering it.
+Whatever connector you use, the handover checklist applies: every tool GET-only, allowlist applied on
+every endpoint (Agile ones included), pagination completed before filtering, no token in the file.
+`/mcp-server` walks through registering it.
+
+### Worked example of model A: the self-hosted `jira-mcp` connector
+
+`https://github.com/COG-GTM/jira-mcp` is a small, generic, read-only Jira Data Center MCP server written
+for exactly this setup: the engineer runs it on their own machine inside the network, Devin Desktop
+talks to it over stdio, and it talks to Jira over HTTPS with a PAT. It is an example, not an Atlassian
+product: read its code, have your security reviewer and Jira administrator look at it, and fork it if
+your rules differ.
+
+```text
+  your laptop (inside the network)                                       your network
+  ┌──────────────────────────────────────────────────────────────┐      ┌──────────────────┐
+  │  Devin Desktop ──stdio (MCP)──► docker run -i onprem-jira-mcp │──HTTPS──►│ Jira Data Center │
+  │                                  (or: python -m connector.server)│  PAT  │ /rest/api/2/...  │
+  │  no inbound port opened; the PAT is passed at launch, not baked│      │ /rest/agile/1.0/ │
+  └──────────────────────────────────────────────────────────────┘      └──────────────────┘
+```
+
+What it gives Devin (seven tools, all GET): `search_issues(jql, limit)`, `get_issue(key)`,
+`get_comments(key)`, `list_projects()`, `list_fields()`, `get_boards()`, `get_sprint_issues(sprint_id)`.
+
+What it does that the handover checklist asks for:
+
+| Control | How the connector does it |
+| --- | --- |
+| Read-only | Only the seven GET-backed tools exist; there is no create/update/transition/delete tool to misuse |
+| Project allowlist | `JIRA_PROJECTS=SN,ABC`; every JQL is rewritten to `(<your jql>) AND project in ("SN","ABC")`, `get_issue`/`get_comments` refuse keys outside the list, boards and sprint issues are filtered to it |
+| Input checks | Issue keys must look like `ABC-123`; sprint ids must be numeric |
+| Credential handling | `JIRA_TOKEN` (or `JIRA_USERNAME`/`JIRA_PASSWORD` with `JIRA_AUTH_MODE=basic`) is read from the environment at start, never written to disk or the image, and redacted from every log line and error |
+| TLS | verifies by default (`JIRA_SSL_VERIFY=true`); a private CA is `JIRA_CA_BUNDLE=/path/to/ca.pem` mounted into the container |
+| Audit | one JSON line per call on stderr: tool, target, ok/refused/error, duration; no payloads |
+| Network surface | stdio only, so nothing listens on a port; outbound HTTPS to Jira is the only connection |
+
+How you run it (its `DEPLOYMENT.md` has the six steps in full; the credential comes from your Jira
+administrator per row 3 above):
+
+```bash
+git clone https://github.com/COG-GTM/jira-mcp ../jira-mcp && cd ../jira-mcp
+docker build -t onprem-jira-mcp:latest .           # or: pip install -r requirements.txt  (mcp, httpx)
+# Devin Desktop: copy the "onprem-jira" block from devin-desktop.example.json into your MCP config,
+# set JIRA_URL, JIRA_PROJECTS, and point JIRA_TOKEN at your PAT with ${env:JIRA_TOKEN}.
+```
+
+This repository's `mcp_config.example.json` carries the same block as `jira-readonly`. Two things to
+know before you copy it: the Python form must be started as a module from the connector's own
+directory (`python -m connector.server`; running `connector/server.py` directly fails with a relative
+import error), which is why the example uses the Docker form; and `JIRA_URL` is the browser-bar base
+URL from row 1, context path included.
+
+Tested here (offline, 2026-09, `jira-mcp` commit `cf7fa17`): its own test suite (37 tests) passes;
+pointed at the fake with `JIRA_URL=http://127.0.0.1:8089` and `JIRA_PROJECTS=SN`, the MCP tool listing returned
+the seven tools, `list_projects`, `get_issue SN-103`, `search_issues status = 'In Progress'` (6 hits)
+and `get_boards` returned the fake's data, `get_issue ZZ-1` was refused by the allowlist before any
+request left the laptop, a wrong token surfaced as `Jira returned 401` with the token absent from the
+error and the log, and the audit lines were as described. The fake learned parenthesised JQL groups for
+this (`(status = 'In Progress') AND project in ("SN")`). Not tested: a real Jira host, the Docker image
+build, `basic` mode, `JIRA_CA_BUNDLE`, `get_comments` and `get_sprint_issues` (the fake has no comments
+or sprints).
 
 For a brand-new user: get option 1 or 3 working first. MCP is a convenience layer on top of a working
 connection, not a way around a missing one.
@@ -388,14 +444,15 @@ Tested on this machine (Linux, Python 3.12, no network to any Jira), all against
 
 - `curl` and `rest_client.py`: `/myself`, `/serverInfo`, `/search` with paging, `/issue/{key}`; wrong token -> `401` with no token in the body or log; `POST` -> `405`. Asserted in `tools/tests/test_integrations.py`.
 - `jira-cli` v1.7.0 (GitCommit `79067e2`, 2025-08-30, linux/amd64): `init --installation local --auth-type bearer`, `me`, `serverinfo`, `issue list` (plain, by status, by type, `--raw`, `--csv`), `issue view`; wrong token -> `401`. The six GETs `init` makes are recorded above and served by the fake.
-- The fake's new Data Center routes (`/myself`, `/serverInfo`, `/project`, `/field`, `/issue/createmeta/{key}/issuetypes`, `/rest/agile/1.0/board`) and its `IN` / `NOT IN` JQL, each with a valid token, a wrong token, and no token.
+- The fake's new Data Center routes (`/myself`, `/serverInfo`, `/project`, `/field`, `/issue/createmeta/{key}/issuetypes`, `/rest/agile/1.0/board`) and its `IN` / `NOT IN` JQL and parenthesised groups, each with a valid token, a wrong token, and no token.
+- The self-hosted `COG-GTM/jira-mcp` connector (commit `cf7fa17`, Python form, MCP over stdio) against the fake: tool list, `list_projects`, `get_issue`, `search_issues`, `get_boards`, allowlist refusal, wrong token -> `401` with no token in error or log. Its own 37 tests pass.
 
 Not tested (needs something this repository does not have):
 
 - Any real Jira Data Center host, PAT, private CA, proxy, or SSO redirect: the "Onsite-only live check" in `README.md` is the list to run when you have them.
 - Appfire Jira CLI (licence + admin-installed connector) and `go-jira` (Go toolchain).
 - `jira-cli` `basic` and `mtls` authentication, `SSL_CERT_FILE`, Windows and macOS binaries.
-- Any Jira MCP server (models A-D); only the offline reference MCP server in `integrations/reference-mcp/` is tested.
+- Any MCP server against a real Jira host, the `jira-mcp` Docker image build, and models C and D end to end.
 - Devin's hosted Jira integration against a Data Center host.
 
 ## Sources (each opened and checked 2026-09)
@@ -406,3 +463,4 @@ Not tested (needs something this repository does not have):
 - Appfire Jira CLI: Marketplace listing https://marketplace.atlassian.com/apps/6398/jira-command-line-interface-cli ; Data Center compatibility https://appfire.atlassian.net/wiki/spaces/ACLI/pages/3380838441/Compatibility+for+ACLI+13.1.0 ; licensing and the ACLI Connector requirement https://appfire.atlassian.net/wiki/spaces/ACLI/pages/60559747/Licensing+and+connector+requirements
 - `jira-cli` (on-premise support, `basic` / `bearer` / `mtls`): https://github.com/ankitpokhrel/jira-cli ; releases: https://github.com/ankitpokhrel/jira-cli/releases
 - `go-jira`: https://github.com/go-jira/jira
+- Self-hosted read-only Jira Data Center MCP connector (example for option 6, model A/B): https://github.com/COG-GTM/jira-mcp (access is by organisation; it returned 404 anonymously when checked)

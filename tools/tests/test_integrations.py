@@ -146,6 +146,19 @@ class FakeServerTests(unittest.TestCase):
         self.assertEqual(rest["total"], 12 - 3 - 6)
         self.assertEqual(self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "status IN ()"}), bearer())[0], 400)
 
+    def test_jira_jql_groups_as_sent_by_mcp_connector(self):
+        """COG-GTM/jira-mcp wraps the caller's JQL and appends its allowlist: `(<jql>) AND project in ("SN")`."""
+        def total(jql):
+            status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": jql}), bearer())
+            self.assertEqual(status, 200, jql)
+            return body["total"]
+        self.assertEqual(total("(status = 'In Progress') AND project in (\"SN\")"), 6)
+        self.assertEqual(total("((status = Done AND type = Bug)) AND project in (\"SN\")"), total("status = Done AND type = Bug"))
+        self.assertEqual(total("(project = SN) AND project in (\"ZZ\")"), 0)
+        for bad in ("(status = Done", "status = Done)", "((status = Done) AND"):
+            with self.subTest(jql=bad):
+                self.assertEqual(self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": bad}), bearer())[0], 400)
+
     def test_gitlab_list_headers_and_single_issue(self):
         status, headers, body = self.c.get("/api/v4/projects/123/issues?state=all&per_page=100", gitlab())
         self.assertEqual(status, 200)
