@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Regenerate or check VI-INVENTORY.md from the real `.vi` files in this folder.
+
+    python example-system/real-vi/inventory.py --check    # sha256 of every .vi matches sources.json; with lvkit, the inventory text too
+    python example-system/real-vi/inventory.py --write    # needs lvkit: re-run describe/unresolved/generate and rewrite VI-INVENTORY.md
+
+The inventory is derived, never hand-edited: every signature, dependency, constant, and structure in it is
+what `lvkit describe` printed for the checked-in binaries, followed by what `lvkit unresolved` and
+`lvkit generate` reported for each. `--check` runs offline; only the text comparison needs lvkit and is
+skipped with a note when it is not installed.
+"""
+
+import argparse
+import hashlib
+import json
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+SOURCES = HERE / "sources.json"
+INVENTORY = HERE / "VI-INVENTORY.md"
+DROP_SECTIONS = ("## Properties",)  # window/toolbar flags: noise for a migration inventory
+LVKIT_TIMEOUT_S = 300
+
+
+def load_sources() -> dict:
+    src = json.loads(SOURCES.read_text(encoding="utf-8"))
+    for key in ("repository", "url", "license", "commit", "lvkit_version", "files"):
+        if key not in src:
+            raise SystemExit(f"{SOURCES}: missing {key}")
+    for entry in src["files"]:
+        name = entry["file"]
+        if Path(name).name != name or not name.endswith(".vi"):
+            raise SystemExit(f"{SOURCES}: bad file name {name!r}")
+    return src
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def check_hashes(src: dict) -> list[str]:
+    problems = []
+    for entry in src["files"]:
+        path = HERE / entry["file"]
+        if not path.is_file():
+            problems.append(f"missing {path.name}")
+        elif sha256(path) != entry["sha256"]:
+            problems.append(f"{path.name}: sha256 differs from sources.json")
+    extra = {p.name for p in HERE.glob("*.vi")} - {e["file"] for e in src["files"]}
+    problems.extend(f"{name}: .vi not listed in sources.json" for name in sorted(extra))
+    return problems
+
+
+def lvkit_path() -> str | None:
+    return shutil.which("lvkit")
+
+
+def lvkit_version(exe: str) -> str:
+    """The version string `lvkit --version` prints, e.g. `0.8.4`; empty when it cannot be read."""
+    r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=LVKIT_TIMEOUT_S, check=False)
+    m = re.search(r"(\d+\.\d+\.\d+\S*)", r.stdout + r.stderr)
+    return m.group(1) if r.returncode == 0 and m else ""
+
+
+def describe(exe: str, path: Path) -> str:
+    r = subprocess.run([exe, "describe", str(path)], capture_output=True, text=True, timeout=LVKIT_TIMEOUT_S, check=False)
+    if r.returncode != 0:
+        raise SystemExit(f"lvkit describe {path.name} failed ({r.returncode}): {r.stderr.strip()[-300:]}")
+    return r.stdout
+
+
+def unresolved(exe: str, path: Path) -> str:
+    """`lvkit unresolved`, with this folder's absolute path shortened to the file name."""
+    r = subprocess.run([exe, "unresolved", str(path)], capture_output=True, text=True, timeout=LVKIT_TIMEOUT_S, check=False)
+    if r.returncode != 0:
+        raise SystemExit(f"lvkit unresolved {path.name} failed ({r.returncode}): {r.stderr.strip()[-300:]}")
+    lines = [ln.rstrip().replace(str(path), path.name) for ln in r.stdout.splitlines()]
+    lines = [re.sub(r"^# .*", "## Unresolved (lvkit unresolved)", ln) for ln in lines]
+    lines = [re.sub(r"^## (?!Unresolved)", "### ", ln) for ln in lines]
+    return "\n".join(lines).strip() + "\n"
+
+
+def generate(exe: str, path: Path) -> str:
+    """One line: did `lvkit generate` produce Python for this VI, and if not, the reason it printed."""
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([exe, "generate", str(path), "-o", tmp], capture_output=True, text=True, timeout=LVKIT_TIMEOUT_S, check=False)
+    out = r.stdout + r.stderr
+    failed = re.search(r"->\s*FAILED:\s*(.+)", out)
+    counts = re.findall(r"^\s*(vilib|ast|stub|error):\s*(\d+)\s*$", out, flags=re.M)
+    summary = ", ".join(f"{k} {v}" for k, v in counts) or f"exit {r.returncode}"
+    verdict = f"FAILED: {failed.group(1).strip()}" if failed else ("produced Python" if r.returncode == 0 else f"exit {r.returncode}")
+    return f"## Generate (lvkit generate)\n\n{verdict} ({summary}). Scaffolding at best; the port in `topic_filter.py` is hand-written from the inventory.\n"
+
+
+def trim(text: str, name: str) -> str:
+    """Replace the absolute path header with the file name and drop the sections in DROP_SECTIONS."""
+    out: list[str] = []
+    skipping = False
+    for line in text.splitlines():
+        if line.startswith("# "):
+            line = f"# {name}"
+        if line.startswith("## "):
+            skipping = line.strip() in DROP_SECTIONS
+        if not skipping:
+            out.append(line.rstrip())
+    while out and not out[-1]:
+        out.pop()
+    return "\n".join(out) + "\n"
+
+
+def render(src: dict, exe: str) -> str:
+    parts = [
+        "# Inventory of the real VIs (generated)\n",
+        f"Generated by `example-system/real-vi/inventory.py --write` with `lvkit describe`, `lvkit unresolved`, and "
+        f"`lvkit generate` (lvkit {src['lvkit_version']}), each run on the single file with no search path, which is the "
+        "bare-binary case. Do not edit by hand; `--check` fails when this file and the binaries disagree.\n",
+        f"Source: {src['repository']} at commit `{src['commit'][:12]}` ({src['license']}). "
+        f"Upstream paths and sha256 of each file are in `sources.json`.\n",
+    ]
+    for entry in src["files"]:
+        parts.append(f"\n---\n\nUpstream path: `{entry['upstream_path']}` - {entry['role']}\n\n")
+        path = HERE / entry["file"]
+        parts.append(trim(describe(exe, path), entry["file"]))
+        parts.append("\n" + unresolved(exe, path))
+        parts.append("\n" + generate(exe, path))
+    return "".join(parts)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--check", action="store_true")
+    g.add_argument("--write", action="store_true")
+    a = ap.parse_args(argv)
+    src = load_sources()
+    problems = check_hashes(src)
+    if problems:
+        print("\n".join(problems))
+        return 1
+    exe = lvkit_path()
+    if a.write:
+        if exe is None:
+            raise SystemExit("lvkit is not installed; see integrations/lvkit.md")
+        found = lvkit_version(exe)
+        if found != src["lvkit_version"]:
+            raise SystemExit(
+                f"lvkit {found or '(unknown version)'} on PATH but sources.json records {src['lvkit_version']}; "
+                "update lvkit_version in sources.json first so the inventory states which release produced it"
+            )
+        INVENTORY.write_text(render(src, exe), encoding="utf-8")
+        print(f"wrote {INVENTORY.relative_to(HERE.parent.parent)}")
+        return 0
+    print(f"{len(src['files'])} .vi files match sources.json")
+    if exe is None:
+        print("lvkit not installed: inventory text not re-derived (hashes only)")
+        return 0
+    found = lvkit_version(exe)
+    if found != src["lvkit_version"]:
+        print(
+            f"lvkit {found or '(unknown version)'} on PATH, inventory was made with {src['lvkit_version']}: "
+            "text not re-derived (hashes only)"
+        )
+        return 0
+    if not INVENTORY.is_file():
+        print(f"{INVENTORY.name} missing; run --write")
+        return 1
+    if INVENTORY.read_text(encoding="utf-8") != render(src, exe):
+        print(f"{INVENTORY.name} is stale; run --write")
+        return 1
+    print(f"{INVENTORY.name} matches lvkit describe/unresolved/generate")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
