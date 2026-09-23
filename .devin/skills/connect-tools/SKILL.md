@@ -25,7 +25,7 @@ Transport and authentication are separate decisions. Pick one from each column:
 | --- | --- |
 | REST via `curl` or `integrations/rest_client.py` | Jira/Confluence Data Center: PAT. Jira/Confluence Cloud: API token + email. GitLab: PAT. GitHub: fine-grained PAT. Azure DevOps: PAT. |
 | Vendor CLI (`glab`, `gh`, `az devops`, `acli`) | Same tokens, or browser/SSO login where the vendor supports it. |
-| MCP server (`/mcp-server`) | Local stdio server: token from environment. Vendor-hosted server: OAuth in the browser. |
+| MCP server (`/mcp-server`) | Local server: token from environment. Team-hosted or vendor-hosted server (a URL): token header or OAuth in the browser. Which to pick, and what Devin asks first: `integrations/mcp-hosting.md`. |
 
 Details and copy-paste commands: `integrations/README.md`, `integrations/curl-recipes.md`, `integrations/cli-recipes.md`.
 
@@ -41,7 +41,7 @@ Details and copy-paste commands: `integrations/README.md`, `integrations/curl-re
 5. **Read before write.** Every recipe here is read-only. Adding a write (create issue, post comment) needs explicit user approval each time and a scoped token.
 6. **Reuse the repo tooling.** Save the JSON (or a CSV export) under `outputs/`, fetch every page first, then `python tools/tracker_import.py --from jira|gitlab|ado|csv --in outputs/<export> --out outputs/tracker.json` (add `--merge example-system/tracker.json` to update existing items by external id instead of duplicating). Run `python tools/tracker_report.py --file outputs/tracker.json --markdown` or feed `/exec-deck`, so external data flows through the same reports as the offline example. Unknown status or priority values stop the import and print the allowed set; extend the tables in `tracker_import.py` deliberately.
 7. **Before the first live call, run the onsite checklist.** "Onsite-only live check" in `integrations/README.md` lists what to verify with a real PAT; none of it has been done in this repository.
-8. **Leave nothing behind.** Do not save tokens to files in the repository. If a config file needs a value, reference `${VAR}` and let the environment supply it.
+8. **Leave nothing behind.** Do not save tokens to files in the repository. If a config file needs a value, reference `${env:VAR}` and let the environment supply it (the documented form is `${env:VAR}`, not `${VAR}`).
 
 ## Offline fallback
 

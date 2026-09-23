@@ -8,7 +8,7 @@ need to and your administrator has approved it. Everything here is read-only by 
 | 1. Offline | Work from files already in the repository (`example-system/tracker.json`, exported CSV/JSON) or the fake tracker server below | none | no | nothing | Always works. Default for practice and walkthroughs. |
 | 2. REST / curl | Devin calls the vendor HTTP API with `curl` or `rest_client.py` | PAT or API token in an env var | yes, to the vendor host | `curl` (present) or Python 3 | You have a token and want the fewest moving parts. |
 | 3. Vendor CLI | `glab`, `gh`, `az devops`, `acli` run by Devin | the CLI's own login (token or browser) | yes | the CLI binary | The CLI is already installed and approved on the laptop. |
-| 4. MCP server | A local process Devin talks to over stdio; tools show up in Devin | whatever the server uses (usually a PAT/env var) | usually yes | a runtime (Python/Node/Go) or a binary | You want the tools available in every session without re-explaining the API. |
+| 4. MCP server | Tools show up inside Devin. Either a process Devin starts on the laptop (stdio) or a URL your team or a vendor hosts (HTTPS); see `mcp-hosting.md` | env var / secret file for local; token header or browser sign-in for hosted | local: only if the server calls out; hosted: yes | local: a runtime (Python/Node/Go) or binary; hosted: nothing on the laptop | You want the tools available in every session without re-explaining the API. |
 
 Transport (CLI, REST, MCP) is separate from authentication (PAT, API token, OAuth). Any lane can
 use any auth the vendor supports.
@@ -22,7 +22,7 @@ use any auth the vendor supports.
 | GitLab (SaaS or self-managed) | PAT, scope `read_api` | `PRIVATE-TOKEN: $TOKEN` | User settings, Access tokens | `glab auth login --token` for the CLI. GitLab's built-in MCP is OAuth and must be enabled by the admin. |
 | GitHub / GHES | Fine-grained PAT, read-only | `Authorization: Bearer $TOKEN` | Settings, Developer settings | `gh auth login` for the CLI. `github-mcp-server` accepts the same PAT. |
 | Azure DevOps Services | PAT, scope Work Items (Read) | `Authorization: Basic base64(:token)` | User settings, Personal access tokens | `az devops` CLI uses `AZURE_DEVOPS_EXT_PAT`. Azure DevOps Server (on-prem) differs. |
-| OAuth (any vendor) | browser sign-in through your IdP | handled by the client | admin enables the app | Needed for vendor-hosted MCP servers. Requires admin approval; not covered here beyond that. |
+| OAuth (any vendor) | browser sign-in through your IdP | handled by the client | admin enables the app | Needed for vendor-hosted MCP servers (`devin mcp login <name>`). Requires admin approval; see `mcp-hosting.md`, model D. |
 
 Least privilege: read scopes only, one token per tool, short expiry, never paste a token into a chat
 or a file. Set it in the shell for the session: `export JIRA_TOKEN=...` (Windows: `$env:JIRA_TOKEN="..."`).
@@ -38,7 +38,8 @@ or a file. Set it in the shell for the session: `export JIRA_TOKEN=...` (Windows
 | `fake_server.py` | 1 | Offline stand-in for the Jira, GitLab, and Azure DevOps read endpoints on `127.0.0.1`, fed by `fixtures/`. See "Prove it offline". |
 | `fixtures/` | 1 | Twelve synthetic sensor-node issues, once per vendor shape (`jira_issues.json`, `gitlab_issues.json`, `ado_workitems.json`) plus `csv_export.csv`. |
 | `../tools/tracker_import.py` | 1-2 | Normalises a vendor export (fake or real) or a CSV into the tracker schema; `../tools/tests/test_integrations.py` drives server and importer. |
-| `mcp_config.example.json` | 4 | Entries to copy into `.devin/mcp_config.json`: the local reference server plus optional vendor servers (delete what you do not use). |
+| `mcp-hosting.md` | 4 | Where an MCP server can live (your laptop, shared entry with personal secret, team-hosted, vendor-hosted), what changes between them, and the questions Devin asks before writing config. Start here for anything beyond the reference server. |
+| `mcp_config.example.json` | 4 | One entry per hosting model to copy into `.devin/mcp_config.json`: the local reference server, two local vendor servers, a team-hosted URL, a disabled vendor-hosted URL (delete what you do not use). |
 | `reference-mcp/server.py` | 4 | A complete MCP server in one file, no dependencies, exposing three read-only tools over `example-system/`. Already registered in `.devin/mcp_config.json`. |
 | `reference-mcp/handshake.jsonl`, `reference-mcp/test_server.py` | 4 | Five-line protocol walkthrough and the tests that drive the server over a real pipe. |
 

@@ -11,6 +11,7 @@ Exit code 0 unless something required failed. Never touches the network. Standar
 import json
 import os
 import platform
+import re
 import shutil
 import sys
 import tempfile
@@ -19,6 +20,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MIN_PYTHON = (3, 10)
 REQUIRED_FILES = ["AGENTS.md", "README.md", ".devin/mcp_config.json", "example-system/tracker.json"]
+
+
+def default_user_mcp_config() -> Path:
+    if platform.system() == "Windows":
+        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "devin" / "mcp_config.json"
+    return Path.home() / ".config" / "devin" / "mcp_config.json"
+
+
+USER_MCP_CONFIG = default_user_mcp_config()
 
 
 def row(name: str, status: str, detail: str) -> dict:
@@ -49,23 +59,84 @@ def check_skills() -> dict:
     return row("Skills", "OK", f"{len(names)} found: " + ", ".join(names))
 
 
+def mcp_config_files() -> list[tuple[str, Path, bool]]:
+    """(label, path, required) for every MCP config file Devin may load, lowest precedence first."""
+    return [
+        ("user mcp_config.json", USER_MCP_CONFIG, False),
+        (".devin/mcp_config.json", ROOT / ".devin" / "mcp_config.json", True),
+        (".devin/mcp_config.local.json", ROOT / ".devin" / "mcp_config.local.json", False),
+    ]
+
+
 def check_mcp_config() -> dict:
-    f = ROOT / ".devin" / "mcp_config.json"
-    try:
-        cfg = json.loads(f.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        return row("MCP config", "FAIL", f"{f.relative_to(ROOT)} unreadable: {type(e).__name__}")
-    servers = cfg.get("mcpServers") if isinstance(cfg, dict) else None
-    if not isinstance(servers, dict) or not servers:
-        return row("MCP config", "FAIL", "mcpServers must be a non-empty object")
+    """Validate every entry in every file on its own.
+
+    Whether Devin merges a same-named override field by field or replaces the whole entry is
+    not documented, so an override must be complete (command/args or url) to pass either way.
+    """
+    problems: list[str] = []
+    checked: list[str] = []
+    seen: dict[str, str] = {}
+    for label, f, required in mcp_config_files():
+        if not required and not f.is_file():
+            continue
+        checked.append(label)
+        try:
+            cfg = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            problems.append(f"{label} unreadable: {type(e).__name__}")
+            continue
+        servers = cfg.get("mcpServers") if isinstance(cfg, dict) else None
+        if not isinstance(servers, dict) or (required and not servers):
+            problems.append(f"{label}: mcpServers must be a non-empty object")
+            continue
+        for name, entry in servers.items():
+            if name in seen and isinstance(entry, dict) and "command" not in entry and "url" not in entry:
+                problems.append(
+                    f"{label}: {name} overrides {seen[name]} but omits command/url; "
+                    "copy the whole entry and add env so it works whether the build merges or replaces"
+                )
+                continue
+            problems.extend(f"{label}: {p}" for p in server_problems({name: entry}))
+            seen.setdefault(name, label)
+    if problems:
+        return row("MCP config", "FAIL", "; ".join(problems))
+    return row("MCP config", "OK", f"{len(seen)} server(s): " + ", ".join(seen) + f" (checked {', '.join(checked)})")
+
+
+def server_problems(servers: dict) -> list[str]:
+    """Validate every mcpServers entry: local (command) or remote (url), no literal secrets."""
     problems = []
     for name, entry in servers.items():
         if not isinstance(entry, dict):
             problems.append(f"{name}: entry must be an object")
             continue
+        for field in ("env", "headers"):
+            values = entry.get(field, {})
+            if not isinstance(values, dict):
+                problems.append(f"{name}: {field} must be an object")
+                continue
+            for k, v in values.items():
+                if not isinstance(v, str):
+                    problems.append(f"{name}: {field}.{k} must be a string")
+                    continue
+                if BARE_VAR_RE.match(v.strip()):
+                    problems.append(f"{name}: {field}.{k} uses {v}; the documented form is ${{env:VAR}}, not ${{VAR}}")
+                elif looks_like_literal_secret(k, v):
+                    problems.append(f"{name}: {field}.{k} looks like a literal secret; use ${{env:VAR}} or ${{file:PATH}}")
+        url = entry.get("url")
+        if url is not None:
+            if "command" in entry:
+                problems.append(f"{name}: use either url (remote) or command (local), not both")
+            elif not isinstance(url, str) or not url.startswith("https://"):
+                problems.append(f"{name}: url must start with https://")
+            transport = entry.get("transport", "http")
+            if transport not in ("http", "sse"):
+                problems.append(f"{name}: transport must be http or sse")
+            continue
         cmd = entry.get("command")
         if not isinstance(cmd, str) or not cmd.strip():
-            problems.append(f"{name}: missing command")
+            problems.append(f"{name}: missing command (or url for a remote server)")
             continue
         if not resolve_command(cmd):
             problems.append(f"{name}: command {cmd!r} not found on PATH")
@@ -76,9 +147,19 @@ def check_mcp_config() -> dict:
         for a in args:
             if a.endswith(".py") and not (ROOT / a).exists():
                 problems.append(f"{name}: {a} not found")
-    if problems:
-        return row("MCP config", "FAIL", "; ".join(problems))
-    return row("MCP config", "OK", f"{len(servers)} server(s): " + ", ".join(servers))
+    return problems
+
+
+BARE_VAR_RE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
+SECRET_KEY_RE = re.compile(r"token|secret|password|passwd|api[_-]?key|authorization", re.IGNORECASE)
+PLACEHOLDER_RE = re.compile(r"^(Bearer |Basic |Token )?\$\{(env|file):[^}]+\}$")
+
+
+def looks_like_literal_secret(key: str, value: str) -> bool:
+    if not SECRET_KEY_RE.search(key):
+        return False
+    v = value.strip()
+    return bool(v) and not PLACEHOLDER_RE.match(v)
 
 
 def resolve_command(cmd: str) -> bool:

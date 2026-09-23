@@ -21,6 +21,7 @@ import topic_filter as tf  # noqa: E402
 
 PY = sys.executable
 CASES = REAL / "cases.csv"
+TWO_BYTE_CHAR = "\u00e9"
 
 
 class CreateTopicFilter(unittest.TestCase):
@@ -149,7 +150,7 @@ class CasesFile(unittest.TestCase):
             "note too long": head + f"A1,a,a,TRUE,0,TRUE,TRUE,TRUE,s,{'x' * 2000}\n",
             "filter two over": head + f"A1,{'x' * (tf.MAX_FILTER_BYTES + 2)},a,FALSE,55042,-,FALSE,-,s,\n",
             "topic one over": head + f"A1,a,{'x' * (tf.MAX_TOPIC_BYTES + 1)},TRUE,0,FALSE,TRUE,FALSE,s,\n",
-            "topic multibyte over": head + f"A1,a,{'\u00e9' * (tf.MAX_TOPIC_BYTES // 2 + 1)},TRUE,0,FALSE,TRUE,FALSE,s,\n",
+            "topic multibyte over": head + f"A1,a,{TWO_BYTE_CHAR * (tf.MAX_TOPIC_BYTES // 2 + 1)},TRUE,0,FALSE,TRUE,FALSE,s,\n",
             "too many": head + "".join(f"A{i},a,a,TRUE,0,TRUE,TRUE,TRUE,s,\n" for i in range(tf.MAX_CASE_ROWS + 1)),
         }
         for name, text in bad.items():

@@ -167,8 +167,8 @@ def check_links() -> None:
                 fail(f"{p.relative_to(ROOT)}: broken link {target}")
         for m in BACKTICK_PATH_RE.finditer(text):
             target = m.group(1).rstrip("/").split("::")[0]
-            if "*" in target or "<" in target:
-                continue
+            if "*" in target or "<" in target or target.endswith(".local.json"):
+                continue  # per-user override files are gitignored by design
             if not (ROOT / target).exists() and not (p.parent / target).exists():
                 fail(f"{p.relative_to(ROOT)}: path `{target}` does not exist")
 

@@ -61,7 +61,7 @@ plain English; `AGENTS.md` maps phrases like "make me a deck" to the right skill
 | `/architecture-doc` | Short arc42 / C4 document derived from the actual code: module table, runtime view, decisions, risks | source tree | `example-system/docs/ARCHITECTURE.md` (or yours) |
 | `/track-and-report` | Bugs, defects, and capabilities in one JSON file linked to requirement and hazard IDs; status reports in text, Markdown, JSON | `example-system/tracker.json` | tracker rows, `python tools/tracker_report.py` output |
 | `/connect-tools` | Picks the lane (REST/curl, vendor CLI, MCP) and credential (PAT, API token, OAuth) for Jira, Confluence, GitLab, GitHub, Azure DevOps; read-only, token never in chat, dry run first | `integrations/` recipes | redacted request shown, then JSON in `outputs/` |
-| `/mcp-server` | Runs the offline reference MCP server, adds a tool to it, or registers a server by hand in `.devin/mcp_config.json`; no marketplace needed | `integrations/reference-mcp/` | new tool + test, config entry |
+| `/mcp-server` | Runs the offline reference MCP server, adds a tool to it, or registers a server by hand in `.devin/mcp_config.json`; `host` asks about your environment first and picks laptop, shared, team-hosted, or vendor-hosted (`integrations/mcp-hosting.md`); no marketplace needed | `integrations/reference-mcp/` | new tool + test, config entry |
 | `/labview-to-python` | Inventories what a VI or TestStand sequence does, rebuilds that behaviour in Python, proves it against a recording of the real rig, and says retain / wrap / port for each part. Not a converter | exported VI docs (HTML), screenshots, TestStand XML, a recording CSV; a bare `.vi` with optional `lvkit` | `outputs/<rig>-inventory.md`, `rig.py`, `<rig>-compare.md`, `<rig>-review.md` |
 | `/matlab-to-code` | Reads a `.m` or `.slx`, writes down the numeric semantics (indexing, rounding, saturation, fixed point), exports golden vectors, implements in C and/or Python, proves equivalence; reviews Embedded Coder output instead of re-porting it | `example-system/model/` or your model | `outputs/<model>-notes.md`, vectors CSV, code + tests, compare report |
 | `/bring-your-firmware` | Maps your C/C++ tree (build, toolchain, RTOS, HAL seam), stands up a host-side harness with stubbed hardware from `templates/host-harness/`, gets three tests running on a laptop, then hands over to `/tdd`, `/design-artifacts`, `/track-and-report`, `/exec-deck` | your firmware tree (read-only first) | `outputs/<tree>-firmware-map.md`, `host-tests/` in your tree |
@@ -290,6 +290,7 @@ tools/               small Python scripts the skills call. Standard library only
   bench_compare.py   two CSVs -> PASS/FAIL per column (tolerances, max error, first divergent row)
 integrations/        README.md (which lane, which credential), curl-recipes.md, cli-recipes.md,
                      rest_client.py (read-only, redacts tokens), mcp_config.example.json,
+                     mcp-hosting.md (laptop vs shared vs team-hosted vs vendor-hosted MCP, and what Devin asks first),
                      fake_server.py (offline stand-in for Jira, GitLab, Azure DevOps; fixtures/ holds its data),
                      reference-mcp/ (one-file MCP server + handshake + tests),
                      lvkit.md (optional .vi reader: what it did here, install offline, MCP entry)
@@ -329,7 +330,7 @@ Requirements: Python 3.10+. Optional: a C compiler and `make` for the C tests. N
 - **Hazard / FMEA table** what can fail, how bad, how likely, what mitigates it, which test proves it.
 - **Twins** the same firmware written twice, in C and Python, sharing one test list.
 - **PAT / API token** a personal access token; the credential you use instead of a password. Never paste one into chat.
-- **MCP** a small program Devin can call for tools and data; here, a single Python file.
+- **MCP** a small program Devin can call for tools and data; here, a single Python file on your laptop. It can also be a service your team or a vendor hosts (`integrations/mcp-hosting.md`).
 - **HAL** hardware abstraction layer: the thin set of functions (SPI, I2C, UART, GPIO, clock) between firmware logic and the chip. The host harness replaces it.
 - **Host tests / host harness** the firmware compiled and tested on a laptop with the HAL stubbed; no board.
 - **VI** a LabVIEW program (`.vi`, a binary). **TestStand** NI's test sequencer that calls VIs in order.
