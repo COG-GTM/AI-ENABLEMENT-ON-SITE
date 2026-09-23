@@ -60,7 +60,7 @@ plain English; `AGENTS.md` maps phrases like "make me a deck" to the right skill
 | `/tdd` | Red, green, refactor on Python or C; writes the failing test first, then the smallest change to both firmware twins | `example-system/src/`, `sim/`, `tests/` | new tests and code, `make -C example-system test` green |
 | `/architecture-doc` | Short arc42 / C4 document derived from the actual code: module table, runtime view, decisions, risks | source tree | `example-system/docs/ARCHITECTURE.md` (or yours) |
 | `/track-and-report` | Bugs, defects, and capabilities in one JSON file linked to requirement and hazard IDs; status reports in text, Markdown, JSON | `example-system/tracker.json` | tracker rows, `python tools/tracker_report.py` output |
-| `/connect-tools` | Picks the lane (REST/curl, vendor CLI, MCP) and credential (PAT, API token, OAuth) for Jira, Confluence, GitLab, GitHub, Azure DevOps; read-only, token never in chat, dry run first | `integrations/` recipes | redacted request shown, then JSON in `outputs/` |
+| `/connect-tools` | Picks the lane (REST/curl, vendor CLI, MCP) and credential (PAT, API token, OAuth) for Jira, Confluence, GitLab, GitHub, Azure DevOps; read-only, token never in chat, dry run first. Jira on-premises (Data Center) from zero, including what the Jira admin must expose and a `jira-cli` walkthrough: `integrations/jira-on-prem.md` | `integrations/` recipes | redacted request shown, then JSON in `outputs/` |
 | `/mcp-server` | Runs the offline reference MCP server, adds a tool to it, or registers a server by hand in `.devin/mcp_config.json`; `host` asks about your environment first and picks laptop, shared, team-hosted, or vendor-hosted (`integrations/mcp-hosting.md`); no marketplace needed | `integrations/reference-mcp/` | new tool + test, config entry |
 | `/labview-to-python` | Inventories what a VI or TestStand sequence does, rebuilds that behaviour in Python, proves it against a recording of the real rig, and says retain / wrap / port for each part. Not a converter | exported VI docs (HTML), screenshots, TestStand XML, a recording CSV; a bare `.vi` with optional `lvkit` | `outputs/<rig>-inventory.md`, `rig.py`, `<rig>-compare.md`, `<rig>-review.md` |
 | `/matlab-to-code` | Reads a `.m` or `.slx`, writes down the numeric semantics (indexing, rounding, saturation, fixed point), exports golden vectors, implements in C and/or Python, proves equivalence; reviews Embedded Coder output instead of re-porting it | `example-system/model/` or your model | `outputs/<model>-notes.md`, vectors CSV, code + tests, compare report |
@@ -80,6 +80,7 @@ Full prompt list, ready to paste:
 | Architecture doc | `/architecture-doc Document the sensor node firmware` |
 | Bugs and status | `/track-and-report Show open high-severity items and make a status report` |
 | Connect a tool | `/connect-tools I have a GitLab PAT; pull open issues for project 123 read-only` |
+| Jira on-prem, first time | `/connect-tools Our Jira is on-prem (Data Center). Walk me through the options and connect read-only with a PAT` |
 | MCP server by hand | `/mcp-server run-reference` then `/mcp-server new-tool return the timing budget` |
 | Leave LabVIEW, safely | `/labview-to-python example-system/bench/rig.vi.html example-system/bench/rig_recording.csv` |
 | MATLAB model to C | `/matlab-to-code example-system/model/moving_avg.m --target c` |
@@ -289,9 +290,11 @@ tools/               small Python scripts the skills call. Standard library only
   tracker_import.py  Jira / GitLab / Azure DevOps / CSV export -> tracker.json schema
   bench_compare.py   two CSVs -> PASS/FAIL per column (tolerances, max error, first divergent row)
 integrations/        README.md (which lane, which credential), curl-recipes.md, cli-recipes.md,
+                     jira-on-prem.md (Jira Data Center for a first-time user: every option, admin checklist, CLI how-to,
+                                      the self-hosted COG-GTM/jira-mcp connector as the MCP example),
                      rest_client.py (read-only, redacts tokens), mcp_config.example.json,
                      mcp-hosting.md (laptop vs shared vs team-hosted vs vendor-hosted MCP, and what Devin asks first),
-                     fake_server.py (offline stand-in for Jira, GitLab, Azure DevOps; fixtures/ holds its data),
+                     fake_server.py (offline stand-in for Jira Data Center, GitLab, Azure DevOps; enough Jira for jira-cli; fixtures/ holds its data),
                      reference-mcp/ (one-file MCP server + handshake + tests),
                      lvkit.md (optional .vi reader: what it did here, install offline, MCP entry)
 templates/           spec.md, plan.md, tracker-item.json, deck-outline-example.json,
@@ -330,6 +333,7 @@ Requirements: Python 3.10+. Optional: a C compiler and `make` for the C tests. N
 - **Hazard / FMEA table** what can fail, how bad, how likely, what mitigates it, which test proves it.
 - **Twins** the same firmware written twice, in C and Python, sharing one test list.
 - **PAT / API token** a personal access token; the credential you use instead of a password. Never paste one into chat.
+- **Jira Data Center / on-prem** Jira your organisation hosts (any address that is not `*.atlassian.net`). It ships its REST API; no CLI to install on the server. `integrations/jira-on-prem.md`. For Devin tools against it, the self-hosted read-only connector `https://github.com/COG-GTM/jira-mcp` is the worked example (option 6 on that page).
 - **MCP** a small program Devin can call for tools and data; here, a single Python file on your laptop. It can also be a service your team or a vendor hosts (`integrations/mcp-hosting.md`).
 - **HAL** hardware abstraction layer: the thin set of functions (SPI, I2C, UART, GPIO, clock) between firmware logic and the chip. The host harness replaces it.
 - **Host tests / host harness** the firmware compiled and tested on a laptop with the HAL stubbed; no board.

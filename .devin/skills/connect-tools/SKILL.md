@@ -24,10 +24,14 @@ Transport and authentication are separate decisions. Pick one from each column:
 | Lane (transport) | Credential (auth) |
 | --- | --- |
 | REST via `curl` or `integrations/rest_client.py` | Jira/Confluence Data Center: PAT. Jira/Confluence Cloud: API token + email. GitLab: PAT. GitHub: fine-grained PAT. Azure DevOps: PAT. |
-| Vendor CLI (`glab`, `gh`, `az devops`, `acli`) | Same tokens, or browser/SSO login where the vendor supports it. |
+| Vendor CLI (`glab`, `gh`, `az devops`, `acli` for Jira Cloud, `jira-cli` for Jira Data Center) | Same tokens, or browser/SSO login where the vendor supports it. `acli` is Cloud-only; Data Center uses `jira-cli` with `JIRA_AUTH_TYPE=bearer`. |
 | MCP server (`/mcp-server`) | Local server: token from environment. Team-hosted or vendor-hosted server (a URL): token header or OAuth in the browser. Which to pick, and what Devin asks first: `integrations/mcp-hosting.md`. |
 
 Details and copy-paste commands: `integrations/README.md`, `integrations/curl-recipes.md`, `integrations/cli-recipes.md`.
+Jira on-premises (Jira Data Center) from zero, including what the Jira administrator must expose and
+the `jira-cli` walkthrough: `integrations/jira-on-prem.md`. If the user says "Jira on-prem", "Jira Server",
+or gives a Jira URL that is not `*.atlassian.net`, hand them that page first and follow its order:
+`curl` reach check, `/myself` with the PAT, then the client they choose.
 
 ## Steps
 
@@ -35,7 +39,7 @@ Details and copy-paste commands: `integrations/README.md`, `integrations/curl-re
 2. **Confirm the credential exists.** Never ask the user to paste a token in chat. Ask them to export it in their shell (`export JIRA_TOKEN=...`) and tell you when done. Confirm with `env | grep -c JIRA_TOKEN` (prints a count, not the value).
 3. **Choose the lane.**
    - No extra software allowed -> REST via `curl` or `python integrations/rest_client.py`.
-   - Vendor CLI already installed (`command -v glab gh az acli`) -> CLI recipes.
+   - Vendor CLI already installed (`command -v glab gh az acli jira`) -> CLI recipes. For Jira Data Center that is `jira-cli` (one binary, nothing installed in Jira); Appfire's commercial CLI additionally needs its connector app installed in Jira by an administrator.
    - Devin needs to call the tool repeatedly inside a session -> MCP (`/mcp-server`).
 4. **Dry-run first.** `python integrations/rest_client.py --dry-run jira issue SN-42` prints the request with the token redacted. Review the URL and scope before sending anything.
 5. **Read before write.** Every recipe here is read-only. Adding a write (create issue, post comment) needs explicit user approval each time and a scoped token.

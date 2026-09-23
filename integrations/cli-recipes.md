@@ -8,8 +8,8 @@ terminal like any other command; you approve each one. Check first: `which glab 
 | GitLab | `glab` | `glab auth login --hostname gitlab.example.internal --token "$GITLAB_TOKEN"` | `glab auth login` (interactive) |
 | GitHub / GHES | `gh` | `echo "$GITHUB_TOKEN" \| gh auth login --hostname ghes.example.internal --with-token` | `gh auth login --web` |
 | Azure DevOps | `az devops` | `export AZURE_DEVOPS_EXT_PAT="$ADO_TOKEN"` then `az devops configure --defaults organization=$ADO_ORG project=<p>` | `az login` |
-| Jira / Confluence Cloud | `acli` (Atlassian CLI) | `acli jira auth login --site <site>.atlassian.net --email "$JIRA_EMAIL" --token` (prompts) | `acli jira auth login --web` |
-| Jira Data Center | none official | use `curl-recipes.md` | n/a |
+| Jira / Confluence Cloud | `acli` (Atlassian CLI); **Cloud only**, do not point it at Data Center | `acli jira auth login --site <site>.atlassian.net --email "$JIRA_EMAIL" --token` (prompts) | `acli jira auth login --web` |
+| Jira Data Center (on-prem) | `jira-cli` (open source, tested here against the offline fake); Appfire Jira CLI (commercial, needs an admin-installed connector app); `go-jira` (older). Full guide: `jira-on-prem.md` | `export JIRA_API_TOKEN="$JIRA_TOKEN" JIRA_AUTH_TYPE=bearer` then `jira init --installation local --server "$JIRA_BASE" --login <username> --auth-type bearer --project SN --board none` | none for PATs; `--auth-type mtls` for client certificates |
 
 ## GitLab (`glab`)
 
@@ -42,6 +42,26 @@ az repos pr list --status active -o table
 acli jira workitem search --jql "project = SN AND status = Open" --limit 20
 acli jira workitem view SN-42
 ```
+
+## Jira Data Center (`jira-cli`)
+
+One Go binary from github.com/ankitpokhrel/jira-cli, nothing installed in Jira. PAT in `JIRA_API_TOKEN`,
+`JIRA_AUTH_TYPE=bearer`; `init` records server, login, and project in `~/.config/.jira/.config.yml`
+(never the token). Verified against `fake_server.py` with v1.7.0; see `jira-on-prem.md` for the
+step-by-step, the six GETs `init` makes, and the transcript.
+
+```bash
+jira me
+jira serverinfo
+jira issue list --plain
+jira issue list -s "In Progress" --plain
+jira issue list -tBug --plain
+jira issue view SN-103 --plain
+jira issue list -s Done --csv > outputs/jira-done.csv       # --raw is jira-cli's reshaped JSON (issueType), not Jira's; for tracker_import.py use rest_client.py
+```
+
+Read-only means: no `issue create|edit|move|assign|delete`, no `comment add`, no `sprint add`.
+Appfire Jira CLI (commercial) and `go-jira` are described in `jira-on-prem.md`; neither was run here.
 
 ## Patterns worth copying
 

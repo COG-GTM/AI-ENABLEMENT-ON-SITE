@@ -107,6 +107,71 @@ class FakeServerTests(unittest.TestCase):
         status, _, done = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "status = Done"}), bearer())
         self.assertEqual([i["fields"]["status"]["name"] for i in done["issues"]], ["Done"] * done["total"])
 
+    def test_jira_data_center_cli_bootstrap_endpoints(self):
+        """The GET sequence jira-cli v1.7.0 `init --installation local` makes (recorded against this fake), then a filtered list."""
+        status, _, me = self.c.get("/rest/api/2/myself", bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual((me["name"], me["displayName"], me["active"]), ("practice-user", "Practice User", True))
+        self.assertTrue(me["emailAddress"].endswith("@example.invalid"))
+        status, _, info = self.c.get("/rest/api/2/serverInfo", bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual((info["deploymentType"], info["versionNumbers"], info["baseUrl"]), ("Server", [10, 3, 0], self.c.base))
+        status, _, projects = self.c.get("/rest/api/2/project?expand=lead", bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual([p["key"] for p in projects], ["SN"])
+        status, _, boards = self.c.get("/rest/agile/1.0/board?projectKeyOrId=SN", bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual((boards["total"], boards["isLast"], boards["values"]), (0, True, []))
+        status, _, types = self.c.get("/rest/api/2/issue/createmeta/SN/issuetypes?expand=projects.issuetypes.fields", bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual([t["name"] for t in types["values"]], ["Bug", "Defect", "Story"])
+        self.assertEqual(self.c.get("/rest/api/2/issue/createmeta/ZZ/issuetypes", bearer())[0], 404)
+        status, _, fields = self.c.get("/rest/api/2/field", bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual({f["id"] for f in fields}, fake_server.JIRA_FIELDS)
+        for path in ("/rest/api/2/myself", "/rest/api/2/serverInfo", "/rest/api/2/project", "/rest/agile/1.0/board", "/rest/api/2/field"):
+            with self.subTest(path=path):
+                self.assertEqual(self.c.get(path, bearer(WRONG))[0], 401)
+                self.assertEqual(self.c.get(path, {})[0], 401)
+        self.assertEqual(self.c.get("/rest/agile/1.0/sprint", bearer())[0], 404)
+        # jira-cli renders `-s "In Progress"` and `-tBug` as JQL IN / type clauses
+        jql = 'project="SN" AND status IN ("In Progress") ORDER BY created DESC'
+        status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": jql, "startAt": 0, "maxResults": 100}), bearer())
+        self.assertEqual(status, 200)
+        self.assertEqual(body["total"], 6)
+        self.assertEqual({i["fields"]["status"]["name"] for i in body["issues"]}, {"In Progress"})
+        _, _, bugs = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": 'project="SN" AND type="Bug"'}), bearer())
+        self.assertEqual({i["fields"]["issuetype"]["name"] for i in bugs["issues"]}, {"Bug"})
+        _, _, rest = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "status NOT IN (Done, 'In Progress')"}), bearer())
+        self.assertEqual(rest["total"], 12 - 3 - 6)
+        self.assertEqual(self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": "status IN ()"}), bearer())[0], 400)
+
+    def test_jira_jql_groups_as_sent_by_mcp_connector(self):
+        """COG-GTM/jira-mcp wraps the caller's JQL and appends its allowlist: `(<jql>) AND project in ("SN")`."""
+        def total(jql):
+            status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": jql}), bearer())
+            self.assertEqual(status, 200, jql)
+            return body["total"]
+        self.assertEqual(total("(status = 'In Progress') AND project in (\"SN\")"), 6)
+        self.assertEqual(total("((status = Done AND type = Bug)) AND project in (\"SN\")"), total("status = Done AND type = Bug"))
+        self.assertEqual(total("(project = SN) AND project in (\"ZZ\")"), 0)
+        for bad in ("(status = Done", "status = Done)", "((status = Done) AND", "status = \"Done"):
+            with self.subTest(jql=bad):
+                self.assertEqual(self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": bad}), bearer())[0], 400)
+
+    def test_jira_jql_quotes_hide_parens_and_keywords(self):
+        def total(jql):
+            status, _, body = self.c.get("/rest/api/2/search?" + urllib.parse.urlencode({"jql": jql}), bearer())
+            self.assertEqual(status, 200, jql)
+            return body["total"]
+        self.assertEqual(total('status = "Waiting (Support"'), 0)
+        self.assertEqual(total('status = "Waiting (Support)" AND project = SN'), 0)
+        self.assertEqual(total("status IN ('Done (x)', 'In Progress') AND project in (\"SN\")"), 6)
+        self.assertEqual(total("status != 'Ready AND Waiting'"), 12)
+        self.assertEqual(total("status = 'ORDER BY created'"), 0)
+        self.assertEqual(total("status = Done ORDER BY 'created (desc)'"), 3)
+        self.assertEqual(total("(status = Done) AND project in (\"SN\") ORDER BY created DESC"), 3)
+
     def test_gitlab_list_headers_and_single_issue(self):
         status, headers, body = self.c.get("/api/v4/projects/123/issues?state=all&per_page=100", gitlab())
         self.assertEqual(status, 200)
