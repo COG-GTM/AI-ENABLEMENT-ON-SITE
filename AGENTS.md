@@ -18,7 +18,7 @@ When the user's request matches a row, invoke that skill (or tell them the slash
 | test first, TDD, red-green, write tests before | `/tdd` |
 | architecture doc, system overview, C4, arc42, document how this works | `/architecture-doc` |
 | bugs, defects, capabilities, tracker, status report, burndown | `/track-and-report` |
-| connect to Jira, GitLab, Confluence, GitHub, Azure DevOps; CLI, API, token, PAT | `/connect-tools` |
+| connect to Jira (Cloud or on-prem / Data Center), GitLab, Confluence, GitHub, Azure DevOps; CLI, API, token, PAT | `/connect-tools` |
 | MCP server, add a server by hand, expose a tool, mcp_config | `/mcp-server` |
 | LabVIEW, VI, .vi, TestStand, test rig, bench, instrument, "get out of LabVIEW", port to Python | `/labview-to-python` |
 | MATLAB, Simulink, .m, .slx, model, algorithm to C, Embedded Coder output, equivalence | `/matlab-to-code` |

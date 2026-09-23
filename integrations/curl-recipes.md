@@ -18,7 +18,7 @@ export CONF_BASE="https://confluence.example.internal"   # Cloud: https://<site>
 
 ## Jira
 
-Data Center (PAT, Bearer):
+Data Center (on-prem; PAT, Bearer). First time? `jira-on-prem.md` walks through reach, PAT, and TLS in order:
 ```bash
 curl -sS -H "Authorization: Bearer $JIRA_TOKEN" \
   "$JIRA_BASE/rest/api/2/search?jql=project%3DSN%20AND%20status%3DOpen&maxResults=20&fields=key,summary,status,priority"
@@ -33,6 +33,7 @@ curl -sS -u "$JIRA_EMAIL:$JIRA_TOKEN" "$JIRA_BASE/rest/api/3/issue/SN-42/comment
 ```
 
 Sanity check that the token works: `curl -sS -H "Authorization: Bearer $JIRA_TOKEN" "$JIRA_BASE/rest/api/2/myself"`.
+Which Jira is it: `curl -sS -H "Authorization: Bearer $JIRA_TOKEN" "$JIRA_BASE/rest/api/2/serverInfo"` reports `deploymentType`; `Cloud` means the Cloud rows apply.
 
 ## Confluence
 

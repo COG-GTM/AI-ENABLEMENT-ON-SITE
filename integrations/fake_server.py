@@ -10,8 +10,14 @@ The only accepted credential is FAKE_TRACKER_TOKEN (default fake-token-for-local
   GitLab:                PRIVATE-TOKEN: <token>
 
 Endpoints (GET only; every other method is 405):
+  GET /rest/api/2/myself                                   Jira Data Center: the user behind the token (CLI login check)
+  GET /rest/api/2/serverInfo                               Jira Data Center: version and deploymentType ("Server")
   GET /rest/api/2/search?jql=&startAt=&maxResults=        Jira search: startAt, maxResults, total, issues[]
   GET /rest/api/2/issue/{key}                              Jira single issue
+  GET /rest/api/2/project                                  Jira projects derived from the fixture keys (CLI bootstrap)
+  GET /rest/api/2/field                                    Jira field list = the fixture field names (CLI bootstrap)
+  GET /rest/api/2/issue/createmeta/{key}/issuetypes        Jira issue types present in the fixture (CLI bootstrap)
+  GET /rest/agile/1.0/board?projectKeyOrId=                Jira Agile boards: always an empty, complete page (CLI bootstrap)
   GET /api/v4/projects/{id}/issues?page=&per_page=&state=  GitLab list: X-Total, X-Page, X-Per-Page, X-Next-Page
   GET /api/v4/projects/{id}/issues/{iid}                   GitLab single issue
   GET /{org}/{project}/_apis/wit/workitems?ids=1,2&api-version=7.1   Azure DevOps list: count, value[]
@@ -21,12 +27,20 @@ Errors are JSON: 401 missing/wrong credential, 404 unknown path or id, 400 bad q
 500 for an unexpected failure (generic body; the detail goes to the server log only).
 Credential header values are never echoed; the request log prints them as <redacted>.
 
+The JQL the fake understands: project, status, statusCategory, issuetype (alias type) with =, !=, IN, NOT IN,
+joined by AND; an optional trailing ORDER BY is ignored. That is what jira-cli v1.7.0 sends for `issue list`.
+`jira init --installation local` made six GETs against this fake, in this order: myself, serverInfo, project,
+agile board, issue/createmeta/{key}/issuetypes, field. Nothing else is served; anything else is 404.
+
 Azure DevOps offers WIQL as POST (ad-hoc query text) and as GET by saved query id. This fake serves only the
 GET form, so the server has no non-GET handler and a client can be checked with "GET only" alone.
 
 Response field names follow the public documentation (checked 2026-09):
+  Jira myself    https://developer.atlassian.com/server/jira/platform/rest/v11002/api-group-myself/
+  Jira serverInfo https://developer.atlassian.com/server/jira/platform/rest/v11002/api-group-serverinfo/
   Jira search    https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-issue-search/#api-rest-api-2-search-get
   Jira issue     https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-issues/#api-rest-api-2-issue-issueidorkey-get
+  Jira project/field/createmeta/agile board: shapes reduced to what jira-cli reads; see integrations/jira-on-prem.md
   GitLab issues  https://docs.gitlab.com/api/issues/
   GitLab paging  https://docs.gitlab.com/api/rest/#pagination
   ADO list       https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/list?view=azure-devops-rest-7.1
@@ -58,8 +72,9 @@ INT_RE = re.compile(r"^[0-9]{1,6}$")
 IDS_RE = re.compile(r"^[0-9]{1,10}(,[0-9]{1,10}){0,199}$")  # Azure DevOps work item ids are int32
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 JIRA_KEY_RE = re.compile(r"^[A-Z]{2,6}-[0-9]{1,6}$")
-JQL_RE = re.compile(r"^[A-Za-z0-9 =!_'\"-]{1,200}$")
-JQL_CLAUSE_RE = re.compile(r"^(project|status|statusCategory|issuetype)\s*(=|!=)\s*(\"[^\"]{1,40}\"|'[^']{1,40}'|[A-Za-z0-9_-]{1,40})$")
+JQL_RE = re.compile(r"^[A-Za-z0-9 =!_'\"(),-]{1,200}$")
+JQL_VALUE = r"(?:\"[^\"]{1,40}\"|'[^']{1,40}'|[A-Za-z0-9_-]{1,40})"
+JQL_CLAUSE_RE = re.compile(rf"^(project|status|statusCategory|issuetype|type)\s*(=|!=|(?i:IN)|(?i:NOT\s+IN))\s*({JQL_VALUE}|\(\s*{JQL_VALUE}(?:\s*,\s*{JQL_VALUE}){{0,9}}\s*\))$")
 MAX_PATH = 2048
 MAX_PAGE_SIZE = 100
 MAX_PAGES = 1000
@@ -77,6 +92,12 @@ ADO_FIELDS = {"System.Id", "System.TeamProject", "System.AreaPath", "System.Work
 ADO_REQUIRED = {"System.Id", "System.TeamProject", "System.WorkItemType", "System.State", "System.Title", "System.CreatedDate"}
 ADO_COLUMNS = ("System.Id", "System.WorkItemType", "System.Title", "System.State")
 GITLAB_STATES = ("opened", "closed", "all")
+# Synthetic identity returned by GET /rest/api/2/myself; no fixture needed. Field names follow Jira Data Center.
+JIRA_ME = {"key": "practice-user", "name": "practice-user", "emailAddress": "practice-user@example.invalid",
+           "displayName": "Practice User", "active": True, "timeZone": "UTC", "locale": "en_US"}
+JIRA_SERVER_INFO = {"version": "10.3.0", "versionNumbers": [10, 3, 0], "deploymentType": "Server", "buildNumber": 1030000,
+                    "buildDate": "2026-01-01T00:00:00.000+0000", "scmInfo": "0000000000000000000000000000000000000000",
+                    "serverTitle": "Fake Jira Data Center"}
 
 
 class ApiError(Exception):
@@ -201,12 +222,15 @@ def apply_jql(issues: list, jql: str) -> list:
         "statusCategory": lambda i: i["fields"]["status"]["statusCategory"]["name"],
         "issuetype": lambda i: i["fields"]["issuetype"]["name"],
     }
+    getters["type"] = getters["issuetype"]
     for clause in re.split(r"\s+AND\s+", jql, flags=re.I):
         m = JQL_CLAUSE_RE.match(clause.strip())
         if not m:
-            raise ApiError(400, f"unsupported jql clause; this fake accepts {sorted(getters)} with = or != joined by AND")
-        field, op, value = m.group(1), m.group(2), m.group(3).strip("\"'").lower()
-        issues = [i for i in issues if (getters[field](i).lower() == value) == (op == "=")]
+            raise ApiError(400, f"unsupported jql clause; this fake accepts {sorted(getters)} with =, !=, IN, NOT IN joined by AND")
+        field, op, raw = m.group(1), m.group(2).upper(), m.group(3)
+        values = {v.strip("\"'").lower() for v in re.findall(JQL_VALUE, raw.strip("()"))}
+        wanted = op in ("=", "IN")
+        issues = [i for i in issues if (getters[field](i).lower() in values) == wanted]
     return issues
 
 
@@ -291,6 +315,10 @@ class Handler(BaseHTTPRequestHandler):
             self.style = "jira"
             self.require_token("jira")
             return self.jira(segs[3:], q, fx["jira"])
+        if segs[:3] == ["rest", "agile", "1.0"]:
+            self.style = "jira"
+            self.require_token("jira")
+            return self.jira_agile(segs[3:], q)
         if segs[:2] == ["api", "v4"]:
             self.style = "gitlab"
             self.require_token("gitlab")
@@ -314,6 +342,29 @@ class Handler(BaseHTTPRequestHandler):
             return {"expand": "", "id": i["id"], "self": f"{base}/rest/api/2/issue/{i['id']}", "key": i["key"],
                     "fields": {k: v for k, v in i["fields"].items() if k in keep}}
 
+        if segs == ["myself"]:
+            allow_keys(q, {"expand"})
+            return 200, dict(JIRA_ME, self=f"{base}/rest/api/2/user?username={JIRA_ME['name']}", avatarUrls={}, groups={"size": 0, "items": []},
+                             applicationRoles={"size": 0, "items": []}, expand="groups,applicationRoles"), {}
+        if segs == ["serverInfo"]:
+            allow_keys(q, set())
+            return 200, dict(JIRA_SERVER_INFO, baseUrl=base, serverTime=ASOF), {}
+        if segs == ["project"]:
+            allow_keys(q, {"expand", "recent"})
+            keys = sorted({i["key"].rsplit("-", 1)[0] for i in issues})
+            return 200, [{"expand": "description,lead", "self": f"{base}/rest/api/2/project/{n}", "id": str(10000 + n), "key": k,
+                          "name": f"Project {k}", "projectTypeKey": "software", "avatarUrls": {}} for n, k in enumerate(keys)], {}
+        if segs == ["field"]:
+            allow_keys(q, set())
+            return 200, [{"id": f, "name": f.capitalize(), "custom": False, "orderable": True, "navigable": True, "searchable": True,
+                          "clauseNames": [f], "schema": {"type": "string", "system": f}} for f in sorted(JIRA_FIELDS)], {}
+        if len(segs) == 4 and segs[:2] == ["issue", "createmeta"] and segs[3] == "issuetypes":
+            allow_keys(q, {"expand", "startAt", "maxResults"})
+            names = sorted({i["fields"]["issuetype"]["name"] for i in issues if i["key"].rsplit("-", 1)[0] == segs[2]})
+            if not names:
+                raise ApiError(404, "Project does not exist or you do not have permission to see it.")
+            values = [{"self": f"{base}/rest/api/2/issuetype/{n}", "id": str(n), "name": k, "subtask": False} for n, k in enumerate(names, 1)]
+            return 200, {"maxResults": 50, "startAt": 0, "total": len(values), "values": values}, {}
         if segs == ["search"]:
             allow_keys(q, {"jql", "startAt", "maxResults", "fields", "expand", "validateQuery"})
             start = int_param(q, "startAt", 0, 0, MAX_START_AT)
@@ -327,6 +378,12 @@ class Handler(BaseHTTPRequestHandler):
                 if segs[1] in (i["key"], i["id"]):
                     return 200, with_self(i), {}
             raise ApiError(404, "Issue does not exist or you do not have permission to see it.")
+        raise ApiError(404, "unknown path")
+
+    def jira_agile(self, segs, q):
+        if segs == ["board"]:  # no boards in the fake: a CLI must cope with an empty, complete page
+            allow_keys(q, {"projectKeyOrId", "type", "name", "startAt", "maxResults"})
+            return 200, {"maxResults": 50, "startAt": 0, "total": 0, "isLast": True, "values": []}, {}
         raise ApiError(404, "unknown path")
 
     def gitlab(self, segs, q, issues):

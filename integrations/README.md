@@ -13,12 +13,16 @@ need to and your administrator has approved it. Everything here is read-only by 
 Transport (CLI, REST, MCP) is separate from authentication (PAT, API token, OAuth). Any lane can
 use any auth the vendor supports.
 
+**Jira on-premises (Jira Data Center)?** Start with `jira-on-prem.md`: every option for a first-time
+user, what the Jira administrator has to expose (nothing but the REST API that is already there), and
+a step-by-step for the command line.
+
 ## Authentication cheat sheet
 
 | Vendor | Token type | Header / flag | Where to create | Notes |
 | --- | --- | --- | --- | --- |
 | Jira / Confluence Cloud | API token (per user) | `Authorization: Basic base64(email:token)` | Atlassian account settings, Security | Survives SAML/SSO unless the admin disables API tokens. Scoped tokens preferred. |
-| Jira / Confluence Data Center | PAT | `Authorization: Bearer $TOKEN` | Profile, Personal Access Tokens | On-premises. No official MCP; use REST. |
+| Jira / Confluence Data Center (on-prem) | PAT | `Authorization: Bearer $TOKEN` | Profile, Personal Access Tokens | On-premises. Same header for `curl`, `rest_client.py`, and `jira-cli` (`JIRA_AUTH_TYPE=bearer`). No Atlassian MCP or `acli` for Data Center; see `jira-on-prem.md`. |
 | GitLab (SaaS or self-managed) | PAT, scope `read_api` | `PRIVATE-TOKEN: $TOKEN` | User settings, Access tokens | `glab auth login --token` for the CLI. GitLab's built-in MCP is OAuth and must be enabled by the admin. |
 | GitHub / GHES | Fine-grained PAT, read-only | `Authorization: Bearer $TOKEN` | Settings, Developer settings | `gh auth login` for the CLI. `github-mcp-server` accepts the same PAT. |
 | Azure DevOps Services | PAT, scope Work Items (Read) | `Authorization: Basic base64(:token)` | User settings, Personal access tokens | `az devops` CLI uses `AZURE_DEVOPS_EXT_PAT`. Azure DevOps Server (on-prem) differs. |
@@ -33,9 +37,10 @@ or a file. Set it in the shell for the session: `export JIRA_TOKEN=...` (Windows
 | --- | --- | --- |
 | `curl-recipes.md` | 2 | Copy-paste read-only `curl` calls for each vendor, env vars only. |
 | `rest_client.py` | 2 | Standard-library Python client: `python integrations/rest_client.py jira search "project = SN"`. `--dry-run` prints the request without sending. |
-| `cli-recipes.md` | 3 | Read-only `glab`, `gh`, `az devops`, `acli` commands and how they log in. |
+| `cli-recipes.md` | 3 | Read-only `glab`, `gh`, `az devops`, `acli` (Cloud), and `jira-cli` (Data Center) commands and how they log in. |
+| `jira-on-prem.md` | 0-4 | Jira Data Center from zero: which Jira you have, the one picture, what the admin must expose, all six options with a decision tree, the `curl` and `jira-cli` step-by-steps, troubleshooting by HTTP status, and what was and was not tested. |
 | `test_rest_client.py` | 2 | Offline tests: every command dry-runs, tokens are redacted, bad input is refused. |
-| `fake_server.py` | 1 | Offline stand-in for the Jira, GitLab, and Azure DevOps read endpoints on `127.0.0.1`, fed by `fixtures/`. See "Prove it offline". |
+| `fake_server.py` | 1 | Offline stand-in for the Jira Data Center, GitLab, and Azure DevOps read endpoints on `127.0.0.1`, fed by `fixtures/`. Serves enough of Jira for `jira-cli init` and `issue list` to work. See "Prove it offline". |
 | `fixtures/` | 1 | Twelve synthetic sensor-node issues, once per vendor shape (`jira_issues.json`, `gitlab_issues.json`, `ado_workitems.json`) plus `csv_export.csv`. |
 | `../tools/tracker_import.py` | 1-2 | Normalises a vendor export (fake or real) or a CSV into the tracker schema; `../tools/tests/test_integrations.py` drives server and importer. |
 | `mcp-hosting.md` | 4 | Where an MCP server can live (your laptop, shared entry with personal secret, team-hosted, vendor-hosted), what changes between them, and the questions Devin asks before writing config. Start here for anything beyond the reference server. |
@@ -57,7 +62,9 @@ Terminal 2 (`PORT` is the number printed above; the token defaults to the consta
 
 ```bash
 export PORT=41231 FAKE_TRACKER_TOKEN=fake-token-for-local-tests
-# Jira: paginated search (startAt/maxResults/total/issues[]) and one issue
+# Jira Data Center: who am I, which server, then paginated search (startAt/maxResults/total/issues[]) and one issue
+curl -sS -H "Authorization: Bearer $FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/rest/api/2/myself"
+curl -sS -H "Authorization: Bearer $FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/rest/api/2/serverInfo"
 curl -sS -H "Authorization: Bearer $FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/rest/api/2/search?jql=project+%3D+SN&startAt=0&maxResults=5" > outputs/jira-page1.json
 curl -sS -H "Authorization: Bearer $FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/rest/api/2/issue/SN-103"
 # GitLab: X-Total / X-Page / X-Per-Page / X-Next-Page headers drive the page walk
@@ -92,7 +99,7 @@ What the fake does and does not do:
 
 - Binds `127.0.0.1` only; `--port` defaults to an ephemeral port (0) and is printed as the only line on stdout.
 - Auth: Jira and Azure DevOps paths take `Authorization: Bearer <token>` or `Authorization: Basic base64(user:token)`; GitLab paths take `PRIVATE-TOKEN`. The accepted value is `$FAKE_TRACKER_TOKEN` (default in `fake_server.py`). Missing or wrong -> `401` JSON, and the value is never echoed or logged.
-- Endpoints: `/rest/api/2/search` (`jql`, `startAt`, `maxResults`, `fields`), `/rest/api/2/issue/{key}`, `/api/v4/projects/{id}/issues` (`page`, `per_page`, `state`), `/api/v4/projects/{id}/issues/{iid}`, `/{org}/{project}/_apis/wit/workitems` (`ids`, `api-version`, `fields`), `/{org}/{project}/_apis/wit/wiql/{query-id}` (`api-version`, `$top`).
+- Endpoints: `/rest/api/2/myself`, `/rest/api/2/serverInfo`, `/rest/api/2/search` (`jql`, `startAt`, `maxResults`, `fields`; JQL limited to `project`/`status`/`statusCategory`/`issuetype` with `=`, `!=`, `IN`, `NOT IN` joined by `AND`), `/rest/api/2/issue/{key}`, plus the four `jira-cli init` bootstrap reads `/rest/api/2/project`, `/rest/api/2/field`, `/rest/api/2/issue/createmeta/{key}/issuetypes`, `/rest/agile/1.0/board` (always empty), `/api/v4/projects/{id}/issues` (`page`, `per_page`, `state`), `/api/v4/projects/{id}/issues/{iid}`, `/{org}/{project}/_apis/wit/workitems` (`ids`, `api-version`, `fields`), `/{org}/{project}/_apis/wit/wiql/{query-id}` (`api-version`, `$top`).
 - Unknown path or id -> `404` JSON. Unknown, non-integer, negative, or oversized query parameters -> `400` JSON. Any method other than GET -> `405` with `Allow: GET`; there is no write path, and `test_integrations.py` asserts that.
 - Azure DevOps ad-hoc WIQL is a POST in the real API, so the fake (and `rest_client.py ado query`) serve only the GET saved-query-by-id form. Save the query in Azure DevOps first.
 - Field names and pagination follow the public vendor docs cited at the top of `fake_server.py`. Only the read-only subset above exists; anything else is `404`.
@@ -101,6 +108,7 @@ What the fake does and does not do:
 ## Onsite-only live check
 
 Not done in this repository: nothing here has been run against a real Jira, GitLab, or Azure DevOps host.
+(`jira-cli` v1.7.0 has been run against the offline fake only; `jira-on-prem.md`, "What was tested".)
 With an approved host and a read-only PAT in the customer environment, verify and record:
 
 - [ ] Outbound HTTPS to the host is allowed and the certificate chain validates (set `REST_CA_BUNDLE` for a private CA).
@@ -111,6 +119,7 @@ With an approved host and a read-only PAT in the customer environment, verify an
 - [ ] Import the real export with `tracker_import.py`, run `tracker_report.py`, and compare totals with the vendor UI.
 - [ ] Azure DevOps: a saved query id from Boards > Queries works with `ado query`; ad-hoc WIQL is not used.
 - [ ] Token scope is read-only, expiry is set, and the shell history contains no token value.
+- [ ] Jira Data Center with `jira-cli`: `jira init --installation local --auth-type bearer` succeeds (the six GETs in `jira-on-prem.md` appear in the Jira access log), `jira issue view <key>` matches the browser, and no write subcommand was run.
 
 ## Boundary reminder
 
