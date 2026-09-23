@@ -8,6 +8,9 @@ one needs, and lists the questions Devin will ask before it changes any config.
 Everything in this repository so far uses model A. Models B and C are what a team or a platform
 group sets up; model D is a vendor's server. `/mcp-server host` walks you through the choice.
 
+To brief a room instead of reading this page, open `mcp-overview.html` in a browser: the same four
+models as 16 slides, with the pros and cons side by side.
+
 ## The four models in one picture
 
 ```

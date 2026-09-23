@@ -1,0 +1,152 @@
+{
+  "title": "Giving Devin your tools with MCP",
+  "subtitle": "What it is, the four places it can run, and what each one costs you",
+  "footer": "Synthetic reference system. No customer data, no real program.",
+  "slides": [
+    {"type": "title"},
+
+    {"type": "bullets", "title": "What MCP is, without the jargon", "bullets": [
+      "An MCP server is a small program that hands Devin extra tools: read a requirement, query the tracker, look inside a file",
+      "It answers three messages and nothing else: who are you, what tools do you have, run this tool",
+      "Devin either starts that program on your machine, or connects to one someone else hosts over HTTPS",
+      "The tools then appear in every session, named and described, instead of being re-explained each time",
+      "Hosting is only the question of where the program runs and who looks after it"
+    ], "note": "Source: integrations/mcp-hosting.md, integrations/reference-mcp/server.py",
+     "notes": "Deliberately no protocol detail here. The three messages are initialize, tools/list, tools/call."},
+
+    {"type": "two-column", "title": "What changes for the people doing the work",
+     "left_title": "Without MCP", "left": [
+      "Every session starts by explaining the API again",
+      "Exports get pasted in by hand, or not at all",
+      "Each engineer improvises their own credential handling",
+      "No shared definition of what Devin is allowed to read"
+    ], "right_title": "With MCP", "right": [
+      "The tools are present at session start, already described",
+      "Each tool declares its inputs; bad arguments are refused",
+      "Credentials stay in the shell as placeholders, never in chat",
+      "One reviewed config entry the whole team clones"
+    ]},
+
+    {"type": "table", "title": "MCP is one of four lanes. Use the cheapest that works.",
+     "columns": ["Lane", "What it is", "Network", "Install", "Use when"],
+     "rows": [
+      ["1. Offline files", "Repo files or a local stand-in", "no", "nothing", "Practice and walkthroughs"],
+      ["2. REST / curl", "Devin calls the vendor API", "yes", "curl", "You have a token, want it simple"],
+      ["3. Vendor CLI", "Devin runs the vendor CLI", "yes", "the CLI", "It is already approved here"],
+      ["4. MCP server", "Tools live inside Devin", "depends", "a runtime", "You want them every session"]
+     ], "note": "Source: integrations/README.md. Transport and authentication are separate choices.",
+     "notes": "Point: MCP is not mandatory. Lane 1 needs no approval at all and is where a first visit should start."},
+
+    {"type": "stats", "title": "What is already running, offline, today", "stats": [
+      {"value": "3", "label": "read-only tools on the reference server"},
+      {"value": "217", "label": "lines: the whole server, one file"},
+      {"value": "0", "label": "dependencies and network calls"},
+      {"value": "6", "label": "tests driving it over a real pipe"}
+    ], "note": "Reproduce: python integrations/reference-mcp/server.py < integrations/reference-mcp/handshake.jsonl; python -m unittest integrations/reference-mcp/test_server.py (6 tests, OK); wc -l on server.py",
+     "notes": "This is the live demo moment. Five JSON lines show the entire protocol."},
+
+    {"type": "section", "title": "Where the server runs", "subtitle": "Four honest answers, and what each one costs"},
+
+    {"type": "table", "title": "Pick one",
+     "columns": ["", "A. Laptop", "B. Shared", "C. Team-hosted", "D. Vendor"],
+     "rows": [
+      ["Runs on", "your machine", "your machine", "internal host", "vendor cloud"],
+      ["Looked after by", "you", "repo owner", "platform team", "the vendor"],
+      ["Network needed", "none", "none", "internal HTTPS", "internet"],
+      ["Who sees the calls", "only you", "only you", "your team", "the vendor"],
+      ["Approval needed", "no", "no", "yes", "yes"]
+     ], "note": "Source: integrations/mcp-hosting.md. Everything demonstrated in this repository is model A.",
+     "notes": "Do not let the room jump to C or D. The honest advice is A now, B when a second person clones, C when someone asks who audited the calls."},
+
+    {"type": "two-column", "title": "Models A and B: run it on the laptop",
+     "left_title": "For", "left": [
+      "Nothing leaves the machine; works with no network at all",
+      "No approval needed: it reads only what you can already read",
+      "Already set up here, one entry and one command",
+      "B adds a single reviewed entry that every clone inherits"
+    ], "right_title": "Against", "right": [
+      "Every laptop needs the runtime installed and kept current",
+      "No central record of who asked what",
+      "One credential per person to issue, rotate, and revoke",
+      "The server holds your permissions, so keep it read-only"
+    ], "notes": "B differs from A only in who owns the config entry. The secret still lives on each laptop."},
+
+    {"type": "two-column", "title": "Model C: hosted by your platform team",
+     "left_title": "For", "left": [
+      "One server, many laptops; nothing installed per machine",
+      "One audit log: tool, caller, time, outcome",
+      "One place to rotate or revoke a credential",
+      "Access controlled at the network and at the proxy"
+    ], "right_title": "Against", "right": [
+      "A real service to build, run, patch, and page on",
+      "A down host now stops everyone, not one person",
+      "Needs a TLS certificate the laptops already trust",
+      "Change control before the first user connects",
+      "Nothing in this repository stands one up for you"
+    ], "notes": "The reason to build C is the audit log. If nobody is asking for it, C is premature."},
+
+    {"type": "two-column", "title": "Model D: hosted by the vendor",
+     "left_title": "For", "left": [
+      "Nothing to host; the vendor runs and updates it",
+      "Browser sign-in gives per-user identity and expiry",
+      "Fastest path when the vendor already offers an endpoint"
+    ], "right_title": "Against", "right": [
+      "Requests leave your network for the vendor's cloud",
+      "A vendor outage or an expired token stops the tools",
+      "Needs administrator approval before the first connection",
+      "Do not assume it sits inside your authorization boundary"
+    ], "notes": "If the boundary answer is unknown, the correct action is to use the offline stand-in instead."},
+
+    {"type": "bullets", "title": "Where the entry lives, and where the secret does not", "bullets": [
+      "Project file, checked in: the entry everyone who clones the repository should get",
+      "Local override, never checked in: your personal token, or something you are trying out",
+      "User file on your machine: servers you want in every project",
+      "Secrets are written as a placeholder that reads your shell or a file, never as the value",
+      "An override with the same name must repeat every key of the entry it replaces",
+      "A newly added server needs a new session; the list is read at startup"
+    ], "note": "Source: integrations/mcp-hosting.md, integrations/mcp_config.example.json"},
+
+    {"type": "table", "title": "The six questions Devin asks before writing any config",
+     "columns": ["Devin asks", "Where the answer sends you"],
+     "rows": [
+      ["Who else needs these tools?", "Just you: A. Your team: B. Several teams, or one audit log: C."],
+      ["Can this laptop reach the host?", "Offline or unknown: A or B only. Internal host: C. Internet: D."],
+      ["Has an administrator approved it?", "No or unknown: the entry is written disabled, or not at all."],
+      ["How will you log in?", "A token in your shell, or single sign-on in the browser."],
+      ["Which file should it go in?", "Just you, everyone who clones, or every project on this machine."],
+      ["Is it read-only?", "If not, every write tool is named and approved one at a time."]
+     ], "note": "Source: .devin/skills/mcp-server/SKILL.md, section D",
+     "notes": "This is the slide a security reviewer will care about most: no config is written until these are answered."},
+
+    {"type": "bullets", "title": "What the readiness check enforces for you", "bullets": [
+      "Every entry in all three config files is validated, not just the one you edited",
+      "A remote server must use HTTPS, and a known transport",
+      "A local server's command must actually exist on this machine",
+      "Anything that looks like a pasted token is rejected outright",
+      "The wrong placeholder syntax is flagged before it silently becomes empty",
+      "An override that quietly drops a field fails the check"
+    ], "note": "Reproduce: python tools/doctor.py and python tools/check_repo.py; both report OK on a laptop with no network",
+     "notes": "Also worth saying: an unset variable becomes an empty string with no warning, which is why the check exists."},
+
+    {"type": "bullets", "title": "What this repository has not proven", "bullets": [
+      "Model A is the only one tested end to end here",
+      "No hosted HTTP server, reverse proxy, or certificate is set up by this repository",
+      "No browser sign-in flow and no vendor endpoint has been exercised",
+      "Nothing here has been run inside a customer network or against a live tracker",
+      "File locations and CLI commands come from the product documentation; confirm them against your build",
+      "No vendor service is inside your authorization boundary by default"
+    ], "note": "Source: integrations/mcp-hosting.md, closing section; integrations/README.md, boundary reminder",
+     "notes": "Say this one out loud. It is the slide that makes the rest credible."},
+
+    {"type": "bullets", "title": "What we need from you", "bullets": [
+      "Confirm the target: laptop now, and is a hosted server wanted later?",
+      "Name the first internal system worth exposing read-only",
+      "Tell us who approves a new internal host, and roughly how long that takes",
+      "Decide whether per-user identity must survive to the system behind the server",
+      "Provide a read-only token and a test project so we can prove the simplest lane first"
+    ], "notes": "Ask for a decision on the first two before leaving the room."},
+
+    {"type": "quote", "text": "Start on the laptop. Move to a hosted server the day someone asks who audited what Devin asked.",
+     "source": "integrations/mcp-hosting.md; every number recomputed by tools/doctor.py, tools/check_repo.py, and the reference server's own tests"}
+  ]
+}

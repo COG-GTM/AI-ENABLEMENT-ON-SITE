@@ -42,6 +42,7 @@ or a file. Set it in the shell for the session: `export JIRA_TOKEN=...` (Windows
 | `mcp_config.example.json` | 4 | One entry per hosting model to copy into `.devin/mcp_config.json`: the local reference server, two local vendor servers, a team-hosted URL, a disabled vendor-hosted URL (delete what you do not use). |
 | `reference-mcp/server.py` | 4 | A complete MCP server in one file, no dependencies, exposing three read-only tools over `example-system/`. Already registered in `.devin/mcp_config.json`. |
 | `reference-mcp/handshake.jsonl`, `reference-mcp/test_server.py` | 4 | Five-line protocol walkthrough and the tests that drive the server over a real pipe. |
+| `mcp-overview.html`, `mcp-overview.deck.json` | 4 | A 16-slide briefing on the same material for a mixed room of leadership and engineers: what MCP is, the four hosting models with pros and cons, where secrets go, and what is not proven here. Open the HTML in a browser (arrow keys, `P` prints to PDF); edit the outline and rebuild with `python tools/build_deck.py integrations/mcp-overview.deck.json integrations/mcp-overview.html`. |
 
 ## Prove it offline
 
