@@ -49,7 +49,8 @@ administrator approves the token and the network path.
 | --- | --- | --- |
 | Run | `/mcp-server run-reference` | five JSON-RPC lines printed from `integrations/reference-mcp/handshake.jsonl` |
 | Extend | `/mcp-server new-tool return the timing budget` | new tool + test in `integrations/reference-mcp/` |
-| Register | `/mcp-server register a GitHub server from integrations/mcp_config.example.json` | entry in `.devin/mcp_config.json`, token via `${VAR}` |
+| Host | `/mcp-server host` | Devin asks six questions (who needs it, network reach, approval, login, which file, read-only) and names the hosting model: laptop, shared entry, team-hosted, or vendor-hosted (`integrations/mcp-hosting.md`) |
+| Register | `/mcp-server add github` | entry in `.devin/mcp_config.json` (or `.devin/mcp_config.local.json` for just you), token via `${env:VAR}`, checked by `python tools/doctor.py` |
 
 ## 6. LabVIEW / TestStand rig to Python (retain, wrap, or port)
 

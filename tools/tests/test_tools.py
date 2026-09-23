@@ -80,6 +80,35 @@ class DoctorTests(unittest.TestCase):
             finally:
                 doctor.ROOT = real
 
+    def test_remote_url_entries_are_accepted_and_validated(self):
+        good = {"team": {"url": "https://mcp.internal.example/mcp", "transport": "http",
+                         "headers": {"Authorization": "Bearer ${env:TEAM_MCP_TOKEN}"}},
+                "sso": {"url": "https://mcp.internal.example/mcp", "disabled": True},
+                "file": {"url": "https://mcp.internal.example/mcp", "headers": {"X-Api-Key": "${file:~/.secrets/k}"}}}
+        self.assertEqual(doctor.server_problems(good), [])
+        bad = {
+            "plain": ({"url": "http://mcp.internal.example/mcp"}, "https://"),
+            "both": ({"url": "https://h/mcp", "command": "python3"}, "not both"),
+            "transport": ({"url": "https://h/mcp", "transport": "grpc"}, "http or sse"),
+            "literal": ({"url": "https://h/mcp", "headers": {"Authorization": "Bearer abc123"}}, "literal secret"),
+            "bare": ({"url": "https://h/mcp", "headers": {"Authorization": "${TEAM_MCP_TOKEN}"}}, "${env:VAR}"),
+            "envlit": ({"command": "python3", "env": {"JIRA_TOKEN": "hunter2hunter2"}}, "literal secret"),
+            "envbare": ({"command": "python3", "env": {"JIRA_TOKEN": "${JIRA_TOKEN}"}}, "not ${VAR}"),
+            "shape": ({"command": "python3", "env": []}, "must be an object"),
+        }
+        for name, (entry, expect) in bad.items():
+            problems = doctor.server_problems({name: entry})
+            self.assertTrue(problems, name)
+            self.assertIn(expect, "; ".join(problems), name)
+
+    def test_example_config_entries_pass_every_check_except_missing_runtimes(self):
+        cfg = json.loads((ROOT / "integrations" / "mcp_config.example.json").read_text())
+        problems = doctor.server_problems(cfg["mcpServers"])
+        unexpected = [p for p in problems if "not found" not in p]
+        self.assertEqual(unexpected, [])
+        for entry in cfg["mcpServers"].values():
+            self.assertTrue(("url" in entry) != ("command" in entry), entry)
+
     def test_outputs_check_does_not_create_directory(self):
         real = doctor.ROOT
         with tempfile.TemporaryDirectory() as td:

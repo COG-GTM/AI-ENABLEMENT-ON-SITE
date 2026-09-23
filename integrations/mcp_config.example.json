@@ -1,31 +1,46 @@
 {
-  "_comment": "Copy the entries you need into .devin/mcp_config.json (project) or the user-level mcp_config.json. Values in ${VAR} are read from your shell environment; never paste tokens here. Only reference-system works offline.",
+  "_comment": "Copy the entries you need into .devin/mcp_config.json (everyone who clones), .devin/mcp_config.local.json (just you, gitignored), or the user-level mcp_config.json (every project on this machine). Secrets are written as ${env:VAR} (your shell) or ${file:~/path} (a file); never paste a token here. Which model each entry is (A laptop, B shared, C team-hosted, D vendor) and what to ask first: integrations/mcp-hosting.md. Only reference-system works offline.",
   "mcpServers": {
     "reference-system": {
+      "_comment": "Model A. Local process, standard library only, reads example-system/ only. Already registered in .devin/mcp_config.json.",
       "command": "python3",
       "args": ["integrations/reference-mcp/server.py"],
       "env": {}
     },
     "jira-readonly": {
-      "_comment": "Read-only Jira Data Center connector (github.com/COG-GTM/jira-mcp): clone it next to this repo, pip install -r requirements.txt (mcp, httpx), PAT auth, project allowlist. Docker variant is in that repo's devin-desktop.example.json. Remove this block if not approved.",
+      "_comment": "Model A or B. Read-only Jira Data Center connector (github.com/COG-GTM/jira-mcp): clone it next to this repo, pip install -r requirements.txt (mcp, httpx), PAT auth, project allowlist. Docker variant is in that repo's devin-desktop.example.json. Needs outbound HTTPS to your Jira host. Remove this block if not approved.",
       "command": "python3",
       "args": ["../jira-mcp/connector/server.py"],
       "env": {
-        "JIRA_URL": "${JIRA_BASE}",
+        "JIRA_URL": "${env:JIRA_BASE}",
         "JIRA_AUTH_MODE": "token",
-        "JIRA_TOKEN": "${JIRA_TOKEN}",
+        "JIRA_TOKEN": "${env:JIRA_TOKEN}",
         "JIRA_PROJECTS": "SN",
         "JIRA_SSL_VERIFY": "true"
       }
     },
     "github-readonly": {
-      "_comment": "github/github-mcp-server binary, read-only toolsets. Remove this block if not approved.",
+      "_comment": "Model A or B. github/github-mcp-server binary on PATH, read-only toolsets. Needs outbound HTTPS to GITHUB_HOST. Remove this block if not approved.",
       "command": "github-mcp-server",
       "args": ["stdio", "--read-only", "--toolsets", "issues,pull_requests,repos"],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}",
-        "GITHUB_HOST": "${GITHUB_HOST}"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_TOKEN}",
+        "GITHUB_HOST": "${env:GITHUB_HOST}"
       }
+    },
+    "team-hosted": {
+      "_comment": "Model C. A server your platform team runs on an internal host; Devin connects over HTTPS, nothing is installed on the laptop. Static token per user shown here; for single sign-on delete 'headers' and run 'devin mcp login team-hosted'. Needs administrator approval, network reach to the host, and a TLS certificate the laptop trusts. Not run in this repository. Remove this block if not approved.",
+      "url": "https://mcp.internal.example/mcp",
+      "transport": "http",
+      "headers": {
+        "Authorization": "Bearer ${env:TEAM_MCP_TOKEN}"
+      }
+    },
+    "vendor-hosted": {
+      "_comment": "Model D. The vendor runs the server on the internet; sign in with 'devin mcp login vendor-hosted' (browser). Requests leave your network. Needs administrator approval and an answer on the authorization boundary. Not run in this repository. Remove this block if not approved.",
+      "url": "https://mcp.vendor.example/mcp",
+      "transport": "http",
+      "disabled": true
     }
   }
 }

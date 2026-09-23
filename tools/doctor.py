@@ -11,6 +11,7 @@ Exit code 0 unless something required failed. Never touches the network. Standar
 import json
 import os
 import platform
+import re
 import shutil
 import sys
 import tempfile
@@ -58,14 +59,44 @@ def check_mcp_config() -> dict:
     servers = cfg.get("mcpServers") if isinstance(cfg, dict) else None
     if not isinstance(servers, dict) or not servers:
         return row("MCP config", "FAIL", "mcpServers must be a non-empty object")
+    problems = server_problems(servers)
+    if problems:
+        return row("MCP config", "FAIL", "; ".join(problems))
+    return row("MCP config", "OK", f"{len(servers)} server(s): " + ", ".join(servers))
+
+
+def server_problems(servers: dict) -> list[str]:
+    """Validate every mcpServers entry: local (command) or remote (url), no literal secrets."""
     problems = []
     for name, entry in servers.items():
         if not isinstance(entry, dict):
             problems.append(f"{name}: entry must be an object")
             continue
+        for field in ("env", "headers"):
+            values = entry.get(field, {})
+            if not isinstance(values, dict):
+                problems.append(f"{name}: {field} must be an object")
+                continue
+            for k, v in values.items():
+                if not isinstance(v, str):
+                    continue
+                if BARE_VAR_RE.match(v.strip()):
+                    problems.append(f"{name}: {field}.{k} uses {v}; the documented form is ${{env:VAR}}, not ${{VAR}}")
+                elif looks_like_literal_secret(k, v):
+                    problems.append(f"{name}: {field}.{k} looks like a literal secret; use ${{env:VAR}} or ${{file:PATH}}")
+        url = entry.get("url")
+        if url is not None:
+            if "command" in entry:
+                problems.append(f"{name}: use either url (remote) or command (local), not both")
+            elif not isinstance(url, str) or not url.startswith("https://"):
+                problems.append(f"{name}: url must start with https://")
+            transport = entry.get("transport", "http")
+            if transport not in ("http", "sse"):
+                problems.append(f"{name}: transport must be http or sse")
+            continue
         cmd = entry.get("command")
         if not isinstance(cmd, str) or not cmd.strip():
-            problems.append(f"{name}: missing command")
+            problems.append(f"{name}: missing command (or url for a remote server)")
             continue
         if not resolve_command(cmd):
             problems.append(f"{name}: command {cmd!r} not found on PATH")
@@ -76,9 +107,19 @@ def check_mcp_config() -> dict:
         for a in args:
             if a.endswith(".py") and not (ROOT / a).exists():
                 problems.append(f"{name}: {a} not found")
-    if problems:
-        return row("MCP config", "FAIL", "; ".join(problems))
-    return row("MCP config", "OK", f"{len(servers)} server(s): " + ", ".join(servers))
+    return problems
+
+
+BARE_VAR_RE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
+SECRET_KEY_RE = re.compile(r"token|secret|password|passwd|api[_-]?key|authorization", re.IGNORECASE)
+PLACEHOLDER_RE = re.compile(r"^(Bearer |Basic |Token )?\$\{(env|file):[^}]+\}$")
+
+
+def looks_like_literal_secret(key: str, value: str) -> bool:
+    if not SECRET_KEY_RE.search(key):
+        return False
+    v = value.strip()
+    return bool(v) and not PLACEHOLDER_RE.match(v)
 
 
 def resolve_command(cmd: str) -> bool:
