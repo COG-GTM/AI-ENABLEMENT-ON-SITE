@@ -102,8 +102,7 @@ documentation recommends for teams:
    same name to `.devin/mcp_config.local.json` (gitignored, so it never reaches the repo). Copy the
    whole entry (`command`, `args`) and add the `env` line rather than writing `env` alone; that
    works whether your build merges the two files field by field or lets the local entry replace
-   the project one. `python tools/doctor.py` checks each server as the combination of its entries
-   across files, so an `env`-only override is not reported as "missing command".
+   the project one. `python tools/doctor.py` fails an `env`-only override for that reason.
 3. The runtime the server needs (Python, Node, a binary) is still installed per laptop. Write down
    what it is in the entry's `_comment` so the next person does not have to guess.
 

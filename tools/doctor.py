@@ -69,11 +69,14 @@ def mcp_config_files() -> list[tuple[str, Path, bool]]:
 
 
 def check_mcp_config() -> dict:
-    """Validate each file's shape, then every server as the merge of its entries across files."""
+    """Validate every entry in every file on its own.
+
+    Whether Devin merges a same-named override field by field or replaces the whole entry is
+    not documented, so an override must be complete (command/args or url) to pass either way.
+    """
     problems: list[str] = []
     checked: list[str] = []
-    merged: dict[str, dict] = {}
-    sources: dict[str, list[str]] = {}
+    seen: dict[str, str] = {}
     for label, f, required in mcp_config_files():
         if not required and not f.is_file():
             continue
@@ -88,17 +91,17 @@ def check_mcp_config() -> dict:
             problems.append(f"{label}: mcpServers must be a non-empty object")
             continue
         for name, entry in servers.items():
-            if not isinstance(entry, dict):
-                problems.append(f"{label}: {name}: entry must be an object")
+            if name in seen and isinstance(entry, dict) and "command" not in entry and "url" not in entry:
+                problems.append(
+                    f"{label}: {name} overrides {seen[name]} but omits command/url; "
+                    "copy the whole entry and add env so it works whether the build merges or replaces"
+                )
                 continue
-            merged[name] = {**merged.get(name, {}), **entry}
-            sources.setdefault(name, []).append(label)
-    for name, entry in merged.items():
-        origin = "+".join(sources[name])
-        problems.extend(f"{origin}: {p}" for p in server_problems({name: entry}))
+            problems.extend(f"{label}: {p}" for p in server_problems({name: entry}))
+            seen.setdefault(name, label)
     if problems:
         return row("MCP config", "FAIL", "; ".join(problems))
-    return row("MCP config", "OK", f"{len(merged)} server(s): " + ", ".join(merged) + f" (checked {', '.join(checked)})")
+    return row("MCP config", "OK", f"{len(seen)} server(s): " + ", ".join(seen) + f" (checked {', '.join(checked)})")
 
 
 def server_problems(servers: dict) -> list[str]:
