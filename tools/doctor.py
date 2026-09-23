@@ -72,11 +72,12 @@ def check_mcp_config() -> dict:
     """Validate every entry in every file on its own.
 
     Whether Devin merges a same-named override field by field or replaces the whole entry is
-    not documented, so an override must be complete (command/args or url) to pass either way.
+    not documented, so an override must repeat every key of the entry it overrides (values may
+    differ, keys may be added). The override is then valid on its own and identical to the merge.
     """
     problems: list[str] = []
     checked: list[str] = []
-    seen: dict[str, str] = {}
+    seen: dict[str, tuple[str, dict]] = {}
     for label, f, required in mcp_config_files():
         if not required and not f.is_file():
             continue
@@ -91,14 +92,18 @@ def check_mcp_config() -> dict:
             problems.append(f"{label}: mcpServers must be a non-empty object")
             continue
         for name, entry in servers.items():
-            if name in seen and isinstance(entry, dict) and "command" not in entry and "url" not in entry:
-                problems.append(
-                    f"{label}: {name} overrides {seen[name]} but omits command/url; "
-                    "copy the whole entry and add env so it works whether the build merges or replaces"
-                )
-                continue
+            if name in seen and isinstance(entry, dict):
+                lower_label, lower = seen[name]
+                missing = sorted(set(lower) - set(entry))
+                if missing:
+                    problems.append(
+                        f"{label}: {name} overrides {lower_label} but omits {', '.join(missing)}; "
+                        "copy the whole entry, then change or add fields, so it works whether the build merges or replaces"
+                    )
+                    continue
             problems.extend(f"{label}: {p}" for p in server_problems({name: entry}))
-            seen.setdefault(name, label)
+            if isinstance(entry, dict):
+                seen[name] = (label, entry)
     if problems:
         return row("MCP config", "FAIL", "; ".join(problems))
     return row("MCP config", "OK", f"{len(seen)} server(s): " + ", ".join(seen) + f" (checked {', '.join(checked)})")

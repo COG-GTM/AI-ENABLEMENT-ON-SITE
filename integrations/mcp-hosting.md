@@ -100,9 +100,10 @@ documentation recommends for teams:
    at all, or `"JIRA_TOKEN": "${env:JIRA_TOKEN}"`).
 2. Each person supplies their own credential: export it in their shell, or add an entry with the
    same name to `.devin/mcp_config.local.json` (gitignored, so it never reaches the repo). Copy the
-   whole entry (`command`, `args`) and add the `env` line rather than writing `env` alone; that
-   works whether your build merges the two files field by field or lets the local entry replace
-   the project one. `python tools/doctor.py` fails an `env`-only override for that reason.
+   whole entry (`command`, `args`, and for a remote server `url`, `transport`, `headers`) and add
+   or change fields rather than writing `env` alone; that works whether your build merges the two
+   files field by field or lets the local entry replace the project one. `python tools/doctor.py`
+   fails an override that drops any key the shared entry has, for that reason.
 3. The runtime the server needs (Python, Node, a binary) is still installed per laptop. Write down
    what it is in the entry's `_comment` so the next person does not have to guess.
 
