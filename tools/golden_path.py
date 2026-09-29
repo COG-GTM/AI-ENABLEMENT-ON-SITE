@@ -285,12 +285,20 @@ def stage_fleet() -> None:
     s = json.loads(r.stdout)
     c, k = s["counts"], s["classification"]
     backlog = load(OUT / "fleet-migration-backlog.json")["items"]
-    ok = c["vi"] == c["vi_scanned"] and sum(k.values()) == c["vi"] and (OUT / "fleet-fleet-inventory.csv").is_file()
+    dep = load(OUT / "fleet-dependency-map.json")
+    ok = (
+        c["vi"] == c["vi_scanned"]
+        and sum(k.values()) == c["vi"]
+        and (OUT / "fleet-fleet-inventory.csv").is_file()
+        and (OUT / "fleet-project-map.md").is_file()
+        and len(dep["nodes"]) == c["vi"]
+    )
     record(
         "fleet",
         ok,
         f"{c['vi']} VIs, {c['lvproj']} .lvproj, {c['seq']} .seq found; port {k['port']}, wrap {k['wrap']}, retain {k['retain']}, "
-        f"unreadable {k['unreadable']}; {len(backlog)} backlog items; reader: {s['reader']}",
+        f"unreadable {k['unreadable']}; {len(backlog)} backlog items; dependency map {len(dep['edges'])} edges, "
+        f"{len(dep['entry_points'])} entry points; reader: {s['reader']}",
     )
 
 
