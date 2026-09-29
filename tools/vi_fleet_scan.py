@@ -37,10 +37,8 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
-import csv
 import datetime as dt
 import hashlib
-import io
 import json
 import re
 import shutil
@@ -50,11 +48,14 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from fleet_common import (  # noqa: F401  (re-exported for tests and callers)
+    BACKLOG_COLUMNS, COMPONENT_RE, OUT_DIR, SCHEMA, backlog_about, backlog_csv_rows, check_prefix, component_slug,
+    csv_text, finish_backlog, item_path, load_previous_backlog, merge_backlog, rel, safe_name, severity_for, validate_backlog,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "outputs"
 FIXTURE = ROOT / "example-system"
 EXPECTED = FIXTURE / "fleet" / "expected"
-SCHEMA = ROOT / "templates" / "tracker-item.json"
 LVKIT_TIMEOUT_S = 300
 ABSENT = "lvkit absent"
 
@@ -65,8 +66,6 @@ COLUMNS = [
     "callers_count", "impact_score", "health", "lvproj", "target", "sequences",
     "classification", "reasons", "complexity", "priority", "missing_inputs",
 ]
-BACKLOG_COLUMNS = ["id", "type", "title", "severity", "status", "component", "requirements", "hazards",
-                   "opened", "closed", "owner", "notes"]
 
 # Evidence catalogue: (regex, reason). Matched case-insensitively against SubVI qualified names, primitive
 # names, .lvproj target names/types, and the VI's own path. Retain outranks wrap.
@@ -546,13 +545,8 @@ def scan_tree(tree: Path, jobs: int = 1, use_index: bool = True, limit: int | No
 # --- backlog --------------------------------------------------------------------------------------
 
 
-def severity_for(score: int) -> str:
-    return "low" if score <= 20 else "medium" if score <= 50 else "high" if score <= 100 else "critical"
-
-
 def build_backlog(rows: list[dict], top: int, prefix: str, opened: str) -> list[dict]:
-    if not re.fullmatch(r"[A-Z]{2,6}", prefix):
-        raise SystemExit(f"--prefix must be 2-6 upper-case letters, got {prefix!r}")
+    check_prefix(prefix)
     candidates = [r for r in rows if r["classification"] in ("port", "wrap")]
     candidates.sort(key=lambda r: (-int(r["priority"]), r["classification"] != "port", r["path"]))
     items = []
@@ -571,96 +565,6 @@ def build_backlog(rows: list[dict], top: int, prefix: str, opened: str) -> list[
     return items
 
 
-COMPONENT_RE = re.compile(r"^[a-z0-9_-]{1,32}$")  # tools/tracker_import.py accepts exactly this
-
-
-def component_slug(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9_-]+", "-", value.lower()).strip("-")[:32].rstrip("-")
-    return slug or "root"
-
-
-PATH_RE = re.compile(r" path: (.+)$")
-
-
-def item_path(item: dict) -> str:
-    m = PATH_RE.search(item.get("notes", ""))
-    return m.group(1) if m else ""
-
-
-def merge_backlog(new_items: list[dict], previous: list[dict], prefix: str) -> tuple[list[dict], dict]:
-    """Carry tracker state across rescans. Identity is the VI's tree-relative path (kept at the end of `notes`):
-    a VI seen before keeps its id, status, owner, opened, closed, requirements, and hazards and only its
-    title/severity/notes are refreshed; a new VI gets the next unused id; a previous item whose VI dropped out of
-    the top N (or was re-classified) is carried forward untouched so nothing closed or in review disappears."""
-    prev_by_path = {item_path(it): it for it in previous if item_path(it)}
-    used = {it["id"] for it in previous}
-    next_n = max([int(m.group(1)) for it in previous for m in [re.match(rf"{prefix}-CAP-(\d{{3}})$", it["id"])] if m] or [0]) + 1
-    merged, seen, stats = [], set(), {"kept": 0, "new": 0, "carried": 0}
-    for it in new_items:
-        path = item_path(it)
-        old = prev_by_path.get(path)
-        if old:
-            merged.append({**old, "title": it["title"], "severity": it["severity"], "notes": it["notes"]})
-            stats["kept"] += 1
-        else:
-            while next_n <= 999 and f"{prefix}-CAP-{next_n:03d}" in used:
-                next_n += 1
-            if next_n > 999:
-                break
-            merged.append({**it, "id": f"{prefix}-CAP-{next_n:03d}"})
-            used.add(merged[-1]["id"])
-            next_n += 1
-            stats["new"] += 1
-        seen.add(path)
-    for it in previous:
-        if item_path(it) not in seen:
-            merged.append(it)
-            stats["carried"] += 1
-    merged.sort(key=lambda it: it["id"])
-    return merged, stats
-
-
-def load_previous_backlog(path: Path) -> list[dict]:
-    """The existing backlog is tracker state edited by hand; a file that exists but cannot be read is an error to
-    fix (or bypass with --fresh), never a first run."""
-    if not path.is_file():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        raise SystemExit(f"{path}: existing backlog could not be read ({type(e).__name__}: {str(e)[:120]}); "
-                         f"fix the file, or pass --fresh to discard it")
-    items = data.get("items") if isinstance(data, dict) else data
-    if not isinstance(items, list) or any(not isinstance(it, dict) or "id" not in it for it in items):
-        raise SystemExit(f"{path}: existing backlog is not a list of tracker items; fix the file, or pass --fresh to discard it")
-    return items
-
-
-def validate_backlog(items: list[dict]) -> None:
-    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
-    id_re = re.compile(schema["properties"]["id"]["pattern"])
-    for it in items:
-        missing = [k for k in schema["required"] if k not in it]
-        if missing or not id_re.match(it["id"]) or len(it["title"]) > 120:
-            raise SystemExit(f"backlog item {it.get('id')} does not match templates/tracker-item.json")
-        for key in ("type", "severity", "status"):
-            if it[key] not in schema["properties"][key]["enum"]:
-                raise SystemExit(f"backlog item {it['id']}: {key}={it[key]!r} not allowed")
-
-
-def csv_text(rows: list[dict], columns: list[str]) -> str:
-    buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=columns, lineterminator="\n", extrasaction="ignore")
-    w.writeheader()
-    for r in rows:
-        w.writerow(r)
-    return buf.getvalue()
-
-
-def backlog_csv_rows(items: list[dict]) -> list[dict]:
-    return [{**it, "requirements": " ".join(it["requirements"]), "hazards": " ".join(it["hazards"]), "closed": it["closed"] or ""} for it in items]
-
-
 def write_outputs(result: dict, out_dir: Path, name: str, top: int, prefix: str, opened: str, fresh: bool = False) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = {
@@ -670,30 +574,15 @@ def write_outputs(result: dict, out_dir: Path, name: str, top: int, prefix: str,
         "backlog_csv": out_dir / f"{name}-migration-backlog.csv",
     }
     items = build_backlog(result["rows"], top, prefix, opened)
-    previous = [] if fresh else load_previous_backlog(paths["backlog"])
     notes = list(result["summary"]["notes"])
-    if previous:
-        items, stats = merge_backlog(items, previous, prefix)
-        notes.append(f"backlog merged with the previous {paths['backlog'].name}: {stats['kept']} kept (id/status/owner preserved), "
-                     f"{stats['new']} new, {stats['carried']} carried forward from the previous run; use --fresh to start over")
-    validate_backlog(items)
+    items = finish_backlog(items, paths["backlog"], prefix, notes, fresh)
     paths["inventory"].write_text(csv_text(result["rows"], COLUMNS), encoding="utf-8")
-    summary = {**result["summary"], "notes": notes, "name": name, "backlog_items": len(items), "outputs": {k: str(v.relative_to(ROOT)) if v.is_relative_to(ROOT) else str(v) for k, v in paths.items()}}
+    summary = {**result["summary"], "notes": notes, "name": name, "backlog_items": len(items), "outputs": {k: str(rel(v)) for k, v in paths.items()}}
     paths["summary"].write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    rel = lambda p: p.relative_to(ROOT) if p.is_relative_to(ROOT) else p  # noqa: E731
-    about = (f"Migration backlog generated by tools/vi_fleet_scan.py from {name}: top port/wrap candidates by priority; rescans with the "
-             f"same --name keep ids and statuses (identity = the path at the end of notes). "
-             f"Report with: python tools/tracker_report.py --file {rel(paths['backlog'])}. "
-             f"Merge into a tracker with: python tools/tracker_import.py --from csv --in {rel(paths['backlog_csv'])} "
-             f"--out outputs/{name}-tracker.json --merge <your tracker.json> --prefix <PREFIX>")
+    about = backlog_about("tools/vi_fleet_scan.py", name, paths["backlog"], paths["backlog_csv"], "top port/wrap candidates by priority")
     paths["backlog"].write_text(json.dumps({"_about": about, "items": items}, indent=2) + "\n", encoding="utf-8")
     paths["backlog_csv"].write_text(csv_text(backlog_csv_rows(items), BACKLOG_COLUMNS), encoding="utf-8")
     return paths
-
-
-def safe_name(tree: Path) -> str:
-    base = re.sub(r"[^A-Za-z0-9._-]+", "-", tree.resolve().name).strip("-") or "tree"
-    return base
 
 
 def render_text(summary: dict, paths: dict[str, Path]) -> str:
