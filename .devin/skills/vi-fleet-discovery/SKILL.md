@@ -128,7 +128,8 @@ is proven by `tools/bench_compare.py` against a recording". No VI is called port
   which files changed) but the backlog is *merged*: a VI keeps its id, status, owner, and dates and only its
   title, severity, and notes are refreshed; a new VI gets the next unused id; an item whose VI dropped out of
   the top N or was re-classified is carried forward untouched. The summary `notes` say how many were kept, new,
-  and carried. `--fresh` throws the old backlog away. Identity is the `path:` at the end of each item's notes,
+  and carried. A backlog file that exists but cannot be parsed stops the scan (nothing is overwritten); fix it or
+  pass `--fresh` to throw the old backlog away. Identity is the `path:` at the end of each item's notes,
   so keep it when you edit items. Backlog `component` is the owning library or top folder, slugged to the
   tracker's `^[a-z0-9_-]{1,32}$` rule (the full library name stays in the notes).
 

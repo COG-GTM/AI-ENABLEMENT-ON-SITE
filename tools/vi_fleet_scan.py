@@ -621,14 +621,19 @@ def merge_backlog(new_items: list[dict], previous: list[dict], prefix: str) -> t
 
 
 def load_previous_backlog(path: Path) -> list[dict]:
+    """The existing backlog is tracker state edited by hand; a file that exists but cannot be read is an error to
+    fix (or bypass with --fresh), never a first run."""
     if not path.is_file():
         return []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
+    except (OSError, json.JSONDecodeError) as e:
+        raise SystemExit(f"{path}: existing backlog could not be read ({type(e).__name__}: {str(e)[:120]}); "
+                         f"fix the file, or pass --fresh to discard it")
     items = data.get("items") if isinstance(data, dict) else data
-    return [it for it in items or [] if isinstance(it, dict) and "id" in it]
+    if not isinstance(items, list) or any(not isinstance(it, dict) or "id" not in it for it in items):
+        raise SystemExit(f"{path}: existing backlog is not a list of tracker items; fix the file, or pass --fresh to discard it")
+    return items
 
 
 def validate_backlog(items: list[dict]) -> None:

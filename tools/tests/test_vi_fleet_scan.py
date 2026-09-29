@@ -202,22 +202,33 @@ class FleetScanTests(unittest.TestCase):
         data = json.loads(paths["backlog"].read_text(encoding="utf-8"))
         first = data["items"][0]
         first.update({"status": "closed", "closed": "2026-02-01", "owner": "bench-team"})
+        second = data["items"][1]
+        second.update({"status": "in_review", "owner": "bench-team"})
         paths["backlog"].write_text(json.dumps(data), encoding="utf-8")
-        # the previously top-ranked VI is now retain-by-name (drops out of the candidates) -> carried forward
-        first_path = fleet.item_path(first)
+        first_path, second_path = fleet.item_path(first), fleet.item_path(second)
+        # the second item's VI is deleted from the tree: no longer a candidate -> carried forward untouched
+        (self.tree / second_path).unlink()
         result, paths2, _ = self.scan(self.fake)
+        self.assertNotIn(second_path, {r["path"] for r in result["rows"]})
         items = tracker_report.load(paths2["backlog"])
         again = next(i for i in items if fleet.item_path(i) == first_path)
         self.assertEqual((again["id"], again["status"], again["closed"], again["owner"]), (first["id"], "closed", "2026-02-01", "bench-team"))
+        gone = next(i for i in items if fleet.item_path(i) == second_path)
+        self.assertEqual(gone, second)
         self.assertEqual([i["id"] for i in items], [f"VI-CAP-{n:03d}" for n in range(1, 7)])
         summary = json.loads(paths2["summary"].read_text(encoding="utf-8"))
-        self.assertTrue(any("backlog merged" in n and "6 kept" in n for n in summary["notes"]))
+        self.assertTrue(any("backlog merged" in n and "5 kept" in n and "0 new" in n and "1 carried" in n for n in summary["notes"]), summary["notes"])
         # a new VI appears -> new id after the highest existing one; --fresh renumbers from scratch
         (self.tree / "rig" / "Extra.vi").write_bytes(b"RSRC extra")
         _, paths3, _ = self.scan(self.fake)
         items3 = tracker_report.load(paths3["backlog"])
         self.assertEqual(len(items3), 7)
         self.assertEqual(next(i for i in items3 if i["title"] == "Port Extra.vi")["id"], "VI-CAP-007")
+        # a backlog that exists but cannot be parsed must stop the run, not be overwritten
+        paths3["backlog"].write_text("{\"items\": [", encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            fleet.write_outputs(fleet.scan_tree(self.tree), self.dir / "out", "fleet", 50, "VI", "2026-01-05")
+        self.assertEqual(paths3["backlog"].read_text(encoding="utf-8"), "{\"items\": [")
         fleet.lvkit_path = lambda: self.fake
         paths4 = fleet.write_outputs(fleet.scan_tree(self.tree), self.dir / "out", "fleet", 50, "VI", "2026-01-05", fresh=True)
         self.assertTrue(all(i["status"] == "proposed" for i in tracker_report.load(paths4["backlog"])))
