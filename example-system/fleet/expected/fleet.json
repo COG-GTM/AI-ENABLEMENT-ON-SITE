@@ -1,0 +1,10 @@
+{
+  "_about": "Expected shape of `python tools/vi_fleet_scan.py --check`, which scans example-system/ (the four public VIs in real-vi/ plus the synthetic fleet.lvproj and bench-sequence.seq in fleet/). Counts are what the scanner found on the checked-in tree; the CSVs beside this file are what it wrote with and without lvkit. Regenerate with `python tools/vi_fleet_scan.py --check --write-expected` after a deliberate change.",
+  "name": "example-system",
+  "top": 50,
+  "prefix": "VI",
+  "opened": "2026-01-05",
+  "lvkit_reader": "lvkit 0.8.4",
+  "counts": {"vi": 4, "vi_scanned": 4, "lvproj": 1, "lvlib": 0, "lvclass": 0, "seq": 1},
+  "classification_with_lvkit": {"port": 4, "wrap": 0, "retain": 0, "unreadable": 0}
+}

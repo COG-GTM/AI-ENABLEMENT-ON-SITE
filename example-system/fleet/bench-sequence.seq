@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic TestStand-style sequence saved in the XML file format. Hand-written stand-in for shape only:
+     real sequence files are binary by default (Sequence File Properties > File Format switches to XML).
+     The scanner only extracts which VIs a text sequence calls; it does not interpret the sequence. -->
+<SequenceFile>
+  <Sequence Name="MainSequence">
+    <Step Name="Filter matches wildcard topics" Type="LabVIEW">
+      <Module Type="LabVIEW" VIPath="..\real-vi\Test MQTT-4.7.1-2.vi"/>
+    </Step>
+    <Step Name="Filter rejects malformed topics" Type="LabVIEW">
+      <Module Type="LabVIEW" VIPath="..\real-vi\Test MQTT-4.7.1-3.vi"/>
+    </Step>
+  </Sequence>
+</SequenceFile>

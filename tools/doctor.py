@@ -201,9 +201,10 @@ def check_c_toolchain() -> dict:
 def check_optional_tools() -> dict:
     found = [name for name in ("lvkit", "cppcheck") if shutil.which(name)]
     if found:
-        return row("Optional tools", "OK", ", ".join(found) + " (lvkit: LabVIEW .vi inventory; cppcheck: C static analysis)")
+        return row("Optional tools", "OK", ", ".join(found) + " (lvkit: LabVIEW .vi inventory and fleet scan; cppcheck: C static analysis)")
     return row("Optional tools", "SKIP",
-               "lvkit, cppcheck not found; optional. /labview-to-python works from exported VI docs without lvkit")
+               "lvkit, cppcheck not found; optional. /labview-to-python works from exported VI docs without lvkit; "
+               "/vi-fleet-discovery lists VIs without it")
 
 
 def check_network() -> dict:

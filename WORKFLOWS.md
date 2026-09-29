@@ -101,6 +101,25 @@ then every workflow above pointed at your code instead of `example-system/`.
 Host tests prove logic on a laptop; they do not prove timing, interrupts, MISRA, DO-178C objectives, or
 behaviour on the target. `/bring-your-firmware` says so in its output.
 
+## 9. LabVIEW estate: fleet discovery to the first ported rig
+
+Inputs: a folder tree of `.vi` files (with any `.lvproj`, `.lvlib`, `.lvclass`, TestStand `.seq`, exported HTML, and
+recordings that sit beside them), read-only. Optional `lvkit` (`integrations/lvkit.md`) turns file names into
+diagram facts; without it every VI is still listed. Output: how many VIs, what is in each, which to port first,
+and a backlog whose status the tracker tools report.
+
+| Stage | Paste | Leaves behind |
+| --- | --- | --- |
+| Discover | `/vi-fleet-discovery example-system --name demo-fleet` (your tree instead of `example-system`) | `outputs/demo-fleet-fleet-inventory.csv` (one row per VI: signature, SubVIs, unresolved primitives, structures, classification with reasons, complexity, priority, missing inputs), `outputs/demo-fleet-fleet-summary.json`, `outputs/demo-fleet-migration-backlog.json` + `.csv` |
+| Choose | `Read outputs/demo-fleet-fleet-inventory.csv and write the fleet report: counts, top ten port candidates with reasons, what is missing` | `outputs/<name>-fleet-report.md`: the first sprint and the asks (recordings, HTML exports, passwords, binary .seq to convert) |
+| Migrate one | `/labview-to-python <path to one candidate .vi> <its recording>` per rig, in backlog order | `outputs/<rig>-inventory.md`, `outputs/<rig>.py`, `outputs/<rig>-compare.md`, `outputs/<rig>-review.md` (workflow 6) |
+| Status | `/track-and-report status of outputs/demo-fleet-migration-backlog.json` (or merge the `.csv` into the team tracker with `tools/tracker_import.py --from csv`) | `python tools/tracker_report.py --file outputs/demo-fleet-migration-backlog.json --markdown` output: open / in review / closed per component and severity |
+| Brief | `/exec-deck Migration readiness from outputs/demo-fleet-fleet-summary.json and the fleet report` | `outputs/<name>.deck.json` + `.html`: estate size, classification split, first sprint, what is unproven |
+
+`python tools/vi_fleet_scan.py --check` proves the scanner on the checked-in fixture (`example-system/fleet/`), with or
+without lvkit. Classification is static evidence for ordering the work; a VI is ported only when
+`tools/bench_compare.py` says PASS against a recording of the original.
+
 ## Rules that hold across every workflow
 
 - Numbers come from tools (`what_if.py`, `tracker_report.py`, `make test`), never typed by hand.
