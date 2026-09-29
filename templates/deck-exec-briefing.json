@@ -848,7 +848,7 @@
       ],
       "right_title": "This repository with Devin",
       "right": [
-        "The scanner reads the whole tree once; each unit gets one bounded prompt",
+        "The scanner reads the whole tree once; each unit is then one skill run on its backlog row (the prompt pack that automates this is not merged yet)",
         "Every lane ends in bench_compare.py or make test saying PASS or FAIL per column",
         "Skills print what is not proven, in their own output, every run",
         "Skills, tracker, backlog and deck rebuild offline from plain CSV and JSON anyone can open"

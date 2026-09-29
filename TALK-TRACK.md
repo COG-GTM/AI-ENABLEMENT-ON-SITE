@@ -2,8 +2,8 @@
 
 Deck: `templates/deck-exec-briefing.json` (14 slides). Preview `templates/deck-exec-briefing.html` in any browser,
 or rebuild it offline: `python tools/build_deck.py templates/deck-exec-briefing.json outputs/deck-exec-briefing.html`
-(`python tools/export_pptx.py ... .pptx` for PowerPoint). Arrow keys or click to advance; `?` shows the key list;
-`P` switches to print mode.
+(`python tools/export_pptx.py ... .pptx` for PowerPoint). Arrow keys, space or a click advance; Home / End jump;
+`P` opens the print dialog with one slide per page.
 
 Timing: 50 minutes of slides, 10 minutes of questions. Every number on a slide is quoted from the printed output
 of `python tools/golden_path.py`, `python tools/vi_fleet_scan.py example-system --name demo-fleet` (with `lvkit`

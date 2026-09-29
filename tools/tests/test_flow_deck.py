@@ -89,6 +89,18 @@ class FlowValidation(unittest.TestCase):
         self.check(flow_slide(edges=[{"from": "a", "to": "b", "label": "x" * 40}]), "longer than 32")
         self.check(flow_slide(edges=[{"from": "a", "to": "b", "route": "sideways"}]), "route")
 
+    def test_heading_caption_and_return_lane(self):
+        seven = [{"label": "C" * 40 if i == 0 else f"C{i}", "nodes": [{"id": f"n{i}", "label": "x"}]} for i in range(7)]
+        self.check(flow_slide(columns=seven, edges=[]), "wider than the node")
+        self.check(flow_slide(caption="word " * 400), "caption: wraps to")
+        lay = build_deck.flow_layout(flow_slide())
+        back = [e for e in lay["edges"] if e["route"] == "back"]
+        self.assertEqual(len(back), 1)
+        self.assertGreater(back[0]["lane"], max(nd["y"] + nd["h"] for nd in lay["nodes"]))
+        self.assertLessEqual(back[0]["lane"], lay["h"])
+        self.assertLess(build_deck.flow_layout(flow_slide(edges=[])).get("h"), lay["h"])
+        self.check(flow_slide(edges=[{"from": "d", "to": "a"}]), "bottom node of its column")
+
     def test_text_limits(self):
         self.check(flow_slide(columns=[{"label": "A", "nodes": [{"id": "a", "label": "x", "kind": "magic"}]}], edges=[]), "kind")
         self.check(flow_slide(columns=[{"label": "A", "nodes": [{"id": "a", "label": "w " * 200}]}], edges=[]), "label")
@@ -171,7 +183,7 @@ class FlowPptx(unittest.TestCase):
             sps = list(root.iter(f"{NS_P}sp"))
             cxns = list(root.iter(f"{NS_P}cxnSp"))
             texts = [t.text or "" for t in root.iter(f"{NS_A}t")]
-            self.assertEqual(len(cxns), 5)
+            self.assertEqual(len(cxns), 7)  # 4 straight edges + 3 segments for the one return edge
             self.assertGreaterEqual(len(sps), 5 + 3 + 1 + 1)  # nodes + column heads + legend + title
             for word in ("Tree", "Scan", "tool", "Skill", "Proof", "Later", "next", "Caption < & >"):
                 self.assertIn(word, texts)

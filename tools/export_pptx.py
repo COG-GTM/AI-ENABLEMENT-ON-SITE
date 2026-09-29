@@ -139,14 +139,15 @@ def sp(sid: int, name: str, x: int, y: int, w: int, h: int, paras: str = "", fil
             f'<a:prstGeom prst="{prst}"><a:avLst/></a:prstGeom>{fill_xml}{line_xml}</p:spPr>{body}</p:sp>')
 
 
-def connector(sid: int, x1: int, y1: int, x2: int, y2: int, color: str, dash: bool = False) -> str:
-    """Straight connector with an arrow head at (x2, y2). The frame is the bounding box; flips give the direction."""
+def connector(sid: int, x1: int, y1: int, x2: int, y2: int, color: str, dash: bool = False, arrow: bool = True) -> str:
+    """Straight connector, arrow head at (x2, y2) unless arrow=False. The frame is the bounding box; flips give the direction."""
     flip = (' flipH="1"' if x2 < x1 else "") + (' flipV="1"' if y2 < y1 else "")
     dash_xml = '<a:prstDash val="dash"/>' if dash else ""
+    head = '<a:tailEnd type="triangle" w="med" len="med"/>' if arrow else ""
     return (f'<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="{sid}" name="Edge"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>'
             f'<p:spPr><a:xfrm{flip}><a:off x="{min(x1, x2)}" y="{min(y1, y2)}"/><a:ext cx="{abs(x2 - x1)}" cy="{abs(y2 - y1)}"/></a:xfrm>'
             f'<a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom><a:ln w="19050"><a:solidFill><a:srgbClr val="{color}"/>'
-            f'</a:solidFill>{dash_xml}<a:tailEnd type="triangle" w="med" len="med"/></a:ln></p:spPr></p:cxnSp>')
+            f'</a:solidFill>{dash_xml}{head}</a:ln></p:spPr></p:cxnSp>')
 
 
 def table(sid: int, x: int, y: int, w: int, columns: list, rows: list) -> str:
@@ -195,12 +196,11 @@ FLOW_STYLE = {  # kind -> (fill, line colour or accent marker, text colour, dash
 
 
 def flow(s: dict, sid: int, accent: str) -> str:
-    """The flow diagram as native shapes: one rectangle per node, one straight connector per edge, legend and caption
+    """The flow diagram as native shapes: one rectangle per node, straight connectors per edge, legend and caption
     below. Same layout as the HTML (build_deck.flow_layout), scaled from its pixel box into the body area."""
     lay = build_deck.flow_layout(s)
     cw = W - 2 * MX
-    diagram_h = 3352800  # leaves room for the legend line and a two-line caption above the footnote
-    k = min(cw / build_deck.FLOW_W, diagram_h / lay["h"])
+    k = cw / build_deck.FLOW_W  # 1 HTML px = k EMU; flow_layout already checked diagram + caption fit in FLOW_BODY px
     ox = MX + int((cw - build_deck.FLOW_W * k) / 2)
     oy = BODY_Y
 
@@ -217,10 +217,17 @@ def flow(s: dict, sid: int, accent: str) -> str:
             out.append(sp(sid, "Column", X(c["x"]), Y(0), int(c["w"] * k), int(20 * k), para(str(c["label"]).upper(), build_deck.FLOW_HEAD_PX * pt, MUTED, True, algn="ctr"), anchor="ctr", inset=0))
             sid += 1
     for e in lay["edges"]:
-        out.append(connector(sid, X(e["x1"]), Y(e["y1"]), X(e["x2"]), Y(e["y2"]), EDGE, e["dashed"]))
-        sid += 1
+        if e["route"] == "back":  # down into the lane below the nodes, across, up into the target: three segments, one arrow head
+            ly0 = e["lane"]
+            out.append(connector(sid, X(e["x1"]), Y(e["y1"]), X(e["x1"]), Y(ly0), EDGE, e["dashed"], arrow=False))
+            out.append(connector(sid + 1, X(e["x1"]), Y(ly0), X(e["x2"]), Y(ly0), EDGE, e["dashed"], arrow=False))
+            out.append(connector(sid + 2, X(e["x2"]), Y(ly0), X(e["x2"]), Y(e["y2"]), EDGE, e["dashed"]))
+            sid += 3
+        else:
+            out.append(connector(sid, X(e["x1"]), Y(e["y1"]), X(e["x2"]), Y(e["y2"]), EDGE, e["dashed"]))
+            sid += 1
         if e["label"]:
-            lx, ly = (e["x1"] + e["x2"]) / 2, (e["y1"] + e["y2"]) / 2
+            lx, ly = (e["x1"] + e["x2"]) / 2, e["lane"] - 4 if e["route"] == "back" else (e["y1"] + e["y2"]) / 2
             out.append(sp(sid, "Edge label", X(lx - 60), Y(ly - 22), int(120 * k), int(18 * k), para(e["label"], 11 * pt, MUTED, algn="ctr"), anchor="b", inset=0))
             sid += 1
     for nd in lay["nodes"]:
