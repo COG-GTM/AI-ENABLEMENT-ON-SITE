@@ -4,273 +4,891 @@
   "subtitle": "How this repository takes a tree of .vi, .c and .m files to ported code with proof, one unit at a time. LabVIEW / TestStand, C/C++ firmware, MATLAB / Simulink. Offline, on a laptop, with Devin Desktop.",
   "footer": "Synthetic reference system, customer-neutral. Everything shown runs offline from this folder.",
   "slides": [
-    {"type": "title",
-     "notes": "One hour: 50 minutes of slides, 10 for questions. Everything on these slides was produced by tools in this folder; nothing was typed from memory."},
-
-    {"type": "two-column", "title": "Why we are here: the five asks",
-     "left_title": "You asked for",
-     "left": [
-       "Repo-scale LabVIEW: thousands of VIs; how many, what is in them, which leave first",
-       "Repo-scale MATLAB: the same question over .m / .slx trees",
-       "A low-touch pipeline: runs unattended, keeps token use bounded",
-       "Related worked examples, not toy demos",
-       "Advanced topics: evidence, boundaries, what is deliberately left out"
-     ],
-     "right_title": "Where this hour answers it",
-     "right": [
-       "Slides 4-5: fleet scan, backlog, one ported rig, its numbers",
-       "Slide 7: the model lane today; repo-scale scan lands in the next PR",
-       "Slide 8: structured files, one bounded prompt per unit, offline CI",
-       "Slides 4, 6, 7: each lane ends in an example under example-system/",
-       "Slides 9-12: static vs runtime, retain / wrap / port, not covered"
-     ],
-     "notes": "Set expectations: high level first (slide 3), then one level down per lane, then the boundaries."},
-
-    {"type": "flow", "title": "The factory: every lane has the same shape",
-     "columns": [
-       {"label": "Inputs", "nodes": [
-         {"id": "in_vi", "label": ".vi / .lvproj / .seq tree", "sub": "+ one recording per rig", "kind": "input"},
-         {"id": "in_c", "label": ".c / .cpp tree", "sub": "+ build files and HAL", "kind": "input"},
-         {"id": "in_m", "label": ".m / .slx models", "sub": "+ golden vectors", "kind": "input"}
-       ]},
-       {"label": "Discover", "nodes": [
-         {"id": "scan_vi", "label": "Fleet scan", "sub": "tools/vi_fleet_scan.py"},
-         {"id": "map_c", "label": "Firmware map", "sub": "/bring-your-firmware, read only"},
-         {"id": "scan_m", "label": "Model tree scan", "sub": "tools/m_fleet_scan.py", "kind": "pending"}
-       ]},
-       {"label": "Backlog", "nodes": [
-         {"id": "backlog", "label": "Inventory + migration backlog", "sub": "CSV + JSON, one row per unit", "kind": "output"}
-       ]},
-       {"label": "Migrate one unit", "nodes": [
-         {"id": "lv", "label": "/labview-to-python", "sub": "one rig", "kind": "skill"},
-         {"id": "fw", "label": "/tdd", "sub": "C and Python twins", "kind": "skill"},
-         {"id": "ml", "label": "/matlab-to-code", "sub": "one model", "kind": "skill"}
-       ]},
-       {"label": "Prove", "nodes": [
-         {"id": "proof", "label": "bench_compare.py, make test", "sub": "PASS or FAIL per column", "kind": "gate"}
-       ]},
-       {"label": "Report", "nodes": [
-         {"id": "track", "label": "/track-and-report", "sub": "tracker JSON to report", "kind": "skill"},
-         {"id": "deck", "label": "/exec-deck", "sub": "numbers recomputed", "kind": "skill"}
-       ]}
-     ],
-     "edges": [
-       {"from": "in_vi", "to": "scan_vi"}, {"from": "in_c", "to": "map_c"}, {"from": "in_m", "to": "scan_m"},
-       {"from": "scan_vi", "to": "backlog"}, {"from": "map_c", "to": "backlog"}, {"from": "scan_m", "to": "backlog"},
-       {"from": "backlog", "to": "lv"}, {"from": "backlog", "to": "fw"}, {"from": "backlog", "to": "ml"},
-       {"from": "lv", "to": "proof"}, {"from": "fw", "to": "proof"}, {"from": "ml", "to": "proof"},
-       {"from": "proof", "to": "track"}, {"from": "track", "to": "deck"}
-     ],
-     "caption": "One scan reads the whole tree and writes a backlog. A skill migrates one unit at a time. A comparison says PASS or FAIL per column. The tracker and the deck recompute their numbers from those files, so nothing on a slide is typed by hand.",
-     "notes": "The picture to remember. Discovery is static evidence and orders the work; the gate in the middle is runtime proof and closes an item. Dashed box: designed, not merged."},
-
-    {"type": "flow", "title": "LabVIEW estate: from a folder of VIs to a proven rig",
-     "columns": [
-       {"label": "Inputs", "nodes": [
-         {"id": "tree", "label": ".vi / .lvproj / .seq tree", "sub": "read only, thousands of files", "kind": "input"}
-       ]},
-       {"label": "/vi-fleet-discovery", "nodes": [
-         {"id": "walk", "label": "Walk the tree", "sub": "lvkit describe + unresolved per VI"},
-         {"id": "cls", "label": "Classify port / wrap / retain / unreadable", "sub": "complexity, priority"}
-       ]},
-       {"label": "Backlog", "nodes": [
-         {"id": "inv", "label": "Fleet inventory", "sub": "fleet-inventory.csv + summary JSON", "kind": "output"},
-         {"id": "bl", "label": "Migration backlog", "sub": "migration-backlog.json, tracker-shaped", "kind": "output"}
-       ]},
-       {"label": "/labview-to-python", "nodes": [
-         {"id": "invm", "label": "Inventory the VI", "sub": "HTML export, screenshots, lvkit"},
-         {"id": "rwp", "label": "Retain / wrap / port per SubVI", "sub": "written into the review"},
-         {"id": "port", "label": "Python port", "sub": "rig.py, instruments as callbacks"}
-       ]},
-       {"label": "Prove", "nodes": [
-         {"id": "rec", "label": "Recording of one real run", "sub": "CSV: raw samples + results", "kind": "input"},
-         {"id": "replay", "label": "Replay the raw samples", "sub": "rig.py --replay"},
-         {"id": "cmp", "label": "bench_compare.py", "sub": "recording vs port, per column", "kind": "gate"}
-       ]},
-       {"label": "Report", "nodes": [
-         {"id": "tr", "label": "/track-and-report", "sub": "backlog becomes the status report", "kind": "skill"},
-         {"id": "dk", "label": "/exec-deck", "kind": "skill"}
-       ]}
-     ],
-     "edges": [
-       {"from": "tree", "to": "walk"}, {"from": "walk", "to": "cls"}, {"from": "cls", "to": "inv"}, {"from": "cls", "to": "bl"},
-       {"from": "bl", "to": "invm"}, {"from": "invm", "to": "rwp"}, {"from": "rwp", "to": "port"},
-       {"from": "port", "to": "replay"}, {"from": "rec", "to": "replay"}, {"from": "replay", "to": "cmp"},
-       {"from": "cmp", "to": "tr"}, {"from": "tr", "to": "dk"}
-     ],
-     "caption": "The scan orders the work: its classification is static evidence, not proof that anything ports. A rig is done when tools/bench_compare.py says PASS against the rig's own recording. Fixtures: example-system/fleet, example-system/real-vi, example-system/bench.",
-     "notes": "Workflows 9 then 6. A .vi is a proprietary binary; there is no point-and-convert step and the skill says so. The recording, not the source, is the proof."},
-
-    {"type": "stats", "title": "What the shipped LabVIEW rehearsal proves today",
-     "stats": [
-       {"value": "4", "label": "VIs in the fleet fixture (1 .lvproj, 1 .seq): port 4 with lvkit installed, unreadable 4 without it"},
-       {"value": "9/9", "label": "columns match the VI recording: 3 soak steps replayed, verdicts PASS/PASS/FAIL reproduced, failure included"},
-       {"value": "39", "label": "cases replayed through the port of 4 real open-source VIs; 10/10 columns match the diagram-derived table"},
-       {"value": "12", "label": "rows where those real VIs differ from MQTT 3.1.1: a finding the comparison surfaced, documented, not hidden"}
-     ],
-     "note": "Quoted from python tools/golden_path.py (stages fleet, labview-to-python, real-vi) and python tools/vi_fleet_scan.py example-system --name demo-fleet with lvkit 0.8.6. The real-VI port agrees with the diagram reading; nobody ran the original VIs, so that lane stops short of runtime proof.",
-     "notes": "Live if time: python tools/golden_path.py. Point at the three lines these numbers come from."},
-
-    {"type": "flow", "title": "C/C++ firmware: host tests plus a Python twin, not a converter",
-     "columns": [
-       {"label": "Inputs", "nodes": [
-         {"id": "src", "label": ".c / .h tree", "sub": "Make, CMake or IDE; HAL calls inside", "kind": "input"}
-       ]},
-       {"label": "/bring-your-firmware", "nodes": [
-         {"id": "map", "label": "Map the tree", "sub": "build, RTOS, HAL seam, pure logic"},
-         {"id": "seam", "label": "Pick the seam", "sub": "link-time stubs or callbacks"},
-         {"id": "harn", "label": "Host harness", "sub": "hal_stub.c + test_main.c"}
-       ]},
-       {"label": "Prove on the laptop", "nodes": [
-         {"id": "mk", "label": "make test", "sub": "nominal, injected fault, boundary", "kind": "gate"}
-       ]},
-       {"label": "/tdd, next change", "nodes": [
-         {"id": "ctwin", "label": "C firmware", "sub": "example-system/src"},
-         {"id": "ptwin", "label": "Python twin", "sub": "example-system/sim, same test list"}
-       ]},
-       {"label": "Prove", "nodes": [
-         {"id": "shared", "label": "Shared tests and vectors", "sub": "make -C example-system test", "kind": "gate"}
-       ]},
-       {"label": "Report", "nodes": [
-         {"id": "da", "label": "/design-artifacts", "sub": "SRS, ICD, hazards, ADR", "kind": "skill"},
-         {"id": "tr", "label": "/track-and-report", "kind": "skill"},
-         {"id": "dk", "label": "/exec-deck", "kind": "skill"}
-       ]}
-     ],
-     "edges": [
-       {"from": "src", "to": "map"}, {"from": "map", "to": "seam"}, {"from": "seam", "to": "harn"}, {"from": "harn", "to": "mk"},
-       {"from": "mk", "to": "ctwin"}, {"from": "mk", "to": "ptwin"}, {"from": "ctwin", "to": "shared"}, {"from": "ptwin", "to": "shared"},
-       {"from": "shared", "to": "da"}, {"from": "da", "to": "tr"}, {"from": "tr", "to": "dk"}
-     ],
-     "caption": "Your C is compiled on a laptop against the stubbed HAL in templates/host-harness and tested there (on the example: host tests: 58 checks passed). The Python twin is a second implementation kept honest by the same tests and vectors. Nothing converts C to Python, and host tests do not prove target timing, interrupts or certification objectives.",
-     "notes": "Workflow 8. Already on GoogleTest, Unity or Ceedling? The skill uses yours. Keep the on-target tests you have."},
-
-    {"type": "flow", "title": "MATLAB / Simulink: model to C and Python that match the vectors",
-     "columns": [
-       {"label": "Inputs", "nodes": [
-         {"id": "mdl", "label": ".m / .slx models", "sub": ".slx read as ZIP + XML, no MATLAB needed", "kind": "input"}
-       ]},
-       {"label": "Discover, repo scale", "nodes": [
-         {"id": "mscan", "label": "Model tree scan", "sub": "tools/m_fleet_scan.py, /repo-discovery", "kind": "pending"}
-       ]},
-       {"label": "/matlab-to-code", "nodes": [
-         {"id": "notes", "label": "Numeric semantics notes", "sub": "indexing, rounding, saturation, warm-up"},
-         {"id": "impl", "label": "Implement in Python and C", "sub": "via /tdd; generated C is reviewed, not replaced"}
-       ]},
-       {"label": "Prove", "nodes": [
-         {"id": "vec", "label": "Golden vectors from the model owner", "sub": "export_vectors.m to filter_vectors.csv", "kind": "input"},
-         {"id": "rv", "label": "run_vectors.py", "sub": "replays via the Python or C twin"},
-         {"id": "bc", "label": "bench_compare.py", "sub": "tolerance 0 for integer outputs", "kind": "gate"}
-       ]},
-       {"label": "Report", "nodes": [
-         {"id": "da", "label": "/design-artifacts", "kind": "skill"},
-         {"id": "tr", "label": "/track-and-report", "kind": "skill"},
-         {"id": "dk", "label": "/exec-deck", "kind": "skill"}
-       ]}
-     ],
-     "edges": [
-       {"from": "mdl", "to": "mscan"}, {"from": "mscan", "to": "notes"}, {"from": "mdl", "to": "notes"},
-       {"from": "notes", "to": "impl"}, {"from": "impl", "to": "rv"}, {"from": "vec", "to": "rv"}, {"from": "rv", "to": "bc"},
-       {"from": "bc", "to": "da"}, {"from": "da", "to": "tr"}, {"from": "tr", "to": "dk"}
-     ],
-     "caption": "Today: one model at a time. The notes make rounding, saturation and warm-up explicit before code exists; both twins must reproduce the owner's vectors (26 vectors replayed through the python and c twins; python 3/3 columns, c 3/3 columns match exactly). Dashed: the repo-scale model scan is landing in the next PR.",
-     "notes": "Workflow 7. Vector equivalence proves the code matches the model on those rows, not that the design is right."},
-
-    {"type": "flow", "title": "Reusable pipeline: files in, one bounded prompt per unit, proof in CI",
-     "columns": [
-       {"label": "Inputs", "nodes": [
-         {"id": "any", "label": "Any tree", "sub": ".vi, .c or .m; read only", "kind": "input"}
-       ]},
-       {"label": "Scan once", "nodes": [
-         {"id": "s_vi", "label": "vi_fleet_scan.py", "sub": "merged; the shape the others follow"},
-         {"id": "s_x", "label": "m_fleet_scan.py, c_fleet_scan.py", "sub": "same CSV / JSON shape", "kind": "pending"}
-       ]},
-       {"label": "Structured files", "nodes": [
-         {"id": "files", "label": "CSV + JSON + backlog", "sub": "one row per unit; never re-read the tree", "kind": "output"}
-       ]},
-       {"label": "One prompt per unit", "nodes": [
-         {"id": "pack", "label": "prompt_pack.py", "sub": "one bounded prompt per row; dry-run by default", "kind": "pending"},
-         {"id": "run", "label": "pipeline_run.py", "sub": "journaled state machine, resumable", "kind": "pending"}
-       ]},
-       {"label": "Unattended proof", "nodes": [
-         {"id": "ci", "label": "CI: check.yml", "sub": "check_repo.py + golden_path.py", "kind": "gate"},
-         {"id": "art", "label": "outputs/golden/", "sub": "uploaded as the CI artifact", "kind": "output"}
-       ]}
-     ],
-     "edges": [
-       {"from": "any", "to": "s_vi"}, {"from": "any", "to": "s_x"}, {"from": "s_vi", "to": "files"}, {"from": "s_x", "to": "files"},
-       {"from": "files", "to": "pack"}, {"from": "pack", "to": "run"}, {"from": "run", "to": "ci"}, {"from": "ci", "to": "art"}
-     ],
-     "caption": "Token use is bounded by the files, not by the prompt: the scanner reads the tree once and writes rows; each unit then gets one prompt carrying only its row. .github/workflows/check.yml already runs every check offline on Python 3.10 and 3.12 and keeps the proof as an artifact. Dashed boxes are designed in the research plan and not merged; the golden path will stop at 'prompt pack generated' and will not claim an agent ran.",
-     "notes": "Slide 8 is the one with the most unmerged content. Say which boxes exist today (solid) and which are next PR (dashed)."},
-
-    {"type": "table", "title": "The evidence boundary: what each artefact lets you say",
-     "columns": ["Evidence", "Produced by", "Lets you say", "Does not let you say"],
-     "rows": [
-       ["Static: fleet classification", "tools/vi_fleet_scan.py, lvkit describe / unresolved", "How many VIs, what is in them, which to try first", "That any VI ports; that is per-rig work"],
-       ["Static: firmware map, model notes", "/bring-your-firmware, /matlab-to-code", "Where the HAL seam is; which numeric rules apply", "That the code is correct"],
-       ["Runtime: PASS from bench_compare.py", "The port replayed on the recording or the vectors", "The port reproduces every column of one real run", "Behaviour on inputs that run never saw"],
-       ["Runtime: host tests", "make -C templates/host-harness test", "The logic passes nominal, fault and boundary cases", "Target timing, interrupts, RTOS, silicon, certification"]
-     ],
-     "note": "Every skill prints its own boundary in its output; a port without a recording is labelled a draft.",
-     "notes": "Static evidence orders the work; runtime evidence closes an item. Keep the two words apart in every conversation."},
-
-    {"type": "table", "title": "Retain, wrap or port: one answer per SubVI or block, reason recorded",
-     "columns": ["Answer", "When", "What you get"],
-     "rows": [
-       ["Port", "Pure logic: sequencing, parsing, maths, verdicts, report generation", "Python, proven against the recording"],
-       ["Wrap", "Works, cannot be re-verified cheaply, or needs an NI driver you keep (DAQmx, VISA)", "Python calls the VI, executable or instrument; Python owns sequencing and results"],
-       ["Retain", "FPGA, Real-Time targets, hardware-timed loops, anything the recording cannot exercise", "Stays in LabVIEW; Python consumes its output files"],
-       ["Unreadable", "No lvkit, no HTML export, no screenshots yet", "A backlog row asking for the export before anyone estimates"]
-     ],
-     "note": "Source: .devin/skills/labview-to-python/SKILL.md and .devin/skills/vi-fleet-discovery/SKILL.md; the fleet scanner proposes, the per-rig review decides.",
-     "notes": "The answer that surprises people is Retain: the goal is a bench you can trust, not zero LabVIEW."},
-
-    {"type": "two-column", "title": "What Devin with this repository adds over a general coding agent",
-     "left_title": "A general agent on the same tree",
-     "left": [
-       "Reads what fits in one prompt and re-reads the tree every session",
-       "Writes code that looks right; the proof is whatever you remember to ask for",
-       "Blurs the boundary: a reading of a diagram presented as behaviour",
-       "One-off session; nothing for the next person to rerun"
-     ],
-     "right_title": "This repository with Devin",
-     "right": [
-       "The scanner reads the whole tree once; each unit gets one bounded prompt",
-       "Every lane ends in bench_compare.py or make test saying PASS or FAIL per column",
-       "Skills print what is not proven, in their own output, every run",
-       "Skills, tracker, backlog and deck rebuild offline from plain CSV and JSON anyone can open"
-     ],
-     "notes": "Devin Desktop plus this folder. No cloud service is required for any step shown today."},
-
-    {"type": "bullets", "title": "What is not covered, said before you ask",
-     "bullets": [
-       "No .vi to Python converter: a VI is a proprietary binary; lvkit gives inventory and drawings, never the deliverable",
-       "No C to Python converter: the Python twin is a second implementation kept honest by shared tests",
-       "Host tests do not prove target timing, interrupts, RTOS scheduling, DMA, power modes, MISRA or DO-178C objectives",
-       "Vector equivalence does not prove the design, only that the code matches the model on those rows",
-       "Without a recording a LabVIEW port is a draft, and the skill labels it as one",
-       "Repo-scale MATLAB and C scanners, the prompt pack and the pipeline runner are designed, not merged",
-       "No TestStand or TDMS file ships here; the real-VI lane stops at the diagram reading until someone records a run"
-     ],
-     "notes": "Read this slide slowly. It is the slide that earns trust."},
-
-    {"type": "bullets", "title": "Day one on your tree: the commands",
-     "bullets": [
-       "python tools/doctor.py   (is this laptop ready? prints READY)",
-       "python tools/golden_path.py   (every workflow end to end, offline; proof left in outputs/golden/)",
-       "python tools/vi_fleet_scan.py <your tree> --name <estate>   (inventory CSV + migration backlog)",
-       "/labview-to-python <rig export or .vi> <recording.csv>   (one rig, proven against its recording)",
-       "/bring-your-firmware <your C tree>   (map, host harness, first three tests)",
-       "/matlab-to-code <model.m> --target both   (notes, vectors, Python + C, comparison)",
-       "python tools/tracker_report.py --file outputs/<estate>-migration-backlog.json   (the status report)"
-     ],
-     "note": "Then: /track-and-report and /exec-deck read those files; ask for the end result and Devin runs the whole row (WORKFLOWS.md).",
-     "notes": "If there is time, run python tools/vi_fleet_scan.py example-system --name demo-fleet live and open the backlog."},
-
-    {"type": "quote",
-     "text": "The recording, not the source, is the proof. Inventory tells you where to start; a comparison tells you when you are done.",
-     "source": "Next step: pick one rig, one firmware module and one model from your tree, and run the factory on them this week.",
-     "notes": "Close with the ask: one unit per lane, with a recording or vectors beside it."}
+    {
+      "type": "title",
+      "notes": "One hour: 50 minutes of slides, 10 for questions. Everything on these slides was produced by tools in this folder; nothing was typed from memory."
+    },
+    {
+      "type": "two-column",
+      "title": "Why we are here: the five asks",
+      "left_title": "You asked for",
+      "left": [
+        "Repo-scale LabVIEW: thousands of VIs; how many, what is in them, which leave first",
+        "Repo-scale MATLAB: the same question over .m / .slx trees",
+        "A low-touch pipeline: runs unattended, keeps token use bounded",
+        "Related worked examples, not toy demos",
+        "Advanced topics: evidence, boundaries, what is deliberately left out"
+      ],
+      "right_title": "Where this hour answers it",
+      "right": [
+        "Slides 4-5: fleet scan, backlog, one ported rig, its numbers",
+        "Slide 7: the model lane today; repo-scale scan lands in the next PR",
+        "Slide 8: structured files, one bounded prompt per unit, offline CI",
+        "Slides 4, 6, 7: each lane ends in an example under example-system/",
+        "Slides 9-12: static vs runtime, retain / wrap / port, not covered"
+      ],
+      "notes": "Set expectations: high level first (slide 3), then one level down per lane, then the boundaries."
+    },
+    {
+      "type": "flow",
+      "title": "The factory: every lane has the same shape",
+      "columns": [
+        {
+          "label": "Inputs",
+          "nodes": [
+            {
+              "id": "in_vi",
+              "label": ".vi / .lvproj / .seq tree",
+              "sub": "+ one recording per rig",
+              "kind": "input"
+            },
+            {
+              "id": "in_c",
+              "label": ".c / .cpp tree",
+              "sub": "+ build files and HAL",
+              "kind": "input"
+            },
+            {
+              "id": "in_m",
+              "label": ".m / .slx models",
+              "sub": "+ golden vectors",
+              "kind": "input"
+            }
+          ]
+        },
+        {
+          "label": "Discover",
+          "nodes": [
+            {
+              "id": "scan_vi",
+              "label": "Fleet scan",
+              "sub": "tools/vi_fleet_scan.py"
+            },
+            {
+              "id": "map_c",
+              "label": "Firmware map",
+              "sub": "/bring-your-firmware, read only"
+            },
+            {
+              "id": "scan_m",
+              "label": "Model tree scan",
+              "sub": "tools/m_fleet_scan.py",
+              "kind": "pending"
+            }
+          ]
+        },
+        {
+          "label": "Backlog",
+          "nodes": [
+            {
+              "id": "backlog",
+              "label": "Inventory + migration backlog",
+              "sub": "CSV + JSON, one row per unit",
+              "kind": "output"
+            }
+          ]
+        },
+        {
+          "label": "Migrate one unit",
+          "nodes": [
+            {
+              "id": "lv",
+              "label": "/labview-to-python",
+              "sub": "one rig",
+              "kind": "skill"
+            },
+            {
+              "id": "fw",
+              "label": "/tdd",
+              "sub": "C and Python twins",
+              "kind": "skill"
+            },
+            {
+              "id": "ml",
+              "label": "/matlab-to-code",
+              "sub": "one model",
+              "kind": "skill"
+            }
+          ]
+        },
+        {
+          "label": "Prove",
+          "nodes": [
+            {
+              "id": "proof",
+              "label": "bench_compare.py, make test",
+              "sub": "PASS or FAIL per column",
+              "kind": "gate"
+            }
+          ]
+        },
+        {
+          "label": "Report",
+          "nodes": [
+            {
+              "id": "track",
+              "label": "/track-and-report",
+              "sub": "tracker JSON to report",
+              "kind": "skill"
+            },
+            {
+              "id": "deck",
+              "label": "/exec-deck",
+              "sub": "numbers recomputed",
+              "kind": "skill"
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "in_vi",
+          "to": "scan_vi"
+        },
+        {
+          "from": "in_c",
+          "to": "map_c"
+        },
+        {
+          "from": "in_m",
+          "to": "scan_m"
+        },
+        {
+          "from": "scan_vi",
+          "to": "backlog"
+        },
+        {
+          "from": "map_c",
+          "to": "backlog"
+        },
+        {
+          "from": "scan_m",
+          "to": "backlog"
+        },
+        {
+          "from": "backlog",
+          "to": "lv"
+        },
+        {
+          "from": "backlog",
+          "to": "fw"
+        },
+        {
+          "from": "backlog",
+          "to": "ml"
+        },
+        {
+          "from": "lv",
+          "to": "proof"
+        },
+        {
+          "from": "fw",
+          "to": "proof"
+        },
+        {
+          "from": "ml",
+          "to": "proof"
+        },
+        {
+          "from": "proof",
+          "to": "track"
+        },
+        {
+          "from": "track",
+          "to": "deck"
+        }
+      ],
+      "caption": "One scan reads the whole tree and writes a backlog. A skill migrates one unit at a time. A comparison says PASS or FAIL per column. The tracker and the deck recompute their numbers from those files, so nothing on a slide is typed by hand.",
+      "notes": "The picture to remember. Discovery is static evidence and orders the work; the gate in the middle is runtime proof and closes an item. Dashed box: designed, not merged."
+    },
+    {
+      "type": "flow",
+      "title": "LabVIEW estate: from a folder of VIs to a proven rig",
+      "columns": [
+        {
+          "label": "Inputs",
+          "nodes": [
+            {
+              "id": "tree",
+              "label": ".vi / .lvproj / .seq tree",
+              "sub": "read only, thousands of files",
+              "kind": "input"
+            }
+          ]
+        },
+        {
+          "label": "/vi-fleet-discovery",
+          "nodes": [
+            {
+              "id": "walk",
+              "label": "Walk the tree",
+              "sub": "lvkit describe + unresolved per VI"
+            },
+            {
+              "id": "cls",
+              "label": "Classify port / wrap / retain / unreadable",
+              "sub": "complexity, priority"
+            }
+          ]
+        },
+        {
+          "label": "Backlog",
+          "nodes": [
+            {
+              "id": "inv",
+              "label": "Fleet inventory",
+              "sub": "fleet-inventory.csv + summary JSON",
+              "kind": "output"
+            },
+            {
+              "id": "bl",
+              "label": "Migration backlog",
+              "sub": "migration-backlog.json, tracker-shaped",
+              "kind": "output"
+            }
+          ]
+        },
+        {
+          "label": "/labview-to-python",
+          "nodes": [
+            {
+              "id": "invm",
+              "label": "Inventory the VI",
+              "sub": "HTML export, screenshots, lvkit"
+            },
+            {
+              "id": "rwp",
+              "label": "Retain / wrap / port per SubVI",
+              "sub": "written into the review"
+            },
+            {
+              "id": "port",
+              "label": "Python port",
+              "sub": "rig.py, instruments as callbacks"
+            }
+          ]
+        },
+        {
+          "label": "Prove",
+          "nodes": [
+            {
+              "id": "rec",
+              "label": "Recording of one real run",
+              "sub": "CSV: raw samples + results",
+              "kind": "input"
+            },
+            {
+              "id": "replay",
+              "label": "Replay the raw samples",
+              "sub": "rig.py --replay"
+            },
+            {
+              "id": "cmp",
+              "label": "bench_compare.py",
+              "sub": "recording vs port, per column",
+              "kind": "gate"
+            }
+          ]
+        },
+        {
+          "label": "Report",
+          "nodes": [
+            {
+              "id": "tr",
+              "label": "/track-and-report",
+              "sub": "backlog becomes the status report",
+              "kind": "skill"
+            },
+            {
+              "id": "dk",
+              "label": "/exec-deck",
+              "kind": "skill"
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "tree",
+          "to": "walk"
+        },
+        {
+          "from": "walk",
+          "to": "cls"
+        },
+        {
+          "from": "cls",
+          "to": "inv"
+        },
+        {
+          "from": "cls",
+          "to": "bl"
+        },
+        {
+          "from": "bl",
+          "to": "invm"
+        },
+        {
+          "from": "invm",
+          "to": "rwp"
+        },
+        {
+          "from": "rwp",
+          "to": "port"
+        },
+        {
+          "from": "port",
+          "to": "replay"
+        },
+        {
+          "from": "rec",
+          "to": "replay"
+        },
+        {
+          "from": "replay",
+          "to": "cmp"
+        },
+        {
+          "from": "cmp",
+          "to": "tr"
+        },
+        {
+          "from": "tr",
+          "to": "dk"
+        }
+      ],
+      "caption": "The scan orders the work: its classification is static evidence, not proof that anything ports. A rig is done when tools/bench_compare.py says PASS against the rig's own recording. Fixtures: example-system/fleet, example-system/real-vi, example-system/bench.",
+      "notes": "Workflows 9 then 6. A .vi is a proprietary binary; there is no point-and-convert step and the skill says so. The recording, not the source, is the proof."
+    },
+    {
+      "type": "stats",
+      "title": "What the shipped LabVIEW rehearsal proves today",
+      "stats": [
+        {
+          "value": "4",
+          "label": "VIs in the fleet fixture (1 .lvproj, 1 .seq): port 4 with lvkit installed, unreadable 4 without it"
+        },
+        {
+          "value": "9/9",
+          "label": "columns match the VI recording: 3 soak steps replayed, verdicts PASS/PASS/FAIL reproduced, failure included"
+        },
+        {
+          "value": "39",
+          "label": "cases replayed through the port of 4 real open-source VIs; 10/10 columns match the diagram-derived table"
+        },
+        {
+          "value": "12",
+          "label": "rows where those real VIs differ from MQTT 3.1.1: a finding the comparison surfaced, documented, not hidden"
+        }
+      ],
+      "note": "Quoted from python tools/golden_path.py (stages fleet, labview-to-python, real-vi) and python tools/vi_fleet_scan.py example-system --name demo-fleet with lvkit 0.8.6. The real-VI port agrees with the diagram reading; nobody ran the original VIs, so that lane stops short of runtime proof.",
+      "notes": "Live if time: python tools/golden_path.py. Point at the three lines these numbers come from."
+    },
+    {
+      "type": "flow",
+      "title": "C/C++ firmware: host tests plus a Python twin, not a converter",
+      "columns": [
+        {
+          "label": "Inputs",
+          "nodes": [
+            {
+              "id": "src",
+              "label": ".c / .h tree",
+              "sub": "Make, CMake or IDE; HAL calls inside",
+              "kind": "input"
+            }
+          ]
+        },
+        {
+          "label": "/bring-your-firmware",
+          "nodes": [
+            {
+              "id": "map",
+              "label": "Map the tree",
+              "sub": "build, RTOS, HAL seam, pure logic"
+            },
+            {
+              "id": "seam",
+              "label": "Pick the seam",
+              "sub": "link-time stubs or callbacks"
+            },
+            {
+              "id": "harn",
+              "label": "Host harness",
+              "sub": "hal_stub.c + test_main.c"
+            }
+          ]
+        },
+        {
+          "label": "Prove on the laptop",
+          "nodes": [
+            {
+              "id": "mk",
+              "label": "make test",
+              "sub": "nominal, injected fault, boundary",
+              "kind": "gate"
+            }
+          ]
+        },
+        {
+          "label": "/tdd, next change",
+          "nodes": [
+            {
+              "id": "ctwin",
+              "label": "C firmware",
+              "sub": "example-system/src"
+            },
+            {
+              "id": "ptwin",
+              "label": "Python twin",
+              "sub": "example-system/sim, same test list"
+            }
+          ]
+        },
+        {
+          "label": "Prove",
+          "nodes": [
+            {
+              "id": "shared",
+              "label": "Shared tests and vectors",
+              "sub": "make -C example-system test",
+              "kind": "gate"
+            }
+          ]
+        },
+        {
+          "label": "Report",
+          "nodes": [
+            {
+              "id": "da",
+              "label": "/design-artifacts",
+              "sub": "SRS, ICD, hazards, ADR",
+              "kind": "skill"
+            },
+            {
+              "id": "tr",
+              "label": "/track-and-report",
+              "kind": "skill"
+            },
+            {
+              "id": "dk",
+              "label": "/exec-deck",
+              "kind": "skill"
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "src",
+          "to": "map"
+        },
+        {
+          "from": "map",
+          "to": "seam"
+        },
+        {
+          "from": "seam",
+          "to": "harn"
+        },
+        {
+          "from": "harn",
+          "to": "mk"
+        },
+        {
+          "from": "mk",
+          "to": "ctwin"
+        },
+        {
+          "from": "mk",
+          "to": "ptwin"
+        },
+        {
+          "from": "ctwin",
+          "to": "shared"
+        },
+        {
+          "from": "ptwin",
+          "to": "shared"
+        },
+        {
+          "from": "shared",
+          "to": "da"
+        },
+        {
+          "from": "da",
+          "to": "tr"
+        },
+        {
+          "from": "tr",
+          "to": "dk"
+        }
+      ],
+      "caption": "Your C is compiled on a laptop against the stubbed HAL in templates/host-harness and tested there (on the example: host tests: 58 checks passed). The Python twin is a second implementation kept honest by the same tests and vectors. Nothing converts C to Python, and host tests do not prove target timing, interrupts or certification objectives.",
+      "notes": "Workflow 8. Already on GoogleTest, Unity or Ceedling? The skill uses yours. Keep the on-target tests you have."
+    },
+    {
+      "type": "flow",
+      "title": "MATLAB / Simulink: model to C and Python that match the vectors",
+      "columns": [
+        {
+          "label": "Inputs",
+          "nodes": [
+            {
+              "id": "mdl",
+              "label": ".m / .slx models",
+              "sub": ".slx read as ZIP + XML, no MATLAB needed",
+              "kind": "input"
+            }
+          ]
+        },
+        {
+          "label": "/matlab-to-code",
+          "nodes": [
+            {
+              "id": "mscan",
+              "label": "Model tree scan, repo scale",
+              "sub": "m_fleet_scan.py + /repo-discovery",
+              "kind": "pending"
+            },
+            {
+              "id": "notes",
+              "label": "Numeric semantics notes",
+              "sub": "indexing, rounding, saturation, warm-up"
+            },
+            {
+              "id": "impl",
+              "label": "Python and C twins",
+              "sub": "via /tdd; generated C is reviewed, not replaced"
+            }
+          ]
+        },
+        {
+          "label": "Prove",
+          "nodes": [
+            {
+              "id": "vec",
+              "label": "Golden vectors from the model owner",
+              "sub": "export_vectors.m to filter_vectors.csv",
+              "kind": "input"
+            },
+            {
+              "id": "rv",
+              "label": "run_vectors.py",
+              "sub": "replays via the Python or C twin"
+            },
+            {
+              "id": "bc",
+              "label": "bench_compare.py",
+              "sub": "tolerance 0 for integer outputs",
+              "kind": "gate"
+            }
+          ]
+        },
+        {
+          "label": "Report",
+          "nodes": [
+            {
+              "id": "da",
+              "label": "/design-artifacts",
+              "kind": "skill"
+            },
+            {
+              "id": "tr",
+              "label": "/track-and-report",
+              "kind": "skill"
+            },
+            {
+              "id": "dk",
+              "label": "/exec-deck",
+              "kind": "skill"
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "mdl",
+          "to": "mscan"
+        },
+        {
+          "from": "mscan",
+          "to": "notes"
+        },
+        {
+          "from": "mdl",
+          "to": "notes"
+        },
+        {
+          "from": "notes",
+          "to": "impl"
+        },
+        {
+          "from": "impl",
+          "to": "rv"
+        },
+        {
+          "from": "vec",
+          "to": "rv"
+        },
+        {
+          "from": "rv",
+          "to": "bc"
+        },
+        {
+          "from": "bc",
+          "to": "da"
+        },
+        {
+          "from": "da",
+          "to": "tr"
+        },
+        {
+          "from": "tr",
+          "to": "dk"
+        }
+      ],
+      "caption": "Today: one model at a time. The notes make rounding, saturation and warm-up explicit before code exists; both twins must reproduce the owner's vectors (26 vectors replayed through the python and c twins; python 3/3 columns, c 3/3 columns match exactly). Dashed: the repo-scale model scan is landing in the next PR.",
+      "notes": "Workflow 7. Vector equivalence proves the code matches the model on those rows, not that the design is right."
+    },
+    {
+      "type": "flow",
+      "title": "Reusable pipeline: files in, one bounded prompt per unit, proof in CI",
+      "columns": [
+        {
+          "label": "Inputs",
+          "nodes": [
+            {
+              "id": "any",
+              "label": "Any tree",
+              "sub": ".vi, .c or .m; read only",
+              "kind": "input"
+            }
+          ]
+        },
+        {
+          "label": "Scan once",
+          "nodes": [
+            {
+              "id": "s_vi",
+              "label": "vi_fleet_scan.py",
+              "sub": "merged; the shape the others follow"
+            },
+            {
+              "id": "s_x",
+              "label": "m_fleet_scan.py, c_fleet_scan.py",
+              "sub": "same CSV / JSON shape",
+              "kind": "pending"
+            }
+          ]
+        },
+        {
+          "label": "Structured files",
+          "nodes": [
+            {
+              "id": "files",
+              "label": "CSV + JSON + backlog",
+              "sub": "one row per unit; never re-read the tree",
+              "kind": "output"
+            }
+          ]
+        },
+        {
+          "label": "One prompt per unit",
+          "nodes": [
+            {
+              "id": "pack",
+              "label": "prompt_pack.py",
+              "sub": "one bounded prompt per row; dry-run by default",
+              "kind": "pending"
+            },
+            {
+              "id": "run",
+              "label": "pipeline_run.py",
+              "sub": "journaled state machine, resumable",
+              "kind": "pending"
+            }
+          ]
+        },
+        {
+          "label": "Unattended proof",
+          "nodes": [
+            {
+              "id": "ci",
+              "label": "CI: check.yml",
+              "sub": "check_repo.py + golden_path.py",
+              "kind": "gate"
+            },
+            {
+              "id": "art",
+              "label": "outputs/golden/",
+              "sub": "uploaded as the CI artifact",
+              "kind": "output"
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "any",
+          "to": "s_vi"
+        },
+        {
+          "from": "any",
+          "to": "s_x"
+        },
+        {
+          "from": "s_vi",
+          "to": "files"
+        },
+        {
+          "from": "s_x",
+          "to": "files"
+        },
+        {
+          "from": "files",
+          "to": "pack"
+        },
+        {
+          "from": "pack",
+          "to": "run"
+        },
+        {
+          "from": "run",
+          "to": "ci"
+        },
+        {
+          "from": "ci",
+          "to": "art"
+        }
+      ],
+      "caption": "Token use is bounded by the files, not by the prompt: the scanner reads the tree once and writes rows; each unit then gets one prompt carrying only its row. .github/workflows/check.yml already runs every check offline on Python 3.10 and 3.12 and keeps the proof as an artifact. Dashed boxes are designed in the research plan and not merged; the golden path will stop at 'prompt pack generated' and will not claim an agent ran.",
+      "notes": "Slide 8 is the one with the most unmerged content. Say which boxes exist today (solid) and which are next PR (dashed)."
+    },
+    {
+      "type": "table",
+      "title": "The evidence boundary: what each artefact lets you say",
+      "columns": [
+        "Evidence",
+        "Produced by",
+        "Lets you say",
+        "Does not let you say"
+      ],
+      "rows": [
+        [
+          "Static: fleet classification",
+          "tools/vi_fleet_scan.py, lvkit describe / unresolved",
+          "How many VIs, what is in them, which to try first",
+          "That any VI ports; that is per-rig work"
+        ],
+        [
+          "Static: firmware map, model notes",
+          "/bring-your-firmware, /matlab-to-code",
+          "Where the HAL seam is; which numeric rules apply",
+          "That the code is correct"
+        ],
+        [
+          "Runtime: PASS from bench_compare.py",
+          "The port replayed on the recording or the vectors",
+          "The port reproduces every column of one real run",
+          "Behaviour on inputs that run never saw"
+        ],
+        [
+          "Runtime: host tests",
+          "make -C templates/host-harness test",
+          "The logic passes nominal, fault and boundary cases",
+          "Target timing, interrupts, RTOS, silicon, certification"
+        ]
+      ],
+      "note": "Every skill prints its own boundary in its output; a port without a recording is labelled a draft.",
+      "notes": "Static evidence orders the work; runtime evidence closes an item. Keep the two words apart in every conversation."
+    },
+    {
+      "type": "table",
+      "title": "Retain, wrap or port: one answer per SubVI or block, reason recorded",
+      "columns": [
+        "Answer",
+        "When",
+        "What you get"
+      ],
+      "rows": [
+        [
+          "Port",
+          "Pure logic: sequencing, parsing, maths, verdicts, report generation",
+          "Python, proven against the recording"
+        ],
+        [
+          "Wrap",
+          "Works, cannot be re-verified cheaply, or needs an NI driver you keep (DAQmx, VISA)",
+          "Python calls the VI, executable or instrument; Python owns sequencing and results"
+        ],
+        [
+          "Retain",
+          "FPGA, Real-Time targets, hardware-timed loops, anything the recording cannot exercise",
+          "Stays in LabVIEW; Python consumes its output files"
+        ],
+        [
+          "Unreadable",
+          "No lvkit, no HTML export, no screenshots yet",
+          "A backlog row asking for the export before anyone estimates"
+        ]
+      ],
+      "note": "Source: .devin/skills/labview-to-python/SKILL.md and .devin/skills/vi-fleet-discovery/SKILL.md; the fleet scanner proposes, the per-rig review decides.",
+      "notes": "The answer that surprises people is Retain: the goal is a bench you can trust, not zero LabVIEW."
+    },
+    {
+      "type": "two-column",
+      "title": "What Devin with this repository adds over a general coding agent",
+      "left_title": "A general agent on the same tree",
+      "left": [
+        "Reads what fits in one prompt and re-reads the tree every session",
+        "Writes code that looks right; the proof is whatever you remember to ask for",
+        "Blurs the boundary: a reading of a diagram presented as behaviour",
+        "One-off session; nothing for the next person to rerun"
+      ],
+      "right_title": "This repository with Devin",
+      "right": [
+        "The scanner reads the whole tree once; each unit gets one bounded prompt",
+        "Every lane ends in bench_compare.py or make test saying PASS or FAIL per column",
+        "Skills print what is not proven, in their own output, every run",
+        "Skills, tracker, backlog and deck rebuild offline from plain CSV and JSON anyone can open"
+      ],
+      "notes": "Devin Desktop plus this folder. No cloud service is required for any step shown today."
+    },
+    {
+      "type": "bullets",
+      "title": "What is not covered, said before you ask",
+      "bullets": [
+        "No .vi to Python converter: a VI is a proprietary binary; lvkit gives inventory and drawings, never the deliverable",
+        "No C to Python converter: the Python twin is a second implementation kept honest by shared tests",
+        "Host tests do not prove target timing, interrupts, RTOS scheduling, DMA, power modes, MISRA or DO-178C objectives",
+        "Vector equivalence does not prove the design, only that the code matches the model on those rows",
+        "Without a recording a LabVIEW port is a draft, and the skill labels it as one",
+        "Repo-scale MATLAB and C scanners, the prompt pack and the pipeline runner are designed, not merged",
+        "No TestStand or TDMS file ships here; the real-VI lane stops at the diagram reading until someone records a run"
+      ],
+      "notes": "Read this slide slowly. It is the slide that earns trust."
+    },
+    {
+      "type": "bullets",
+      "title": "Day one on your tree: the commands",
+      "bullets": [
+        "python tools/doctor.py   (is this laptop ready? prints READY)",
+        "python tools/golden_path.py   (every workflow end to end, offline; proof left in outputs/golden/)",
+        "python tools/vi_fleet_scan.py <your tree> --name <estate>   (inventory CSV + migration backlog)",
+        "/labview-to-python <rig export or .vi> <recording.csv>   (one rig, proven against its recording)",
+        "/bring-your-firmware <your C tree>   (map, host harness, first three tests)",
+        "/matlab-to-code <model.m> --target both   (notes, vectors, Python + C, comparison)",
+        "python tools/tracker_report.py --file outputs/<estate>-migration-backlog.json   (the status report)"
+      ],
+      "note": "Then: /track-and-report and /exec-deck read those files; ask for the end result and Devin runs the whole row (WORKFLOWS.md).",
+      "notes": "If there is time, run python tools/vi_fleet_scan.py example-system --name demo-fleet live and open the backlog."
+    },
+    {
+      "type": "quote",
+      "text": "The recording, not the source, is the proof. Inventory tells you where to start; a comparison tells you when you are done.",
+      "source": "Next step: pick one rig, one firmware module and one model from your tree, and run the factory on them this week.",
+      "notes": "Close with the ask: one unit per lane, with a recording or vectors beside it."
+    }
   ]
 }
