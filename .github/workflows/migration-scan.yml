@@ -1,0 +1,42 @@
+# Example of the "pipeline the team owns": run repository-scale discovery and prompt packing unattended and keep the
+# artifacts. It runs the offline stages only (scan -> pack -> report in dry-run mode); the agent stage is a per-unit
+# command you add when your environment has one (see tools/pipeline_run.py --agent-cmd). Point --tree at your own
+# checkout to use it on real code; the fixture below keeps the example runnable in this repository.
+name: migration-scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      lang:
+        description: "c | matlab | labview"
+        default: "c"
+      tree:
+        description: "tree to scan (path inside the checkout)"
+        default: "example-system/firmware-repo"
+      name:
+        description: "pipeline name (backlog prefix comes from the scanner)"
+        default: "firmware-repo"
+  schedule:
+    - cron: "0 6 * * 1"   # weekly rescan; ids and statuses in the backlog survive rescans
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: scan -> pack -> report (dry run, no agent)
+        run: |
+          python tools/pipeline_run.py \
+            --lang "${{ github.event.inputs.lang || 'c' }}" \
+            --tree "${{ github.event.inputs.tree || 'example-system/firmware-repo' }}" \
+            --name "${{ github.event.inputs.name || 'firmware-repo' }}" \
+            --resume
+      - name: backlog status
+        run: python tools/tracker_report.py --file "outputs/pipeline/${{ github.event.inputs.name || 'firmware-repo' }}/${{ github.event.inputs.name || 'firmware-repo' }}-backlog-status.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migration-scan-${{ github.event.inputs.name || 'firmware-repo' }}
+          path: outputs/pipeline/

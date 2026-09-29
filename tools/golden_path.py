@@ -352,6 +352,43 @@ def stage_c_fleet() -> None:
     )
 
 
+def stage_pipeline() -> None:
+    """Reusable pipeline over example-system/firmware-repo/: scan -> pack -> agent (dry run: no agent is called) -> compare -> report,
+    then a --resume run that must skip the unchanged scan and pack stages. Proves the glue and the journal, not any migration."""
+    pipe = OUT / "pipeline-firmware-repo"
+    for old in pipe.glob("journal.jsonl"):
+        old.unlink()
+    for old in pipe.glob("state.json"):
+        old.unlink()
+    base = [PY, "tools/pipeline_run.py", "--lang", "c", "--tree", "example-system/firmware-repo", "--name", "firmware-repo",
+            "--out", str(pipe), "--opened", "2026-01-05", "--json"]
+    r = run(base)
+    if r.returncode:
+        record("pipeline", False, (r.stdout + r.stderr)[-300:])
+        return
+    state = json.loads(r.stdout)
+    st = state["stages"]
+    r2 = run(base + ["--resume"])
+    if r2.returncode:
+        record("pipeline", False, (r2.stdout + r2.stderr)[-300:])
+        return
+    journal = [json.loads(line) for line in (pipe / "journal.jsonl").read_text(encoding="utf-8").splitlines()]
+    resumed = {e["stage"] for e in journal if e["event"] == "skipped" and "--resume" in e.get("reason", "")}
+    agent = st["agent"]
+    n_units = len(agent["units"])
+    ok = (st["agent"]["mode"] == "dry run" and all(u["status"] == "skipped" for u in agent["units"].values())
+          and not (pipe / "results").exists() and resumed == {"scan", "pack"} and (pipe / "REPORT.md").is_file()
+          and (pipe / "firmware-repo-backlog-status.json").is_file() and st["pack"]["over_budget"] == 0
+          and st["report"]["status"] == "done")
+    record(
+        "pipeline",
+        ok,
+        f"scan -> pack -> agent -> compare -> report on firmware-repo: {st['pack']['packs']} packs, largest {st['pack']['max_pack_tokens_est']} tokens est. "
+        f"(whole tree {st['pack']['whole_tree_tokens_est']}); agent stage dry run, {n_units} units skipped, no result.json written; "
+        f"--resume skipped {', '.join(sorted(resumed))}; {len(journal)} journal events",
+    )
+
+
 def stage_host_harness() -> None:
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     if not (cc and shutil.which("make")):
@@ -402,7 +439,7 @@ def main(argv=None) -> int:
     results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
-              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_c_fleet, stage_host_harness]
+              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_c_fleet, stage_pipeline, stage_host_harness]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:

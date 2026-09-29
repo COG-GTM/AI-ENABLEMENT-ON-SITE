@@ -29,7 +29,7 @@ AGENTS = ROOT / "AGENTS.md"
 ROUTING_DOCS = ["README.md", "WORKFLOWS.md", "WALKTHROUGH.md"]
 # Frontmatter keys documented for Devin Local skills. Anything else is a typo or an unsupported field.
 FRONTMATTER_KEYS = {"name", "description", "argument-hint", "model", "allowed-tools", "permissions", "triggers"}
-MAX_SKILLS = 15
+MAX_SKILLS = 16
 
 # Words that must never appear (case-insensitive). Add customer/program names here before publishing.
 FORBIDDEN = [
@@ -53,7 +53,7 @@ SKIP_DIRS = {".git", "build", "__pycache__", "outputs"}
 TEXT_EXT = {".md", ".json", ".py", ".c", ".h", ".txt", ".sh", ".yaml", ".yml", ".toml", ".cfg", ".html", ".mk", ""}
 
 LINK_RE = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
-BACKTICK_PATH_RE = re.compile(r"`((?:\.devin|\.agents|example-system|integrations|templates|tools|outputs)/[^`\s*]+)`")
+BACKTICK_PATH_RE = re.compile(r"`((?:\.devin|\.agents|example-system|integrations|templates|tools|outputs|use-cases)/[^`\s*]+)`")
 # Skill references in routing docs are code: `/skill ...` inline, or a fenced line starting with /skill.
 # Absolute paths in code spans need a second segment or a trailing slash (`/tmp/`, `/usr/bin`), see CONTRIBUTING.md.
 INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
