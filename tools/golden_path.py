@@ -9,7 +9,7 @@ Usage:
 This is the proof that the repository works on a fresh checkout with no network: readiness, research
 brief, what-if analysis, tracker report, traceability matrix, executive deck (HTML and, when the exporter
 is present, PPTX), the spec worked example, the MCP handshake, the model-to-code and LabVIEW-rig
-equivalence checks, the VI fleet scan, the host harness, and the firmware twins. Every expected number is derived from the
+equivalence checks, the VI fleet scan, the MATLAB repository scan, the host harness, and the firmware twins. Every expected number is derived from the
 source files, never typed in here. Exit 1 if any stage fails.
 Standard library only.
 """
@@ -294,6 +294,30 @@ def stage_fleet() -> None:
     )
 
 
+def stage_m_fleet() -> None:
+    """Repository-scale MATLAB discovery over example-system/matlab-repo/: the scanner's --check, then a real scan."""
+    r = run([PY, "tools/m_fleet_scan.py", "--check"])
+    if r.returncode:
+        record("m-fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    r = run([PY, "tools/m_fleet_scan.py", "example-system/matlab-repo", "--name", "matlab-repo", "--out-dir", str(OUT), "--opened", "2026-01-05", "--json"])
+    if r.returncode:
+        record("m-fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    s = json.loads(r.stdout)
+    c, k = s["counts"], s["classification"]
+    backlog = load(OUT / "matlab-repo-m-migration-backlog.json")["items"]
+    ok = (c["m_files"] == c["parsed"] + c["unreadable"] and sum(k.values()) == c["m_files"]
+          and (OUT / "matlab-repo-m-repo-map.md").is_file() and (OUT / "matlab-repo-m-dependency-map.json").is_file())
+    record(
+        "m-fleet",
+        ok,
+        f"{c['m_files']} .m files ({c['scripts']} scripts, {c['functions']} functions, {c['classes']} classes, {c['packages']} packages); "
+        f"{c['edges']} call edges, {c['unresolved_names']} unresolved, {c['dynamic_calls']} dynamic; port {k['port']}, wrap {k['wrap']}, "
+        f"retain {k['retain']}, unreadable {k['unreadable']}; {len(backlog)} backlog items; repo map + dependency map written",
+    )
+
+
 def stage_host_harness() -> None:
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     if not (cc and shutil.which("make")):
@@ -344,7 +368,7 @@ def main(argv=None) -> int:
     results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
-              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_host_harness]
+              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_host_harness]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:

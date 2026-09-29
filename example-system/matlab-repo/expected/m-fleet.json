@@ -1,0 +1,45 @@
+{
+  "_about": "Expected shape of `python tools/m_fleet_scan.py --check` over example-system/matlab-repo/. Regenerate with --check --write-expected after a deliberate change.",
+  "counts": {
+    "m_files": 27,
+    "parsed": 27,
+    "unreadable": 0,
+    "functions": 30,
+    "scripts": 4,
+    "classes": 2,
+    "packages": 4,
+    "tests": 2,
+    "edges": 23,
+    "unresolved_names": 1,
+    "dynamic_calls": 4,
+    "toolboxes": 2,
+    "cycles": 0
+  },
+  "classification": {
+    "port": 24,
+    "wrap": 2,
+    "retain": 1,
+    "unreadable": 0
+  },
+  "entry_points": [
+    "plots/plot_soak.m",
+    "run_soak.m"
+  ],
+  "orphans": [
+    "dispatch_handler.m",
+    "filter_fir.m",
+    "fit_battery_curve.m",
+    "legacy/garbled.m",
+    "legacy/old_decode.m",
+    "private/clamp.m",
+    "util/notes_only.m"
+  ],
+  "toolboxes": [
+    "Optimization Toolbox",
+    "Signal Processing Toolbox"
+  ],
+  "shadowing": [
+    "legacy/max.m"
+  ],
+  "backlog_items": 24
+}
