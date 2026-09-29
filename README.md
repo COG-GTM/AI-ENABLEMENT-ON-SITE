@@ -107,6 +107,7 @@ input. Full tables with every prompt are in `WORKFLOWS.md`; here is what each on
 | 9 | LabVIEW estate: fleet discovery to the first ported rig | `/vi-fleet-discovery`, `/labview-to-python`, `/track-and-report`, `/exec-deck` | "We have thousands of VIs. How many, what is in them, which leave LabVIEW first, and how do we track it?" |
 
 Ask for the end result and Devin runs the whole row: `Swap the IMU for imu-c and brief leadership`.
+One-hour executive briefing of workflows 6 to 9 as flow diagrams: `templates/deck-exec-briefing.json` (rebuild it with `tools/build_deck.py`; speaker notes and timing in `TALK-TRACK.md`).
 
 ## How an embedded engineer uses this
 

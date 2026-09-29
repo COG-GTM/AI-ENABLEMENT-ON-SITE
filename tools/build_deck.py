@@ -19,9 +19,16 @@ Outline format (see templates/deck-outline-example.json):
     {"type": "table", "title": "...", "columns": ["A", "B"], "rows": [["1", "2"], ...]},
     {"type": "stats", "title": "...", "stats": [{"value": "28.1", "label": "days battery life"}, ...]},
     {"type": "bars", "title": "...", "bars": [{"label": "...", "value": 2.4, "max": 3.0}, ...], "unit": "mA"},
-    {"type": "quote", "text": "...", "source": "..."}
+    {"type": "quote", "text": "...", "source": "..."},
+    {"type": "flow", "title": "...", "caption": "one sentence under the diagram",     # flow chart, drawn as inline SVG
+     "columns": [{"label": "Inputs", "nodes": [{"id": "tree", "label": "Tree of .vi files", "sub": "read only", "kind": "input"}]},
+                 {"label": "Scan", "nodes": [{"id": "scan", "label": "Fleet scan", "sub": "tools/vi_fleet_scan.py"}]}],
+     "edges": [{"from": "tree", "to": "scan", "label": "optional edge text"}]}
   ]
 }
+A flow node's "kind" is one of input, step (default), skill, gate, output, pending; each has its own look and
+the legend under the diagram names them. Nodes are laid out left to right by column, stacked inside a column,
+labels wrapped to the node width; text that would not fit is rejected instead of clipped (see flow_layout).
 Any slide may carry "notes": "speaker notes" (used by tools/export_pptx.py, ignored here).
 validate() is the single shape check shared by this tool and export_pptx.py.
 """
@@ -36,12 +43,28 @@ import sys
 import unicodedata
 from pathlib import Path
 
-ALLOWED_TYPES = {"title", "bullets", "two-column", "table", "stats", "bars", "quote", "section"}
+ALLOWED_TYPES = {"title", "bullets", "two-column", "table", "stats", "bars", "quote", "section", "flow"}
 MAX_SLIDES = 60
 MAX_BULLETS = 8
 MAX_TABLE_COLS, MAX_TABLE_ROWS = 12, 12  # one slide's worth in both outputs (HTML clips past 13 rows at 1280x720)
 TABLE_LINES = 14  # wrapped table lines (header included) both outputs can show
 TABLE_PX, CELL_PAD_PX, CELL_FONT_PX, HEAD_FONT_PX = 1136, 24, 19, 16  # HTML table at 1280x720; the PPTX cells are a little wider
+# Flow diagrams: drawn in a 1136 x 380 box (the HTML body width at 1280x720; the PPTX scales it), columns left to
+# right with a gap, nodes stacked and centred in their column. Fonts shrink as columns are added so labels keep
+# about twelve characters per line; anything that still does not fit is refused, never clipped.
+FLOW_W, FLOW_H, FLOW_GAP, FLOW_ROW_GAP, FLOW_PAD, FLOW_HEAD, FLOW_HEAD_PX = 1136, 380, 28, 16, 8, 26, 11
+FLOW_MAX_COLS, FLOW_MAX_ROWS, FLOW_MAX_NODES, FLOW_MAX_EDGES = 7, 4, 20, 30
+FLOW_MAX_LABEL_LINES, FLOW_MAX_SUB_LINES, FLOW_MAX_LABEL, FLOW_MAX_EDGE_LABEL = 3, 2, 80, 32
+FLOW_FONT = {1: 20, 2: 20, 3: 20, 4: 19, 5: 18, 6: 15, 7: 14}  # label px by column count; sub is 3 px smaller
+FLOW_KINDS = {  # kind -> legend text
+    "input": "Your files, read only",
+    "step": "Tool or step in this repository",
+    "skill": "Skill: a slash command",
+    "gate": "Proof: PASS / FAIL from a comparison or test run",
+    "output": "File left in outputs/",
+    "pending": "Not merged yet: landing in the next PR",
+}
+FLOW_ID_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,31}")
 NARROW = set(" ijl.,:;!|'`fIt()[]{}-")
 # Emoji_Modifier_Base ranges from Unicode 15.1 emoji-data.txt: the only glyphs a skin-tone modifier merges into.
 MODIFIER_BASE = (
@@ -111,8 +134,9 @@ ACCENT_RE = re.compile(r"#[0-9A-Fa-f]{6}")
 REQUIRED = {  # per type: keys that must be present (types are checked in validate)
     "title": (), "section": ("title",), "bullets": ("title", "bullets"), "two-column": ("title", "left", "right"),
     "table": ("title", "columns", "rows"), "stats": ("title", "stats"), "bars": ("title", "bars"), "quote": ("text",),
+    "flow": ("title", "columns"),
 }
-OPTIONAL_TEXT = ("title", "subtitle", "left_title", "right_title", "unit", "source", "text", "note", "notes")
+OPTIONAL_TEXT = ("title", "subtitle", "left_title", "right_title", "unit", "source", "text", "note", "notes", "caption")
 
 CSS = """
 :root{--bg:#FCFCFC;--ink:#141414;--muted:#7D7D7D;--accent:#2600FF;--line:#E7E7E7;--card:#F7F6F5;--fill:#97ACFF}
@@ -133,6 +157,22 @@ table{border-collapse:collapse;width:100%;font-size:19px}th,td{text-align:left;p
 .bars{display:flex;flex-direction:column;gap:14px;flex:1;justify-content:center}.bar{display:grid;grid-template-columns:220px 1fr 90px;align-items:center;gap:14px;font-size:20px}
 .bar .track{height:26px;background:#F3F3F3;border-radius:4px;overflow:hidden}.bar .fill{height:100%;background:var(--fill);border-right:2px solid var(--accent)}.bar .val{text-align:right;font-variant-numeric:tabular-nums}
 .quote{flex:1;display:flex;flex-direction:column;justify-content:center}.quote p{font-size:34px;line-height:1.35;margin:0 0 20px;font-weight:500}.quote .src{font-size:20px;color:var(--muted)}
+.flow{flex:0 1 auto;min-height:0;width:100%}.flow svg{width:100%;height:100%;display:block;overflow:visible}
+.flow text{font-family:inherit;fill:var(--ink)}.flow .colhead{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;fill:var(--muted)}
+.flow .nsub{fill:var(--muted)}.flow .edge{fill:none;stroke:#8A8A8A;stroke-width:1.8}.flow .edge.dashed{stroke-dasharray:6 5}
+.flow .elabel{font-size:12px;fill:var(--muted);paint-order:stroke;stroke:var(--bg);stroke-width:5px;stroke-linejoin:round}
+.flow .arrow{fill:#8A8A8A}
+.flow .n-input rect{fill:#F3F3F3;stroke:var(--ink);stroke-width:1.5}
+.flow .n-step rect{fill:#FFFFFF;stroke:var(--ink);stroke-width:1.5}
+.flow .n-skill rect{fill:#EEF1FF;stroke:var(--accent);stroke-width:2}.flow .n-skill .label{font-weight:650}
+.flow .n-gate rect{fill:var(--accent);stroke:var(--accent)}.flow .n-gate text{fill:#FFFFFF}.flow .n-gate .nsub{fill:#DDE3FF}.flow .n-gate .label{font-weight:650}
+.flow .n-output rect{fill:var(--card);stroke:var(--muted);stroke-width:1.5}
+.flow .n-pending rect{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:7 5}.flow .n-pending text{fill:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:14px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:13px;height:13px;border-radius:3px;margin-right:6px;vertical-align:-2px;border:1.5px solid var(--ink);background:#FFF}
+.legend .k-input i{background:#F3F3F3}.legend .k-skill i{background:#EEF1FF;border-color:var(--accent)}.legend .k-gate i{background:var(--accent);border-color:var(--accent)}
+.legend .k-output i{background:var(--card);border-color:var(--muted)}.legend .k-pending i{background:none;border:1.5px dashed var(--muted)}
+.caption{font-size:20px;line-height:1.35;margin:12px 0 0}
 .note{margin-top:auto;font-size:15px;color:var(--muted)}
 .footer{position:absolute;left:72px;right:72px;bottom:22px;display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
 .title-slide{justify-content:center}.section{justify-content:center}.section h1{color:var(--accent)}
@@ -270,6 +310,143 @@ def wrapped_lines(text, width: int) -> int:
     return lines
 
 
+def wrap_text(text, width: int) -> list:
+    """The lines wrapped_lines counts: greedy word wrap into `width` units, over-long words broken by glyph."""
+    lines, line, used = [], "", 0
+    for w in str(text).split():
+        units = glyph_units(w)
+        if used and used + 3 + sum(units) <= width:
+            line, used = line + " " + w, used + 3 + sum(units)
+            continue
+        if used:
+            lines.append(line)
+        line, used = "", 0
+        for ch, u in zip(w, units):
+            if used and used + u > width:
+                lines.append(line)
+                line, used = "", 0
+            line, used = line + ch, used + u
+    return lines + [line] if line else lines
+
+
+def _fits(text, width: int, where: str) -> None:
+    """A word wider than the node would be broken mid-word; refuse it so file names stay readable."""
+    for w in str(text).split():
+        if sum(glyph_units(w)) > width:
+            raise SystemExit(f"{where}: {w!r} is wider than the node: shorten it or use fewer columns")
+
+
+def flow_layout(s: dict, where: str = "flow") -> dict:
+    """Validate a flow slide and place it in the FLOW_W x FLOW_H box (HTML pixels; export_pptx scales to EMU).
+
+    Returns {"font", "sub_font", "h" (box height used, at most FLOW_H), "columns": [{"label", "x", "w"}], "nodes": [{"id", "kind", "label", "sub", "x", "y",
+    "w", "h", "lines", "sub_lines", "col"}], "edges": [{"from", "to", "label", "dashed", "x1", "y1", "x2", "y2",
+    "route"}], "kinds": [kinds used, legend order]}. route is "right" (to a later column), "down" / "up" (same column)
+    or "back" (to an earlier column, drawn below the nodes). Raises SystemExit on anything that would not fit.
+    """
+    cols = s.get("columns")
+    if not isinstance(cols, list) or not 1 <= len(cols) <= FLOW_MAX_COLS:
+        raise SystemExit(f"{where}.columns: expected 1-{FLOW_MAX_COLS} columns")
+    edges = s.get("edges", [])
+    if not isinstance(edges, list) or len(edges) > FLOW_MAX_EDGES:
+        raise SystemExit(f"{where}.edges: expected a list of at most {FLOW_MAX_EDGES} edges")
+    font = FLOW_FONT[len(cols)]
+    sub_font = font - 3
+    col_w = (FLOW_W - FLOW_GAP * (len(cols) - 1)) / len(cols)
+    text_units = int((col_w - 2 * FLOW_PAD) / font * 10)
+    sub_units = int((col_w - 2 * FLOW_PAD) / sub_font * 10)
+    has_head = any(isinstance(c, dict) and c.get("label") for c in cols)
+    top = FLOW_HEAD if has_head else 0
+    out_cols, nodes, seen, totals = [], [], {}, []
+    for ci, c in enumerate(cols):
+        if not isinstance(c, dict) or not isinstance(c.get("nodes"), list) or not 1 <= len(c["nodes"]) <= FLOW_MAX_ROWS:
+            raise SystemExit(f"{where}.columns[{ci}]: expected {{label?, nodes: [1-{FLOW_MAX_ROWS} nodes]}}")
+        if "label" in c:
+            _scalar(c["label"], f"{where}.columns[{ci}].label")
+            if wrapped_lines(str(c["label"]).upper(), int((col_w - 2 * FLOW_PAD) / FLOW_HEAD_PX * 10)) > 1:
+                raise SystemExit(f"{where}.columns[{ci}].label: does not fit on one line above the column: shorten it")
+        x = ci * (col_w + FLOW_GAP)
+        out_cols.append({"label": str(c.get("label", "")), "x": x, "w": col_w})
+        placed, total = [], 0
+        for ni, nd in enumerate(c["nodes"]):
+            at = f"{where}.columns[{ci}].nodes[{ni}]"
+            if not isinstance(nd, dict) or "id" not in nd or "label" not in nd:
+                raise SystemExit(f"{at}: expected {{id, label, sub?, kind?}}")
+            nid = nd["id"]
+            if not isinstance(nid, str) or not FLOW_ID_RE.fullmatch(nid):
+                raise SystemExit(f"{at}.id: expected a letter followed by up to 31 letters, digits, '_' or '-'")
+            if nid in seen:
+                raise SystemExit(f"{at}.id: {nid!r} is used twice")
+            kind = nd.get("kind", "step")
+            if kind not in FLOW_KINDS:
+                raise SystemExit(f"{at}.kind: {kind!r}; allowed: {sorted(FLOW_KINDS)}")
+            _scalar(nd["label"], f"{at}.label")
+            if not str(nd["label"]).strip() or len(str(nd["label"])) > FLOW_MAX_LABEL:
+                raise SystemExit(f"{at}.label: expected 1-{FLOW_MAX_LABEL} characters")
+            lines = wrap_text(nd["label"], text_units)
+            _fits(nd["label"], text_units, f"{at}.label")
+            if len(lines) > FLOW_MAX_LABEL_LINES:
+                raise SystemExit(f"{at}.label: wraps to {len(lines)} lines in a {len(cols)}-column diagram (max {FLOW_MAX_LABEL_LINES}): shorten it")
+            sub_lines = []
+            if nd.get("sub"):
+                _scalar(nd["sub"], f"{at}.sub")
+                if len(str(nd["sub"])) > FLOW_MAX_LABEL:
+                    raise SystemExit(f"{at}.sub: longer than {FLOW_MAX_LABEL} characters")
+                sub_lines = wrap_text(nd["sub"], sub_units)
+                _fits(nd["sub"], sub_units, f"{at}.sub")
+                if len(sub_lines) > FLOW_MAX_SUB_LINES:
+                    raise SystemExit(f"{at}.sub: wraps to {len(sub_lines)} lines (max {FLOW_MAX_SUB_LINES}): shorten it")
+            h = 2 * FLOW_PAD + len(lines) * font * 1.25 + (4 + len(sub_lines) * sub_font * 1.2 if sub_lines else 0)
+            node = {"id": nid, "kind": kind, "label": str(nd["label"]), "sub": str(nd.get("sub", "")), "x": x, "w": col_w,
+                    "h": h, "lines": lines, "sub_lines": sub_lines, "col": ci}
+            seen[nid] = node
+            placed.append(node)
+            total += h + (FLOW_ROW_GAP if placed[:-1] else 0)
+        if total > FLOW_H - top:
+            raise SystemExit(f"{where}.columns[{ci}]: nodes need {total:.0f} px of {FLOW_H - top}: fewer nodes or shorter text")
+        totals.append((placed, total))
+        nodes += placed
+    if len(nodes) > FLOW_MAX_NODES:
+        raise SystemExit(f"{where}: {len(nodes)} nodes (max {FLOW_MAX_NODES}): split the diagram")
+    height = top + max(t for _, t in totals) + 2  # the box shrinks to the tallest column; the slide keeps the caption close
+    for placed, total in totals:
+        y = top + (height - top - total) / 2
+        for node in placed:
+            node["y"] = y
+            y += node["h"] + FLOW_ROW_GAP
+    out_edges = []
+    for ei, e in enumerate(edges):
+        at = f"{where}.edges[{ei}]"
+        if not isinstance(e, dict) or e.get("from") not in seen or e.get("to") not in seen:
+            raise SystemExit(f"{at}: expected {{from, to, label?}} naming node ids on this slide")
+        if e["from"] == e["to"]:
+            raise SystemExit(f"{at}: an edge cannot start and end on the same node")
+        extra = set(e) - {"from", "to", "label"}
+        if extra:
+            raise SystemExit(f"{at}: unknown key {sorted(extra)[0]!r}; the route is derived from the columns")
+        label = ""
+        if e.get("label"):
+            _scalar(e["label"], f"{at}.label")
+            label = str(e["label"])
+            if len(label) > FLOW_MAX_EDGE_LABEL:
+                raise SystemExit(f"{at}.label: longer than {FLOW_MAX_EDGE_LABEL} characters")
+        a, b = seen[e["from"]], seen[e["to"]]
+        if a["col"] < b["col"]:
+            route, x1, y1, x2, y2 = "right", a["x"] + a["w"], a["y"] + a["h"] / 2, b["x"], b["y"] + b["h"] / 2
+        elif a["col"] == b["col"]:
+            if a["y"] < b["y"]:
+                route, x1, y1, x2, y2 = "down", a["x"] + a["w"] / 2, a["y"] + a["h"], b["x"] + b["w"] / 2, b["y"]
+            else:
+                route, x1, y1, x2, y2 = "up", a["x"] + a["w"] / 2, a["y"], b["x"] + b["w"] / 2, b["y"] + b["h"]
+        else:
+            route, x1, y1, x2, y2 = "back", a["x"] + a["w"] / 2, a["y"] + a["h"], b["x"] + b["w"] / 2, b["y"] + b["h"]
+        dashed = bool(e.get("dashed", False)) or "pending" in (a["kind"], b["kind"])
+        out_edges.append({"from": a["id"], "to": b["id"], "label": label, "dashed": dashed, "route": route,
+                          "x1": x1, "y1": y1, "x2": x2, "y2": y2})
+    kinds = [k for k in FLOW_KINDS if any(n["kind"] == k for n in nodes)]
+    return {"font": font, "sub_font": sub_font, "h": height, "columns": out_cols, "nodes": nodes, "edges": out_edges, "kinds": kinds}
+
+
 def table_lines(columns: list, rows: list) -> list:
     """Wrapped line count of the header (upper-cased, smaller font) and of each row, columns sharing the width equally."""
     width = max(1, int((TABLE_PX / len(columns) - CELL_PAD_PX) / CELL_FONT_PX * 10))
@@ -317,6 +494,8 @@ def validate(outline) -> dict:
                 _items(r, f"slide {n}.rows[{i}]", limit=MAX_TABLE_COLS)
             if sum(table_lines(s["columns"], s["rows"])) > TABLE_LINES:
                 raise SystemExit(f"slide {n}: table text wraps to more than {TABLE_LINES} lines: shorten cells or split the slide")
+        if t == "flow":
+            flow_layout(s, f"slide {n}")
         if t == "stats":
             if not isinstance(s["stats"], list) or not 1 <= len(s["stats"]) <= 6:
                 raise SystemExit(f"slide {n}.stats: expected 1-6 items")
@@ -342,6 +521,54 @@ def li(items) -> str:
     if len(items) > MAX_BULLETS:
         raise SystemExit(f"more than {MAX_BULLETS} bullets on one slide: split it")
     return "<ul>" + "".join(f"<li>{esc(x)}</li>" for x in items) + "</ul>"
+
+
+def flow_svg(s: dict, n: int) -> str:
+    """Inline SVG of a flow slide plus its legend. Every string goes through esc(); no href, no image, no script."""
+    lay = flow_layout(s, f"slide {n}")
+    font, sub_font = lay["font"], lay["sub_font"]
+    parts = [f"<svg viewBox='0 0 {FLOW_W} {lay['h']:.0f}' preserveAspectRatio='xMidYMid meet' role='img' aria-label='{esc(s['title'])}'>",
+             f"<defs><marker id='arrow-s{n}' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='8' markerHeight='8' orient='auto-start-reverse'>"
+             "<path d='M0,0 L10,5 L0,10 z' class='arrow'/></marker></defs>"]
+    for c in lay["columns"]:
+        if c["label"]:
+            parts.append(f"<text class='colhead' x='{c['x'] + c['w'] / 2:.1f}' y='13' text-anchor='middle'>{esc(c['label'])}</text>")
+    for e in lay["edges"]:
+        x1, y1, x2, y2 = e["x1"], e["y1"], e["x2"], e["y2"]
+        if e["route"] == "right":
+            mx = (x1 + x2) / 2
+            d = f"M{x1:.1f},{y1:.1f} C{mx:.1f},{y1:.1f} {mx:.1f},{y2:.1f} {x2:.1f},{y2:.1f}"
+            lx, ly = mx, (y1 + y2) / 2 - 6
+        elif e["route"] == "back":
+            dy = 34
+            d = f"M{x1:.1f},{y1:.1f} C{x1:.1f},{y1 + dy:.1f} {x2:.1f},{y2 + dy:.1f} {x2:.1f},{y2:.1f}"
+            lx, ly = (x1 + x2) / 2, max(y1, y2) + dy * 0.75 + 4
+        else:
+            d = f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}"
+            lx, ly = x1 + 8, (y1 + y2) / 2 + 4
+        cls = "edge dashed" if e["dashed"] else "edge"
+        parts.append(f"<path class='{cls}' d='{d}' marker-end='url(#arrow-s{n})'/>")
+        if e["label"]:
+            anchor = "start" if e["route"] in ("down", "up") else "middle"
+            parts.append(f"<text class='elabel' x='{lx:.1f}' y='{ly:.1f}' text-anchor='{anchor}'>{esc(e['label'])}</text>")
+    for nd in lay["nodes"]:
+        rx = 20 if nd["kind"] == "gate" else 6
+        parts.append(f"<g class='n-{nd['kind']}'><rect x='{nd['x']:.1f}' y='{nd['y']:.1f}' width='{nd['w']:.1f}' height='{nd['h']:.1f}' rx='{rx}'/>")
+        cx = nd["x"] + nd["w"] / 2
+        block = len(nd["lines"]) * font * 1.25 + (4 + len(nd["sub_lines"]) * sub_font * 1.2 if nd["sub_lines"] else 0)
+        y = nd["y"] + (nd["h"] - block) / 2
+        parts.append(f"<text class='label' x='{cx:.1f}' y='{y + font * 0.95:.1f}' text-anchor='middle' font-size='{font}'>")
+        parts += [f"<tspan x='{cx:.1f}' dy='{0 if i == 0 else font * 1.25:.2f}'>{esc(line)}</tspan>" for i, line in enumerate(nd["lines"])]
+        parts.append("</text>")
+        if nd["sub_lines"]:
+            y += len(nd["lines"]) * font * 1.25 + 4
+            parts.append(f"<text class='nsub' x='{cx:.1f}' y='{y + sub_font * 0.95:.1f}' text-anchor='middle' font-size='{sub_font}'>")
+            parts += [f"<tspan x='{cx:.1f}' dy='{0 if i == 0 else sub_font * 1.2:.2f}'>{esc(line)}</tspan>" for i, line in enumerate(nd["sub_lines"])]
+            parts.append("</text>")
+        parts.append("</g>")
+    parts.append("</svg>")
+    legend = "".join(f"<span class='k-{k}'><i></i>{esc(FLOW_KINDS[k])}</span>" for k in lay["kinds"])
+    return f"<div class='flow' style='aspect-ratio:{FLOW_W}/{lay['h']:.0f}'>{''.join(parts)}</div><div class='legend'>{legend}</div>"
 
 
 def render_slide(s: dict, deck: dict, n: int, total: int) -> str:
@@ -380,6 +607,10 @@ def render_slide(s: dict, deck: dict, n: int, total: int) -> str:
         body = f"<h2>{esc(s['title'])}</h2><div class='bars'>{''.join(rows)}</div>"
     elif t == "quote":
         body = f"<div class='quote'><p>&ldquo;{esc(s['text'])}&rdquo;</p><div class='src'>{esc(s.get('source', ''))}</div></div>"
+    elif t == "flow":
+        body = f"<h2>{esc(s['title'])}</h2>{flow_svg(s, n)}"
+        if s.get("caption"):
+            body += f"<p class='caption'>{esc(s['caption'])}</p>"
     if s.get("note"):
         body += f"<div class='note'>{esc(s['note'])}</div>"
     footer = f"<div class='footer'><span>{esc(deck.get('footer', ''))}</span><span>{n} / {total}</span></div>"

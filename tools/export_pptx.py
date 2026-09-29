@@ -5,6 +5,7 @@ Usage:
     python tools/export_pptx.py templates/deck-outline-example.json outputs/example-deck.pptx
 
 Standard library only: the .pptx is a ZIP of hand-written OOXML parts. No images, no network.
+Flow slides become native rounded rectangles and straight connectors (curves in the HTML), same layout.
 Widescreen 16:9 (12192000 x 6858000 EMU), one slide master, one slide layout, dark text on white,
 one accent colour ("accent" in the outline, else build_deck.DEFAULT_ACCENT).
 A slide with "notes" gets a speaker-notes part; "note" stays an on-slide footnote as in the HTML deck.
@@ -122,9 +123,11 @@ def para(text, sz: int, color: str = INK, bold: bool = False, algn: str = "l", b
 
 
 def sp(sid: int, name: str, x: int, y: int, w: int, h: int, paras: str = "", fill: str | None = None,
-       line: str | None = None, anchor: str = "t", ph: str | None = None, inset: int = 91440) -> str:
+       line: str | None = None, anchor: str = "t", ph: str | None = None, inset: int = 91440, prst: str = "rect",
+       line_w: int = 9525, dash: bool = False) -> str:
     fill_xml = f'<a:solidFill><a:srgbClr val="{fill}"/></a:solidFill>' if fill else "<a:noFill/>"
-    line_xml = f'<a:ln w="9525"><a:solidFill><a:srgbClr val="{line}"/></a:solidFill></a:ln>' if line else "<a:ln><a:noFill/></a:ln>"
+    dash_xml = '<a:prstDash val="dash"/>' if dash else ""
+    line_xml = f'<a:ln w="{line_w}"><a:solidFill><a:srgbClr val="{line}"/></a:solidFill>{dash_xml}</a:ln>' if line else "<a:ln><a:noFill/></a:ln>"
     nvpr = f'<p:nvPr><p:ph type="{ph}"/></p:nvPr>' if ph else "<p:nvPr/>"
     cnv = '<p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>' if ph else '<p:cNvSpPr txBox="1"/>'
     body = ""
@@ -133,7 +136,17 @@ def sp(sid: int, name: str, x: int, y: int, w: int, h: int, paras: str = "", fil
                 f'anchor="{anchor}"><a:normAutofit/></a:bodyPr><a:lstStyle/>{paras or EMPTY_PARA}</p:txBody>')
     return (f'<p:sp><p:nvSpPr><p:cNvPr id="{sid}" name="{esc(name)}"/>{cnv}{nvpr}</p:nvSpPr>'
             f'<p:spPr><a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{w}" cy="{h}"/></a:xfrm>'
-            f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>{fill_xml}{line_xml}</p:spPr>{body}</p:sp>')
+            f'<a:prstGeom prst="{prst}"><a:avLst/></a:prstGeom>{fill_xml}{line_xml}</p:spPr>{body}</p:sp>')
+
+
+def connector(sid: int, x1: int, y1: int, x2: int, y2: int, color: str, dash: bool = False) -> str:
+    """Straight connector with an arrow head at (x2, y2). The frame is the bounding box; flips give the direction."""
+    flip = (' flipH="1"' if x2 < x1 else "") + (' flipV="1"' if y2 < y1 else "")
+    dash_xml = '<a:prstDash val="dash"/>' if dash else ""
+    return (f'<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="{sid}" name="Edge"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>'
+            f'<p:spPr><a:xfrm{flip}><a:off x="{min(x1, x2)}" y="{min(y1, y2)}"/><a:ext cx="{abs(x2 - x1)}" cy="{abs(y2 - y1)}"/></a:xfrm>'
+            f'<a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom><a:ln w="19050"><a:solidFill><a:srgbClr val="{color}"/>'
+            f'</a:solidFill>{dash_xml}<a:tailEnd type="triangle" w="med" len="med"/></a:ln></p:spPr></p:cxnSp>')
 
 
 def table(sid: int, x: int, y: int, w: int, columns: list, rows: list) -> str:
@@ -172,6 +185,63 @@ def heading(s: dict, sid: int, accent: str) -> str:
 
 def bullets(items, sz: int = 2000) -> str:
     return "".join(para(x, sz, INK, bullet=True, space_before=600) for x in items)
+
+
+EDGE = "8A8A8A"
+FLOW_STYLE = {  # kind -> (fill, line colour or accent marker, text colour, dashed)
+    "input": (TRACK, INK, INK, False), "step": ("FFFFFF", INK, INK, False), "skill": ("EEF1FF", "accent", INK, False),
+    "gate": ("accent", "accent", "FFFFFF", False), "output": (CARD, MUTED, INK, False), "pending": (None, MUTED, MUTED, True),
+}
+
+
+def flow(s: dict, sid: int, accent: str) -> str:
+    """The flow diagram as native shapes: one rectangle per node, one straight connector per edge, legend and caption
+    below. Same layout as the HTML (build_deck.flow_layout), scaled from its pixel box into the body area."""
+    lay = build_deck.flow_layout(s)
+    cw = W - 2 * MX
+    diagram_h = 3352800  # leaves room for the legend line and a two-line caption above the footnote
+    k = min(cw / build_deck.FLOW_W, diagram_h / lay["h"])
+    ox = MX + int((cw - build_deck.FLOW_W * k) / 2)
+    oy = BODY_Y
+
+    def X(v):
+        return ox + int(v * k)
+
+    def Y(v):
+        return oy + int(v * k)
+
+    pt = int(k / 9525 * 75)  # px in the HTML box -> hundredths of a point at this scale
+    out = []
+    for c in lay["columns"]:
+        if c["label"]:
+            out.append(sp(sid, "Column", X(c["x"]), Y(0), int(c["w"] * k), int(20 * k), para(str(c["label"]).upper(), build_deck.FLOW_HEAD_PX * pt, MUTED, True, algn="ctr"), anchor="ctr", inset=0))
+            sid += 1
+    for e in lay["edges"]:
+        out.append(connector(sid, X(e["x1"]), Y(e["y1"]), X(e["x2"]), Y(e["y2"]), EDGE, e["dashed"]))
+        sid += 1
+        if e["label"]:
+            lx, ly = (e["x1"] + e["x2"]) / 2, (e["y1"] + e["y2"]) / 2
+            out.append(sp(sid, "Edge label", X(lx - 60), Y(ly - 22), int(120 * k), int(18 * k), para(e["label"], 11 * pt, MUTED, algn="ctr"), anchor="b", inset=0))
+            sid += 1
+    for nd in lay["nodes"]:
+        fill, line, ink, dashed = FLOW_STYLE[nd["kind"]]
+        fill = accent if fill == "accent" else fill
+        line = accent if line == "accent" else line
+        bold = nd["kind"] in ("skill", "gate")
+        paras = para(nd["label"], lay["font"] * pt, ink, bold, algn="ctr")
+        if nd["sub"]:
+            paras += para(nd["sub"], lay["sub_font"] * pt, "FFFFFF" if nd["kind"] == "gate" else MUTED, algn="ctr", space_before=200)
+        out.append(sp(sid, f"Node {nd['id']}", X(nd["x"]), Y(nd["y"]), int(nd["w"] * k), int(nd["h"] * k), paras, fill=fill, line=line,
+                      anchor="ctr", inset=int(build_deck.FLOW_PAD * k), prst="roundRect", line_w=15875, dash=dashed))
+        sid += 1
+    swatch = {"input": TRACK, "step": "E7E7E7", "skill": "97ACFF", "gate": accent, "output": "BDBDBD", "pending": MUTED}
+    legend = "<a:p><a:pPr algn=\"l\"><a:buNone/></a:pPr>" + "".join(
+        run("\u25a0 ", 1100, swatch[kd]) + run(build_deck.FLOW_KINDS[kd] + "    ", 1000, MUTED) for kd in lay["kinds"]) + "</a:p>"
+    y = Y(lay["h"]) + 76200
+    out.append(sp(sid, "Legend", MX, y, cw, 304800, legend, anchor="ctr", inset=0))
+    if s.get("caption"):
+        out.append(sp(sid + 1, "Caption", MX, y + 304800, cw, 5943600 - (y + 304800), para(s["caption"], 1500, INK), inset=0))
+    return "".join(out)
 
 
 def slide_shapes(s: dict, deck: dict, n: int, total: int, accent: str) -> str:
@@ -231,6 +301,9 @@ def slide_shapes(s: dict, deck: dict, n: int, total: int, accent: str) -> str:
                     out.append(sp(sid + 2, "Fill", track_x, ry + 91440, int(track_w * pct), row_h - 182880, fill=accent))
                 out.append(sp(sid + 3, "Value", track_x + track_w + gap, ry, val_w, row_h, para(f"{value:g} {unit}".rstrip(), 1600, INK, algn="r"), anchor="ctr", inset=0))
                 sid += 4
+        elif t == "flow":
+            out.append(flow(s, sid, accent))
+            sid += 80
     sid += 20
     if s.get("note"):
         out.append(sp(sid, "Note", MX, 5943600, cw, 381000, para(s["note"], 1200, MUTED), anchor="b", inset=0))
