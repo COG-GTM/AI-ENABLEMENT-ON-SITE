@@ -52,12 +52,15 @@ python tools/vi_fleet_scan.py <tree> --limit 200            # smoke test a huge 
 python tools/vi_fleet_scan.py <tree> --jobs 4               # parallel lvkit calls, after one serial run warmed the cache
 ```
 
-Ask before running it (`exec` permission). It leaves four files in `outputs/`:
+Ask before running it (`exec` permission). It leaves seven files in `outputs/`:
 
 | File | What it is | Who reads it next |
 | --- | --- | --- |
 | `<name>-fleet-inventory.csv` | One row per VI (columns below) | You, the engineer, a spreadsheet |
 | `<name>-fleet-summary.json` | Counts, classification histogram, project targets, sequence files, reader version, notes | `/exec-deck` (numbers), the report |
+| `<name>-project-map.md` | The project-level description: shape, `.lvproj` targets, sequence files, entry points with call trees, leaf-first migration order, external SubVIs by library, unresolved built-ins, what the map does not know | You; `/architecture-doc` and the agent that documents the estate start here, not from the whole tree |
+| `<name>-dependency-map.json` | Every VI as a node; `subvi` / `ambiguous` / `project-member` / `sequence-call` edges; `external`, `unresolved`, `entry_points`, `cycles`, `leaf_first_order` | `tools/prompt_pack.py` (one bounded pack per VI), `/exec-deck` |
+| `<name>-dependency-map.dot` | The same graph for Graphviz (`dot -Tsvg`), capped at `--dot-top` nodes; the JSON is complete | Anyone with Graphviz; otherwise read the `.md` |
 | `<name>-migration-backlog.json` | Top `--top` port/wrap candidates in `templates/tracker-item.json` shape | `python tools/tracker_report.py --file outputs/<name>-migration-backlog.json` |
 | `<name>-migration-backlog.csv` | Same items, 12 tracker columns | `python tools/tracker_import.py --from csv --in <it> --out t.json --merge <their tracker> --prefix <PREFIX>` |
 
@@ -104,6 +107,27 @@ Classification rules, applied in this order (first match wins), with the evidenc
 Evidence tagged `[file name only]` came from the path, not the diagram (the only evidence when lvkit is
 absent). Treat it as a hint and say so.
 
+## Step 2b - Read the project map (target-neutral)
+
+`outputs/<name>-project-map.md` is the "how does this whole project hang together" answer, assembled from
+the per-VI facts, never typed in. Read it top to bottom:
+
+- **Entry points and call trees**: VIs nothing else in the tree calls, each with what it calls (in the tree),
+  what it calls outside the tree (`external SubVIs`, grouped by `.lvlib`/`.lvclass`), and which primitives
+  lvkit could not resolve. A SubVI file name shared by several VIs in the tree is an `ambiguous` edge, drawn
+  red, never guessed.
+- **Leaf-first migration order**: shared SubVIs first, callers after, so each unit's dependencies already
+  have a proven replacement when its own recording is replayed. Cycles are listed to port together.
+- **External SubVIs**: each library is one decision (target-side equivalent, wrapper, or reason to retain);
+  the histogram of unresolved built-ins says which vi.lib functions the estate leans on most.
+
+The map is **target-neutral**. It describes the LabVIEW project (dependencies, built-ins, targets, order);
+the language each unit moves to - Python, C#, C++, or stays in LabVIEW - is a per-unit decision written in
+the backlog notes. `/labview-to-python` is the lane this repository proves end to end; the map does not change
+if the plan picks another target. The JSON next to it is what `tools/prompt_pack.py` reads to build one
+bounded context package per VI (its own facts plus one hop of callers and callees), so the agent that
+documents or migrates a unit never receives the whole tree.
+
 ## Step 3 - Pick where to start
 
 Open the backlog, or sort the CSV by `priority` descending. The first ten `port` rows that also have a
@@ -141,6 +165,7 @@ is proven by `tools/bench_compare.py` against a recording". No VI is called port
 
 ```bash
 python tools/vi_fleet_scan.py example-system --name demo-fleet
+cat outputs/demo-fleet-project-map.md               # entry points, leaf-first order, external SubVIs, unresolved built-ins
 python tools/tracker_report.py --file outputs/demo-fleet-migration-backlog.json
 python tools/vi_fleet_scan.py --check            # the fixture scans to example-system/fleet/expected/
 ```

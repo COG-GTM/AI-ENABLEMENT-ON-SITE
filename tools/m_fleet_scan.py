@@ -48,8 +48,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from fleet_common import (
-    BACKLOG_COLUMNS, OUT_DIR, ROOT, backlog_about, backlog_csv_rows, check_prefix, component_slug, csv_text,
-    finish_backlog, rel, safe_name, severity_for,
+    BACKLOG_COLUMNS, OUT_DIR, ROOT, backlog_about, backlog_csv_rows, call_tree_lines, check_prefix, component_slug, csv_text,
+    dot_text, finish_backlog, leaf_first_order, rel, safe_name, severity_for,
 )
 
 FIXTURE = ROOT / "example-system" / "matlab-repo"
@@ -507,78 +507,6 @@ def missing_inputs(f: dict, tree: Path, files_by_path: dict) -> list[str]:
     return missing
 
 
-# --- graph analysis -------------------------------------------------------------------------------------------
-
-
-def leaf_first_order(files: list[dict], edges: list[dict]) -> tuple[list[str], list[list[str]]]:
-    """Kahn's algorithm on resolved call edges: units with no unported dependencies first. Nodes left over sit in
-    cycles and are reported together."""
-    deps = defaultdict(set)
-    for e in edges:
-        if e["kind"] != "ambiguous":
-            deps[e["from"]].add(e["to"])
-    paths = sorted(f["path"] for f in files)
-    done, order = set(), []
-    remaining = set(paths)
-    while remaining:
-        ready = sorted(p for p in remaining if deps[p] - done <= set())
-        if not ready:
-            break
-        order += ready
-        done |= set(ready)
-        remaining -= set(ready)
-    cycles = []
-    if remaining:
-        # group leftover nodes by mutual reachability (small graphs: simple closure)
-        rest = sorted(remaining)
-        reach = {p: set() for p in rest}
-        for p in rest:
-            stack, seen = [p], set()
-            while stack:
-                x = stack.pop()
-                for y in deps[x]:
-                    if y in remaining and y not in seen:
-                        seen.add(y); stack.append(y)
-            reach[p] = seen
-        grouped = set()
-        for p in rest:
-            if p in grouped:
-                continue
-            group = sorted({p} | {q for q in rest if p in reach[q] and q in reach[p]})
-            grouped |= set(group)
-            cycles.append(group)
-        order += rest
-    return order, cycles
-
-
-def call_tree_lines(root: str, edges_from: dict, files_by_path: dict, depth: int = 4) -> list[str]:
-    lines, seen = [], set()
-
-    def walk(p: str, d: int) -> None:
-        f = files_by_path[p]
-        tag = f"{f['path']} [{f['kind']}, {f['classification']}]"
-        if p in seen:
-            lines.append("  " * d + "- " + tag + " (seen above)")
-            return
-        seen.add(p)
-        lines.append("  " * d + "- " + tag)
-        if d >= depth:
-            if edges_from.get(p):
-                lines.append("  " * (d + 1) + f"- ... {len(edges_from[p])} more callee(s)")
-            return
-        for target in sorted({e["to"] for e in edges_from.get(p, [])}):
-            walk(target, d + 1)
-        extras = [f"toolbox: {', '.join(f['calls_toolbox'])}" if f["calls_toolbox"] else "",
-                  f"unresolved: {', '.join(f['calls_unresolved'])}" if f["calls_unresolved"] else "",
-                  f"dynamic: {', '.join(sorted({x['call'] for x in f['dynamic']}))}" if f["dynamic"] else ""]
-        for x in extras:
-            if x:
-                lines.append("  " * (d + 1) + "- " + x)
-
-    walk(root, 0)
-    return lines
-
-
 # --- scan ------------------------------------------------------------------------------------------------------
 
 
@@ -622,7 +550,7 @@ def scan_tree(tree: Path, builtins: frozenset[str] = CORE_BUILTINS) -> dict:
         rows.append({**{c: "" for c in COLUMNS}, "path": u["path"], "name": Path(u["path"]).stem, "kind": "unreadable", "role": "source",
                      "classification": "unreadable", "reasons": u["error"], "complexity": 0, "priority": 0, "callers_count": 0, "notes": u["error"]})
     rows.sort(key=lambda r: r["path"])
-    order, cycles = leaf_first_order(files, graph["edges"])
+    order, cycles = leaf_first_order(sorted(f["path"] for f in files), graph["edges"])
     entry = sorted(f["path"] for f in files if not f["callers"] and f["role"] != "test" and f["kind"] == "script")
     orphans = sorted(f["path"] for f in files if not f["callers"] and f["role"] != "test" and f["kind"] in ("function", "package function", "private function"))
     tests = sorted(f["path"] for f in files if f["role"] == "test")
@@ -684,25 +612,15 @@ def build_backlog(rows: list[dict], top: int, prefix: str, opened: str) -> list[
     return items
 
 
-def dot_text(dep_map: dict, cap: int) -> str:
-    nodes = dep_map["nodes"]
-    if len(nodes) > cap:
-        keep = {n["path"] for n in sorted(nodes, key=lambda n: (-(n["callers"] + n["complexity"]), n["path"]))[:cap]}
-        note = f"// {len(nodes)} nodes; showing the {cap} with most callers+complexity. The JSON map is complete.\n"
-    else:
-        keep, note = {n["path"] for n in nodes}, ""
-    colour = {"port": "#DDF4DD", "wrap": "#FFF1C2", "retain": "#F8D0D0", "unreadable": "#DDDDDD"}
-    style = {"call": "", "handle": ' style=dashed label="@"', "package": "", "private": ' style=dotted', "method-name": ' style=dashed label="method?"',
-             "dynamic-literal": ' color="#2600FF" label="dynamic"', "ambiguous": ' color=red style=dashed label="ambiguous"'}
-    out = [note + "digraph m_tree {", "  rankdir=LR; node [shape=box, style=filled, fontname=Helvetica, fontsize=10];"]
-    for n in nodes:
-        if n["path"] in keep:
-            out.append(f'  "{n["path"]}" [label="{n["name"]}\\n{n["kind"]}", fillcolor="{colour[n["classification"]]}"];')
-    for e in dep_map["edges"]:
-        if e["from"] in keep and e["to"] in keep:
-            out.append(f'  "{e["from"]}" -> "{e["to"]}"[{style[e["kind"]].strip()}];'.replace("[]", ""))
-    out.append("}")
-    return "\n".join(out) + "\n"
+M_EDGE_STYLE = {"call": "", "handle": 'style=dashed label="@"', "package": "", "private": "style=dotted",
+                "method-name": 'style=dashed label="method?"', "dynamic-literal": 'color="#2600FF" label="dynamic"',
+                "ambiguous": 'color=red style=dashed label="ambiguous"'}
+
+
+def m_dot(dep_map: dict, cap: int) -> str:
+    nodes = [{"id": n["path"], "label": f"{n['name']}\\n{n['kind']}", "classification": n["classification"], "rank": n["callers"] + n["complexity"]}
+             for n in dep_map["nodes"]]
+    return dot_text("m_tree", nodes, dep_map["edges"], M_EDGE_STYLE, cap)
 
 
 def repo_map_md(name: str, result: dict) -> str:
@@ -722,8 +640,18 @@ def repo_map_md(name: str, result: dict) -> str:
     L += ["## Entry points (scripts nobody calls) and their call trees", ""]
     if not m["entry_points"]:
         L.append("- none found (every script is called by another file, or the tree has no scripts)")
+    def label_of(p: str) -> str:
+        f = files_by_path[p]
+        return f"{f['path']} [{f['kind']}, {f['classification']}]"
+
+    def extras_of(p: str) -> list[str]:
+        f = files_by_path[p]
+        return [x for x in (f"toolbox: {', '.join(f['calls_toolbox'])}" if f["calls_toolbox"] else "",
+                            f"unresolved: {', '.join(f['calls_unresolved'])}" if f["calls_unresolved"] else "",
+                            f"dynamic: {', '.join(sorted({x['call'] for x in f['dynamic']}))}" if f["dynamic"] else "") if x]
+
     for p in m["entry_points"]:
-        L += call_tree_lines(p, result["out_edges"], files_by_path) + [""]
+        L += call_tree_lines(p, result["out_edges"], label_of, extras_of) + [""]
     L += ["## Leaf-first migration order", "",
           "Units with no unported dependencies come first; port in this order and each unit's callees already have a twin "
           "when its own vectors are replayed. Tests and retain items are listed for completeness.", ""]
@@ -777,7 +705,7 @@ def write_outputs(result: dict, out_dir: Path, name: str, top: int, prefix: str,
     summary = {**result["summary"], "notes": notes, "name": name, "backlog_items": len(items), "outputs": {k: str(rel(v)) for k, v in paths.items()}}
     paths["summary"].write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     paths["dependency_map"].write_text(json.dumps(result["dep_map"], indent=2) + "\n", encoding="utf-8")
-    paths["dependency_dot"].write_text(dot_text(result["dep_map"], dot_cap), encoding="utf-8")
+    paths["dependency_dot"].write_text(m_dot(result["dep_map"], dot_cap), encoding="utf-8")
     paths["repo_map"].write_text(repo_map_md(name, result), encoding="utf-8")
     about = backlog_about(TOOL, name, paths["backlog"], paths["backlog_csv"], "top port/wrap candidates by priority (tests and graphics scripts excluded)")
     paths["backlog"].write_text(json.dumps({"_about": about, "items": items}, indent=2) + "\n", encoding="utf-8")

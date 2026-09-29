@@ -13,6 +13,7 @@ import csv
 import io
 import json
 import re
+from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -142,3 +143,94 @@ def backlog_about(tool: str, name: str, backlog_path: Path, backlog_csv_path: Pa
             f"Report with: python tools/tracker_report.py --file {rel(backlog_path)}. "
             f"Merge into a tracker with: python tools/tracker_import.py --from csv --in {rel(backlog_csv_path)} "
             f"--out outputs/{name}-tracker.json --merge <your tracker.json> --prefix <PREFIX>")
+
+
+# --- graph helpers shared by the dependency maps --------------------------------------------------------------
+
+CLASS_FILL = {"port": "#DDF4DD", "wrap": "#FFF1C2", "retain": "#F8D0D0", "unreadable": "#DDDDDD"}
+
+
+def leaf_first_order(node_ids: list[str], edges: list[dict], skip_kinds: tuple[str, ...] = ("ambiguous",)) -> tuple[list[str], list[list[str]]]:
+    """Kahn's algorithm over `from -> to` dependency edges: units with no unported dependencies first. Nodes left
+    over sit in cycles; they are grouped by mutual reachability and appended after the ordered part."""
+    deps: dict[str, set[str]] = defaultdict(set)
+    ids = set(node_ids)
+    for e in edges:
+        if e["kind"] not in skip_kinds and e["from"] in ids and e["to"] in ids:
+            deps[e["from"]].add(e["to"])
+    done, order = set(), []
+    remaining = set(node_ids)
+    while remaining:
+        ready = sorted(p for p in remaining if not (deps[p] - done))
+        if not ready:
+            break
+        order += ready
+        done |= set(ready)
+        remaining -= set(ready)
+    cycles: list[list[str]] = []
+    if remaining:
+        rest = sorted(remaining)
+        reach: dict[str, set[str]] = {}
+        for p in rest:
+            stack, seen = [p], set()
+            while stack:
+                for y in deps[stack.pop()]:
+                    if y in remaining and y not in seen:
+                        seen.add(y)
+                        stack.append(y)
+            reach[p] = seen
+        grouped: set[str] = set()
+        for p in rest:
+            if p in grouped:
+                continue
+            group = sorted({p} | {q for q in rest if p in reach[q] and q in reach[p]})
+            grouped |= set(group)
+            cycles.append(group)
+        order += rest
+    return order, cycles
+
+
+def dot_text(graph_name: str, nodes: list[dict], edges: list[dict], edge_style: dict[str, str], cap: int) -> str:
+    """Graphviz text for a dependency map. `nodes` carry id, label, classification, and rank (higher = kept first
+    when the graph is capped at `cap` nodes); the JSON map stays complete, the drawing is for eyes."""
+    if len(nodes) > cap:
+        keep = {n["id"] for n in sorted(nodes, key=lambda n: (-n["rank"], n["id"]))[:cap]}
+        head = f"// {len(nodes)} nodes; drawing the {cap} with the highest rank (callers + complexity). The JSON map is complete.\n"
+    else:
+        keep, head = {n["id"] for n in nodes}, ""
+    out = [head + f"digraph {graph_name} {{", "  rankdir=LR; node [shape=box, style=filled, fontname=Helvetica, fontsize=10];"]
+    for n in nodes:
+        if n["id"] in keep:
+            fill = CLASS_FILL.get(n.get("classification", ""), "#FFFFFF")
+            out.append(f'  "{n["id"]}" [label="{n["label"]}", fillcolor="{fill}"];')
+    for e in edges:
+        if e["from"] in keep and e["to"] in keep:
+            attrs = edge_style.get(e["kind"], "")
+            out.append(f'  "{e["from"]}" -> "{e["to"]}"' + (f" [{attrs}]" if attrs else "") + ";")
+    out.append("}")
+    return "\n".join(out) + "\n"
+
+
+def call_tree_lines(root: str, edges_from: dict, label_of, extras_of, depth: int = 4) -> list[str]:
+    """Indented Markdown list of what `root` calls, breadth-limited to `depth`; repeated nodes are marked once."""
+    lines: list[str] = []
+    seen: set[str] = set()
+
+    def walk(p: str, d: int) -> None:
+        if p in seen:
+            lines.append("  " * d + "- " + label_of(p) + " (seen above)")
+            return
+        seen.add(p)
+        lines.append("  " * d + "- " + label_of(p))
+        targets = sorted({e["to"] for e in edges_from.get(p, [])})
+        if d >= depth:
+            if targets:
+                lines.append("  " * (d + 1) + f"- ... {len(targets)} more callee(s)")
+            return
+        for t in targets:
+            walk(t, d + 1)
+        for x in extras_of(p):
+            lines.append("  " * (d + 1) + "- " + x)
+
+    walk(root, 0)
+    return lines

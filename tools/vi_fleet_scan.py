@@ -49,8 +49,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from fleet_common import (  # noqa: F401  (re-exported for tests and callers)
-    BACKLOG_COLUMNS, COMPONENT_RE, OUT_DIR, SCHEMA, backlog_about, backlog_csv_rows, check_prefix, component_slug,
-    csv_text, finish_backlog, item_path, load_previous_backlog, merge_backlog, rel, safe_name, severity_for, validate_backlog,
+    BACKLOG_COLUMNS, COMPONENT_RE, OUT_DIR, SCHEMA, backlog_about, backlog_csv_rows, call_tree_lines, check_prefix, component_slug,
+    csv_text, dot_text, finish_backlog, item_path, leaf_first_order, load_previous_backlog, merge_backlog, rel, safe_name,
+    severity_for, validate_backlog,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -542,6 +543,157 @@ def scan_tree(tree: Path, jobs: int = 1, use_index: bool = True, limit: int | No
     return {"rows": rows, "summary": summary}
 
 
+# --- project-level dependency map ----------------------------------------------------------------------------
+
+VI_EDGE_STYLE = {"subvi": "", "ambiguous": 'color=red style=dashed label="ambiguous"', "project-member": "style=dotted color=gray50",
+                 "sequence-call": 'color="#2600FF" label="seq"'}
+
+
+def build_dependency_map(result: dict) -> dict:
+    """Project-level view assembled from the per-VI facts already in `rows`: VI -> SubVI edges (SubVI qualified names
+    matched to files in the tree by file name; several matches = ambiguous, none = external), unresolved built-ins
+    per VI, .lvproj membership with the target chain, sequence-file callers, entry points, leaf-first order, and
+    cycles. Target-neutral: it describes the LabVIEW project, not the language it moves to."""
+    rows, summary = result["rows"], result["summary"]
+    by_file: dict[str, list[str]] = {}
+    for r in rows:
+        by_file.setdefault(r["name"].lower(), []).append(r["path"])
+    edges: list[dict] = []
+    callers: dict[str, set[str]] = {r["path"]: set() for r in rows}
+    external: dict[str, set[str]] = {}
+    unresolved: dict[str, list[str]] = {}
+    for r in rows:
+        for q in filter(None, str(r["subvis"]).split(";")):
+            fname = q.rsplit(":", 1)[-1]
+            matches = by_file.get(fname.lower(), [])
+            if len(matches) == 1:
+                edges.append({"from": r["path"], "to": matches[0], "kind": "subvi", "via": q})
+                callers[matches[0]].add(r["path"])
+            elif matches:
+                for t in matches:
+                    edges.append({"from": r["path"], "to": t, "kind": "ambiguous", "via": q})
+                    callers[t].add(r["path"])
+            else:
+                lib = q.rsplit(":", 1)[0] if ":" in q else "(no library)"
+                external.setdefault(lib, set()).add(fname)
+        if r["unresolved"] and not str(r["unresolved"]).startswith("lvkit unresolved failed"):
+            unresolved[r["path"]] = str(r["unresolved"]).split(";")
+    for proj in summary["projects"]:
+        for r in rows:
+            if r["lvproj"] == proj["file"]:
+                edges.append({"from": proj["file"], "to": r["path"], "kind": "project-member", "via": r["target"] or "(no target)"})
+    for seq in summary["sequences"]:
+        for r in rows:
+            if seq["file"] in [x.split(" (")[0] for x in str(r["sequences"]).split(";") if x]:
+                edges.append({"from": seq["file"], "to": r["path"], "kind": "sequence-call", "via": ""})
+    edges.sort(key=lambda e: (e["from"], e["to"], e["kind"], e["via"]))
+    vi_paths = sorted(r["path"] for r in rows)
+    vi_edges = [e for e in edges if e["kind"] in ("subvi", "ambiguous")]
+    order, cycles = leaf_first_order(vi_paths, vi_edges)
+    builtins: dict[str, int] = {}
+    for items in unresolved.values():
+        for u in items:
+            builtins[u] = builtins.get(u, 0) + 1
+    return {
+        "_about": "Project-level dependency map written by tools/vi_fleet_scan.py from per-VI lvkit facts. `subvi` edges match a "
+                  "SubVI's file name to a VI in the scanned tree; `ambiguous` = several tree VIs share that file name; SubVIs with no "
+                  "match are listed under `external` by owning library (vi.lib, a reuse library, or a folder outside the tree). "
+                  "`unresolved` lists lvkit's per-VI unknown primitives and terminal mappings. Static evidence: it says what the "
+                  "diagrams reference, not what runs, and it does not choose the target language.",
+        "tree": summary["tree"], "reader": summary["reader"],
+        "nodes": [{"path": r["path"], "name": r["name"], "library": r["library"], "classification": r["classification"],
+                   "complexity": int(r["complexity"]), "callers_in_tree": len(callers[r["path"]]),
+                   "callers_lvkit": int(r["callers_count"]) if str(r["callers_count"]).isdigit() else None,
+                   "lvproj": r["lvproj"], "target": r["target"]} for r in rows],
+        "edges": edges,
+        "external": {k: sorted(v) for k, v in sorted(external.items())},
+        "unresolved": unresolved, "unresolved_histogram": dict(sorted(builtins.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "projects": summary["projects"], "sequences": [{"file": q["file"], "format": q["format"], "vi_refs": q["vi_refs"]} for q in summary["sequences"]],
+        "entry_points": sorted(p for p in vi_paths if not callers[p]), "cycles": cycles, "leaf_first_order": order,
+    }
+
+
+def vi_dot(dep_map: dict, cap: int) -> str:
+    nodes = [{"id": n["path"], "label": f"{n['name']}\\n{n['classification']}", "classification": n["classification"],
+              "rank": n["callers_in_tree"] + n["complexity"]} for n in dep_map["nodes"]]
+    nodes += [{"id": p["file"], "label": f"{p['file']}\\n.lvproj", "classification": "", "rank": 10 ** 6} for p in dep_map["projects"]]
+    nodes += [{"id": q["file"], "label": f"{q['file']}\\n.seq", "classification": "", "rank": 10 ** 6} for q in dep_map["sequences"]]
+    return dot_text("vi_tree", nodes, dep_map["edges"], VI_EDGE_STYLE, cap)
+
+
+def repo_map_md(name: str, result: dict, dep_map: dict) -> str:
+    s, rows_by_path = result["summary"], {r["path"]: r for r in result["rows"]}
+    c, k = s["counts"], s["classification"]
+    callers_of = {n["path"]: n["callers_in_tree"] for n in dep_map["nodes"]}
+    tree_names = {Path(x).name.lower() for x in rows_by_path}
+    edges_from: dict[str, list[dict]] = {}
+    for e in dep_map["edges"]:
+        if e["kind"] in ("subvi", "ambiguous"):
+            edges_from.setdefault(e["from"], []).append(e)
+
+    def label_of(p: str) -> str:
+        r = rows_by_path[p]
+        return f"{p} [{r['classification']}" + (f", {r['library']}" if r["library"] else "") + "]"
+
+    def extras_of(p: str) -> list[str]:
+        r = rows_by_path[p]
+        ext = [q for q in str(r["subvis"]).split(";") if q and q.rsplit(":", 1)[-1].lower() not in tree_names]
+        out = []
+        if ext:
+            out.append("external SubVIs: " + ", ".join(ext))
+        if r["unresolved"]:
+            out.append("unresolved: " + str(r["unresolved"]).replace(";", ", "))
+        if r["target"]:
+            out.append("target: " + r["target"])
+        return out
+
+    L = [f"# Project map: {name}", "",
+         f"Generated by `tools/vi_fleet_scan.py` from `{s['tree']}` (reader: {s['reader']}). Static facts from the VI files, the "
+         ".lvproj targets, and the sequence files; nothing was run. The decomposition below is target-neutral: it says what each "
+         "VI depends on and in what order the estate can be taken apart, and leaves the target language (Python, C#, C++, "
+         "keep-in-LabVIEW) to the migration plan.", "",
+         "## Shape", "",
+         f"- {c['vi']} VIs ({c['vi_scanned']} scanned), {c['lvproj']} .lvproj, {c['lvlib']} .lvlib, {c['lvclass']} .lvclass, {c['seq']} .seq",
+         f"- classification: port {k['port']}, wrap {k['wrap']}, retain {k['retain']}, unreadable {k['unreadable']}",
+         f"- {sum(1 for e in dep_map['edges'] if e['kind'] == 'subvi')} SubVI edges inside the tree, "
+         f"{sum(len(v) for v in dep_map['external'].values())} external SubVIs in {len(dep_map['external'])} librar(ies), "
+         f"{len(dep_map['unresolved_histogram'])} distinct unresolved built-ins, {len(dep_map['cycles'])} cycle(s)", ""]
+    L += ["## Projects and targets", ""]
+    for p in dep_map["projects"]:
+        L.append(f"- `{p['file']}`: {p['vis_in_tree']} VIs in the tree, {p['vis_outside_tree']} outside, {p['vis_missing']} missing" + (f"; error: {p['error']}" if p["error"] else ""))
+        for t in p["targets"]:
+            L.append(f"  - target `{t['name']}` [{t['type']}]" + (f" under {t['under']}" if t["under"] else ""))
+    if not dep_map["projects"]:
+        L.append("- no .lvproj files; membership and targets unknown")
+    L += ["", "## Sequence files", ""]
+    L += [f"- `{q['file']}` ({q['format']}): " + (", ".join(q["vi_refs"]) if q["vi_refs"] else "no VI references readable") for q in dep_map["sequences"]] or ["- none"]
+    L += ["", "## Entry points (VIs no other VI in the tree calls) and their call trees", ""]
+    for p in dep_map["entry_points"]:
+        L += call_tree_lines(p, edges_from, label_of, extras_of) + [""]
+    if not dep_map["entry_points"]:
+        L.append("- none (every VI is called by another one, or the tree is empty)")
+    L += ["## Leaf-first migration order", "",
+          "Shared SubVIs first, callers after: each unit's dependencies already have a proven replacement when its own "
+          "recording is replayed. Retain items stay in LabVIEW and are listed so the boundary is visible.", ""]
+    for i, p in enumerate(dep_map["leaf_first_order"], 1):
+        r = rows_by_path[p]
+        L.append(f"{i}. `{p}` - {r['classification']}, complexity {r['complexity']}, callers in tree {callers_of[p]}" + (f", target {r['target']}" if r["target"] else ""))
+    if dep_map["cycles"]:
+        L += ["", "Cycles (port together or break first):"] + [f"- {' <-> '.join(g)}" for g in dep_map["cycles"]]
+    L += ["", "## External SubVIs (referenced, not in the tree)", "",
+          "vi.lib and reuse-library calls. Each library is one decision: a target-side equivalent, a wrapper, or a reason to retain.", ""]
+    L += [f"- `{lib}`: " + ", ".join(v) for lib, v in dep_map["external"].items()] or ["- none (or lvkit absent)"]
+    L += ["", "## Unresolved built-ins (lvkit `unresolved`, count of VIs)", ""]
+    L += [f"- `{u}`: {n}" for u, n in dep_map["unresolved_histogram"].items()] or ["- none reported (or lvkit absent)"]
+    L += ["", "## What this map does not know", "",
+          "- what a VI does at run time: replay a recording with `tools/bench_compare.py` after `/labview-to-python`",
+          "- dynamic calls (Call By Reference, VI Server, Start Asynchronous Call) and plugin folders loaded at run time",
+          "- SubVIs whose files are outside the scanned tree; they appear as external, by library name",
+          "- hardware timing and FPGA behaviour; those VIs are `retain` on static evidence",
+          "- which target language fits: the map is the same whichever one the plan picks", ""]
+    return "\n".join(L)
+
+
 # --- backlog --------------------------------------------------------------------------------------
 
 
@@ -565,14 +717,21 @@ def build_backlog(rows: list[dict], top: int, prefix: str, opened: str) -> list[
     return items
 
 
-def write_outputs(result: dict, out_dir: Path, name: str, top: int, prefix: str, opened: str, fresh: bool = False) -> dict[str, Path]:
+def write_outputs(result: dict, out_dir: Path, name: str, top: int, prefix: str, opened: str, fresh: bool = False, dot_cap: int = 60) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = {
         "inventory": out_dir / f"{name}-fleet-inventory.csv",
         "summary": out_dir / f"{name}-fleet-summary.json",
+        "dependency_map": out_dir / f"{name}-dependency-map.json",
+        "dependency_dot": out_dir / f"{name}-dependency-map.dot",
+        "repo_map": out_dir / f"{name}-project-map.md",
         "backlog": out_dir / f"{name}-migration-backlog.json",
         "backlog_csv": out_dir / f"{name}-migration-backlog.csv",
     }
+    dep_map = build_dependency_map(result)
+    paths["dependency_map"].write_text(json.dumps(dep_map, indent=2) + "\n", encoding="utf-8")
+    paths["dependency_dot"].write_text(vi_dot(dep_map, dot_cap), encoding="utf-8")
+    paths["repo_map"].write_text(repo_map_md(name, result, dep_map), encoding="utf-8")
     items = build_backlog(result["rows"], top, prefix, opened)
     notes = list(result["summary"]["notes"])
     items = finish_backlog(items, paths["backlog"], prefix, notes, fresh)
@@ -594,6 +753,7 @@ def render_text(summary: dict, paths: dict[str, Path]) -> str:
         f"complexity total {summary['complexity_total']}; {summary['missing_recording']} VIs without a recording beside them",
         f"backlog: {summary['backlog_items']} items -> {paths['backlog']}",
         f"inventory: {paths['inventory']}",
+        f"project map: {paths['repo_map']}; dependency map: {paths['dependency_map']} (+ .dot)",
     ]
     lines += [f"note: {n}" for n in summary["notes"]]
     lines += [f"note: {s['file']}: {s['note']}" for s in summary["sequences"] if s["note"]]
@@ -659,6 +819,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", type=int, default=1, help="parallel lvkit processes (lvkit 0.8.4 can fail on a cold cache above 1)")
     ap.add_argument("--limit", type=int, help="scan only the first N VIs (smoke test on a huge tree)")
     ap.add_argument("--no-index", action="store_true", help="skip lvkit index/query (no callers/impact columns)")
+    ap.add_argument("--dot-top", type=int, default=60, help="max nodes drawn in the DOT file (the JSON map is always complete)")
     ap.add_argument("--json", action="store_true", help="print the summary as JSON")
     ap.add_argument("--fresh", action="store_true", help="ignore an existing <name>-migration-backlog.json instead of preserving its ids and statuses")
     ap.add_argument("--check", action="store_true", help="scan the fixture and compare with example-system/fleet/expected/")
@@ -672,7 +833,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"not a directory: {a.tree}", file=sys.stderr)
         return 2
     result = scan_tree(a.tree, jobs=max(1, a.jobs), use_index=not a.no_index, limit=a.limit)
-    paths = write_outputs(result, a.out_dir, a.name or safe_name(a.tree), a.top, a.prefix, a.opened, fresh=a.fresh)
+    paths = write_outputs(result, a.out_dir, a.name or safe_name(a.tree), a.top, a.prefix, a.opened, fresh=a.fresh, dot_cap=a.dot_top)
     summary = json.loads(paths["summary"].read_text(encoding="utf-8"))
     print(json.dumps(summary, indent=2) if a.json else render_text(summary, paths))
     return 0

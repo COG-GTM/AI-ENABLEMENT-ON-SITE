@@ -41,6 +41,7 @@ if cmd == "describe":
         "Acquire.vi": [scope("while", inst("DAQmx Timing (Sample Clock).vi"), inst("DAQmx Read.vi"))],
         "Meter.vi": [inst("VISA Write.vi"), inst("VISA Read.vi"), inst("Scan From String")],
         "Limits.vi": [scope("case", inst("Greater?"), scope("for", inst("Add"))), inst("Format Into String")],
+        "Control.vi": [inst("Limits.vi"), inst("Sum.vi"), inst("Reuse.lvlib:Helpers.lvclass:Helper.vi"), inst("Add")],
         "Sum.vi": [inst("Add"), inst("Add")],
         "Locked.vi": [inst("Add")],
     }.get(name, [inst("Add")])
@@ -160,6 +161,48 @@ class FleetScanTests(unittest.TestCase):
         self.assertEqual(result["summary"]["projects"][0]["vis_outside_tree"], 1)
         formats = {s["file"]: s["format"] for s in result["summary"]["sequences"]}
         self.assertEqual(formats, {"bench.seq": "ini", "binary.seq": "binary"})
+
+    def test_dependency_map_is_project_level_and_target_neutral(self):
+        result, paths, by = self.scan(self.fake)
+        m = json.loads(paths["dependency_map"].read_text(encoding="utf-8"))
+        kinds = {(e["from"], e["to"], e["kind"]) for e in m["edges"]}
+        self.assertIn(("rt/Control.vi", "rig/Limits.vi", "subvi"), kinds)
+        self.assertIn(("rt/Control.vi", "rig/Sum.vi", "ambiguous"), kinds)
+        self.assertIn(("rt/Control.vi", "other/Sum.vi", "ambiguous"), kinds)
+        self.assertIn(("fleet.lvproj", "rt/Filter.vi", "project-member"), kinds)
+        self.assertIn(("bench.seq", "rig/Meter.vi", "sequence-call"), kinds)
+        self.assertNotIn(("bench.seq", "binary.seq", "sequence-call"), kinds)
+        self.assertEqual(m["external"]["Reuse.lvlib:Helpers.lvclass"], ["Helper.vi"])
+        self.assertIn("DAQmx Read.vi", m["external"]["(no library)"])
+        self.assertEqual(m["unresolved_histogram"], {"unknown_primitive:String Subset(1503)": 1})
+        self.assertNotIn("rig/Flaky.vi", m["unresolved"])  # a failed unresolved read is unknown, not empty
+        nodes = {n["path"]: n for n in m["nodes"]}
+        self.assertEqual(nodes["rig/Limits.vi"]["callers_in_tree"], 1)
+        self.assertEqual(nodes["rig/Sum.vi"]["callers_lvkit"], 3)
+        self.assertEqual(nodes["rig/Sum.vi"]["callers_in_tree"], 1)
+        self.assertNotIn("rig/Limits.vi", m["entry_points"])
+        self.assertIn("rt/Control.vi", m["entry_points"])
+        order = m["leaf_first_order"]
+        self.assertLess(order.index("rig/Limits.vi"), order.index("rt/Control.vi"))
+        self.assertEqual(m["cycles"], [])
+        md = paths["repo_map"].read_text(encoding="utf-8")
+        self.assertIn("target-neutral", md)
+        self.assertIn("- rt/Control.vi [retain]", md)
+        self.assertIn("  - rig/Limits.vi [port]", md)
+        self.assertIn("external SubVIs: Reuse.lvlib:Helpers.lvclass:Helper.vi", md)
+        self.assertIn("`fleet.lvproj`: 4 VIs in the tree, 1 outside, 0 missing", md)
+        self.assertIn("target `FPGA Target` [FPGA Target] under RT Target [RT CompactRIO] > Chassis [cRIO Chassis]", md)
+        dot = paths["dependency_dot"].read_text(encoding="utf-8")
+        self.assertIn('"rt/Control.vi" -> "rig/Limits.vi";', dot)
+        self.assertIn('label="ambiguous"', dot)
+        capped = fleet.vi_dot(m, 3)
+        self.assertIn("drawing the 3", capped)
+        self.assertEqual(capped.count("fillcolor"), 3)
+        without, paths2, _ = self.scan(None)
+        m2 = json.loads(paths2["dependency_map"].read_text(encoding="utf-8"))
+        self.assertEqual([e["kind"] for e in m2["edges"] if e["kind"] in ("subvi", "ambiguous")], [])
+        self.assertEqual(len([e for e in m2["edges"] if e["kind"] == "project-member"]), 4)
+        self.assertIn("none (or lvkit absent)", paths2["repo_map"].read_text(encoding="utf-8"))
 
     def test_complexity_and_priority_are_reproducible(self):
         facts = {"primitives": ["a", "b"], "structures": {"case": 1}, "subvis": ["x.vi"], "unresolved": ["u"], "max_nesting": 2, "terminals": 3}

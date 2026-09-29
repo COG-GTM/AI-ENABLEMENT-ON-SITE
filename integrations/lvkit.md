@@ -49,6 +49,22 @@ run on the standard library.
 | `lvkit index <tree>` | Indexes the **enclosing project** (nearest `.lvkit/` or `.git` root, else the folder), not just the tree, into `~/.lvkit/cache/`; prints `{"vis": N, "collisions": 0, "ms": ...}`. Also stops at the first unreadable VI, so the scanner treats it as optional enrichment |
 | `lvkit query --no-refresh --format json <tree> "SELECT path, callers_count, impact_score FROM vi"` | Read-only SQL over that index: `{"columns": [...], "rows": [[...]]}` with absolute paths. Views: `vi`, `terminal`, `constant`, `node`, `type_use`, `class_fact`, `lvproj` |
 | `lvkit structure --json <dir>` | Members of `.lvlib` / `.lvclass` files and the standalone VIs beside them |
+| `lvkit query ... "SELECT vi_path, uid, kind, name, callee_path FROM node"` | Every diagram node with its id and, for SubVI instances, the path of the VI it calls: the "node ids and connections to JSON" step, already done |
+
+The scanner does not need the `node` view: `describe` already lists each VI's SubVIs by qualified name, and
+`tools/vi_fleet_scan.py` matches those names to files in the tree to write `<name>-dependency-map.json` and
+`<name>-project-map.md` (see `/vi-fleet-discovery`, Step 2b).
+
+### PyLabVIEW or lvkit?
+
+Both read the binary `.vi` container without LabVIEW. `pylabview` (MIT, `pip install pylabview`) extracts the
+RSRC blocks of a VI to XML plus separate resource files and can rebuild the VI from them; it is a
+round-trip container tool, and the block diagram (`BDHb`) stays a blob of LabVIEW-internal structures that
+the project documents only partly. `lvkit` (verified 0.8.4 above) decodes those structures into typed
+nodes, wires, terminals, and scopes, and exposes them as JSON and SQL. For "which node calls which SubVI,
+which primitives are built in, what are the inputs and outputs" lvkit is the direct route; PyLabVIEW is the
+fallback when a file lvkit cannot read still has to be opened (for example to recover the front-panel strings
+or the version). Neither one runs a VI; the recording still proves the behaviour.
 
 `--no-auto-vilib` keeps the output independent of any LabVIEW install on the machine (upstream recommends it
 for CI). lvkit never writes into the scanned tree. Versions move quickly (0.8.5 and 0.8.6 appeared within two
