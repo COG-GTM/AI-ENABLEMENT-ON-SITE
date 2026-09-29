@@ -27,7 +27,9 @@ complexity = primitives + 2*structures + 3*subvis + 5*unresolved + 2*max_nesting
 priority   = 100 + 10*min(callers, 5) + 20 if a recording sits beside the VI + 10 if exported docs do - min(complexity, 60)
              (higher = start sooner: widely called, evidence in hand, small)
 Backlog ids are `<PREFIX>-CAP-nnn` (templates/tracker-item.json); the tracker id pattern stops at 999, so the
-backlog holds the top `--top` port/wrap candidates by priority and the CSV holds every VI.
+backlog holds the top `--top` port/wrap candidates by priority and the CSV holds every VI. Re-running with the
+same --name merges into the existing backlog: a VI keeps its id, status, owner, and dates; new VIs get new ids;
+items whose VI left the top N are carried forward (--fresh discards the old backlog).
 Standard library only; exit 0 unless the tree is missing or `--check` fails.
 """
 
@@ -261,33 +263,50 @@ def index_tree(exe: str, tree: Path) -> tuple[dict[str, dict], str]:
 # --- project files and sequences -----------------------------------------------------------------
 
 
+TARGET_TYPE_RE = re.compile(r"fpga|\brt\b|real[- ]?time|my computer|target|chassis|crio|pxi", re.IGNORECASE)
+
+
+def is_target(item: ET.Element) -> bool:
+    return item.get("Type", "") not in ("Dependencies", "Build", "VI", "Folder", "Library", "LVClass", "Document") \
+        and bool(TARGET_TYPE_RE.search(item.get("Type", "")))
+
+
 def read_lvproj(path: Path, tree: Path) -> dict:
-    """Map every VI item in a .lvproj to its target. Targets are the project's top-level Items (My Computer, RT, FPGA)."""
+    """Map every VI item in a .lvproj to its target chain. Targets nest (a cRIO chassis holds an FPGA Target), so a
+    VI's `target` is every target on its path, outermost first: "RT Controller [RT CompactRIO] > Chassis [FPGA Target]"."""
     result = {"file": str(path.relative_to(tree).as_posix()), "targets": [], "vis": {}, "outside_tree": 0, "missing": 0, "error": ""}
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, OSError) as e:
         result["error"] = f"{type(e).__name__}: {str(e)[:120]}"
         return result
-    for target in root.findall("Item"):
-        t_name, t_type = target.get("Name", ""), target.get("Type", "")
-        if t_type in ("Dependencies", "Build"):
-            continue
-        result["targets"].append({"name": t_name, "type": t_type})
-        for item in target.iter("Item"):
-            if item.get("Type") != "VI" or not item.get("URL"):
+
+    def walk(item: ET.Element, chain: list[str]) -> None:
+        for child in item.findall("Item"):
+            c_type = child.get("Type", "")
+            if c_type in ("Dependencies", "Build"):
                 continue
-            url = item.get("URL", "").replace("\\", "/")
-            resolved = (path.parent / url).resolve()
-            try:
-                resolved.relative_to(tree.resolve())
-            except ValueError:
-                result["outside_tree"] += 1
+            if c_type == "VI" and child.get("URL"):
+                url = child.get("URL", "").replace("\\", "/")
+                resolved = (path.parent / url).resolve()
+                try:
+                    resolved.relative_to(tree.resolve())
+                except ValueError:
+                    result["outside_tree"] += 1
+                    continue
+                if not resolved.is_file():
+                    result["missing"] += 1
+                    continue
+                result["vis"].setdefault(str(resolved), {"lvproj": result["file"], "target": " > ".join(chain)})
                 continue
-            if not resolved.is_file():
-                result["missing"] += 1
-                continue
-            result["vis"].setdefault(str(resolved), {"lvproj": result["file"], "target": f"{t_name} [{t_type}]"})
+            if is_target(child) or not chain:
+                label = f"{child.get('Name', '')} [{c_type}]"
+                result["targets"].append({"name": child.get("Name", ""), "type": c_type, "under": " > ".join(chain)})
+                walk(child, chain + [label])
+            else:
+                walk(child, chain)
+
+    walk(root, [])
     return result
 
 
@@ -303,7 +322,7 @@ def read_seq(path: Path, tree: Path) -> dict:
     refs: list[str] = []
     if fmt != "binary":
         text = path.read_text(encoding="utf-8", errors="replace")
-        refs = sorted({m.group(1).strip() for m in re.finditer(r"([^\"'<>\\/\n=]+\.vi)(?=[\"'<\s]|$)", text, re.IGNORECASE | re.MULTILINE)})
+        refs = sorted({m.group(1).strip().replace("\\", "/") for m in re.finditer(r"([^\"'<>\n=]+\.vi)(?=[\"'<\s]|$)", text, re.IGNORECASE | re.MULTILINE)})
     return {"file": str(path.relative_to(tree).as_posix()), "format": fmt, "vi_refs": refs,
             "note": "" if fmt != "binary" else "binary sequence file; save as XML (Sequence File Properties > File Format) or run SequenceFileConverter.exe -Format:XML, then rescan"}
 
@@ -338,6 +357,8 @@ def classify(row: dict, facts: dict, name_only: bool) -> tuple[str, list[str]]:
                    + (", ".join(f"{v} {k}" for k, v in structs.items()) or "no structures"))
     if facts.get("unresolved"):
         reasons.append(f"{len(facts['unresolved'])} unresolved primitive mapping(s) to settle by hand")
+    if facts.get("unresolved_error"):
+        reasons.append("unresolved-primitive count unknown (lvkit unresolved failed); complexity is a lower bound")
     if facts.get("health"):
         reasons.append("LabVIEW health flags: " + ", ".join(facts["health"]))
     return "port", reasons
@@ -353,16 +374,30 @@ def priority(callers: int | None, missing: list[str], score: int) -> int:
     return 100 + 10 * min(callers or 0, 5) + (0 if "recording" in missing else 20) + (0 if "exported docs" in missing else 10) - min(score, 60)
 
 
-def missing_inputs(vi: Path, classification: str) -> list[str]:
-    stem = vi.stem
+INPUT_ONLY_RE = re.compile(r"[-_ .](samples?|inputs?|stimulus|stimuli|vectors?)$")
+
+
+def is_recording(stem: str, filename: str) -> bool:
+    """A recording is the rig's *output* saved beside the VI: <stem>*.csv/.tdms/.tsv whose name does not say it is
+    the input side (<stem>_samples.csv feeds a replay; it proves nothing on its own)."""
+    base, dot, ext = filename.rpartition(".")
+    if not dot or ext not in ("csv", "tdms", "tsv") or not base.startswith(stem):
+        return False
+    return not INPUT_ONLY_RE.search(base)
+
+
+def missing_inputs(vi: Path, classification: str, facts: dict | None = None) -> list[str]:
+    stem = vi.stem.lower()
     siblings = {p.name.lower() for p in vi.parent.iterdir() if p.is_file()}
     missing = []
-    if not any(s.startswith(stem.lower()) and s.endswith((".csv", ".tdms", ".tsv")) for s in siblings):
+    if not any(is_recording(stem, s) for s in siblings):
         missing.append("recording")
-    if not any(s.startswith(stem.lower()) and s.endswith((".html", ".htm")) for s in siblings):
+    if not any(s.startswith(stem) and s.endswith((".html", ".htm")) for s in siblings):
         missing.append("exported docs")
     if classification == "unreadable":
         missing.append("readable diagram (export HTML or unlock)")
+    if facts and facts.get("unresolved_error"):
+        missing.append("unresolved-primitive count (re-run lvkit unresolved)")
     return missing
 
 
@@ -386,10 +421,35 @@ def scan_vi(exe: str | None, vi: Path) -> dict:
         facts = describe(exe, vi)
         if not facts.get("error"):
             u = unresolved(exe, vi)
-            facts["unresolved"] = u.get("unresolved", [])
             if u.get("error"):
+                facts["unresolved"] = None
                 facts["unresolved_error"] = u["error"]
+            else:
+                facts["unresolved"] = u.get("unresolved", [])
     return facts
+
+
+def sequences_by_vi(sequences: list[dict], vis: list[Path], tree: Path) -> dict[str, list[str]]:
+    """Which sequence files call each VI (keyed by absolute VI path). A reference that carries a relative path is
+    resolved against the sequence file's folder; a bare name (or an absolute path from another machine) matches by
+    name, and is marked ambiguous when several VIs in the tree share that name."""
+    by_name: dict[str, list[Path]] = {}
+    for vi in vis:
+        by_name.setdefault(vi.name.lower(), []).append(vi)
+    by_path: dict[str, set[str]] = {}
+    for s in sequences:
+        seq_dir = (tree / s["file"]).parent
+        for ref in s["vi_refs"]:
+            if "/" in ref and not re.match(r"^([a-zA-Z]:)?/", ref):
+                candidate = (seq_dir / ref).resolve()
+                if candidate.is_file():
+                    by_path.setdefault(str(candidate), set()).add(s["file"])
+                    continue
+            name = ref.rsplit("/", 1)[-1].lower()
+            matches = by_name.get(name, [])
+            for vi in matches:
+                by_path.setdefault(str(vi.resolve()), set()).add(s["file"] + (" (name match, ambiguous)" if len(matches) > 1 else ""))
+    return {k: sorted(v) for k, v in by_path.items()}
 
 
 def scan_tree(tree: Path, jobs: int = 1, use_index: bool = True, limit: int | None = None) -> dict:
@@ -408,10 +468,7 @@ def scan_tree(tree: Path, jobs: int = 1, use_index: bool = True, limit: int | No
         for k, v in proj["vis"].items():
             vi_targets.setdefault(k, v)
     sequences = [read_seq(p, tree) for p in found["seq"]]
-    seq_by_vi: dict[str, list[str]] = {}
-    for s in sequences:
-        for ref in s["vi_refs"]:
-            seq_by_vi.setdefault(ref.lower(), []).append(s["file"])
+    seq_by_vi = sequences_by_vi(sequences, found["vi"], tree)
 
     graph: dict[str, dict] = {}
     if exe and use_index and vis:
@@ -438,7 +495,7 @@ def scan_tree(tree: Path, jobs: int = 1, use_index: bool = True, limit: int | No
             "path": rel, "name": vi.name, "size_bytes": vi.stat().st_size, "sha256": sha256(vi),
             "reader": reader if not facts.get("error") else f"{reader}: error",
             "lvproj": proj.get("lvproj", ""), "target": proj.get("target", ""),
-            "sequences": ";".join(sorted(set(seq_by_vi.get(vi.name.lower(), [])))),
+            "sequences": ";".join(seq_by_vi.get(str(vi.resolve()), [])),
         })
         if facts and not facts.get("error"):
             row.update({
@@ -447,21 +504,22 @@ def scan_tree(tree: Path, jobs: int = 1, use_index: bool = True, limit: int | No
                 "inputs": len(facts["inputs"]), "outputs": len(facts["outputs"]),
                 "subvi_count": len(facts["subvis"]), "subvis": ";".join(facts["subvis"]),
                 "primitive_count": len(facts["primitives"]),
-                "unresolved_count": len(facts.get("unresolved", [])), "unresolved": ";".join(facts.get("unresolved", [])),
+                "unresolved_count": len(facts["unresolved"]) if facts.get("unresolved") is not None else "",
+                "unresolved": ";".join(facts.get("unresolved") or []),
                 "structure_count": sum(facts["structures"].values()),
                 "structures": ";".join(f"{k}:{v}" for k, v in facts["structures"].items()),
                 "max_nesting": facts["max_nesting"],
                 "health": ";".join(facts["health"]) or "ok",
             })
             if facts.get("unresolved_error"):
-                row["unresolved"] = "lvkit unresolved failed: " + facts["unresolved_error"]
+                row["unresolved"] = "lvkit unresolved failed (count unknown): " + facts["unresolved_error"]
         g = graph.get(str(vi.resolve()), {})
         if g:
             row["callers_count"] = g.get("callers_count") if g.get("callers_count") is not None else ""
             row["impact_score"] = g.get("impact_score") if g.get("impact_score") is not None else ""
         classification, reasons = classify(row, facts, name_only=not exe)
         score = complexity(facts) if facts and not facts.get("error") else 0
-        missing = missing_inputs(vi, classification)
+        missing = missing_inputs(vi, classification, facts)
         callers = int(row["callers_count"]) if str(row["callers_count"]).isdigit() else None
         row.update({
             "classification": classification, "reasons": "; ".join(reasons), "complexity": score,
@@ -499,17 +557,78 @@ def build_backlog(rows: list[dict], top: int, prefix: str, opened: str) -> list[
     candidates.sort(key=lambda r: (-int(r["priority"]), r["classification"] != "port", r["path"]))
     items = []
     for n, r in enumerate(candidates[: min(top, 999)], start=1):
-        component = r["library"] or (r["path"].split("/")[0] if "/" in r["path"] else "root")
+        component = component_slug(r["library"] or (r["path"].split("/")[0] if "/" in r["path"] else "root"))
         verb = "Port" if r["classification"] == "port" else "Wrap"
         title = f"{verb} {r['name']}"
         items.append({
             "id": f"{prefix}-CAP-{n:03d}", "type": "capability", "title": title[:120],
-            "severity": severity_for(int(r["complexity"])), "status": "proposed", "component": component[:60],
+            "severity": severity_for(int(r["complexity"])), "status": "proposed", "component": component,
             "requirements": [], "hazards": [], "opened": opened, "closed": None, "owner": "test-automation",
             "notes": (f"{r['classification']}: {r['reasons']}. complexity {r['complexity']}, priority {r['priority']}, "
-                      f"callers {r['callers_count'] or 'n/a'}. missing: {r['missing_inputs'] or 'none'}. path: {r['path']}"),
+                      f"callers {r['callers_count'] or 'n/a'}. missing: {r['missing_inputs'] or 'none'}."
+                      + (f" library: {r['library']}." if r["library"] else "") + f" path: {r['path']}"),
         })
     return items
+
+
+COMPONENT_RE = re.compile(r"^[a-z0-9_-]{1,32}$")  # tools/tracker_import.py accepts exactly this
+
+
+def component_slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9_-]+", "-", value.lower()).strip("-")[:32].rstrip("-")
+    return slug or "root"
+
+
+PATH_RE = re.compile(r" path: (.+)$")
+
+
+def item_path(item: dict) -> str:
+    m = PATH_RE.search(item.get("notes", ""))
+    return m.group(1) if m else ""
+
+
+def merge_backlog(new_items: list[dict], previous: list[dict], prefix: str) -> tuple[list[dict], dict]:
+    """Carry tracker state across rescans. Identity is the VI's tree-relative path (kept at the end of `notes`):
+    a VI seen before keeps its id, status, owner, opened, closed, requirements, and hazards and only its
+    title/severity/notes are refreshed; a new VI gets the next unused id; a previous item whose VI dropped out of
+    the top N (or was re-classified) is carried forward untouched so nothing closed or in review disappears."""
+    prev_by_path = {item_path(it): it for it in previous if item_path(it)}
+    used = {it["id"] for it in previous}
+    next_n = max([int(m.group(1)) for it in previous for m in [re.match(rf"{prefix}-CAP-(\d{{3}})$", it["id"])] if m] or [0]) + 1
+    merged, seen, stats = [], set(), {"kept": 0, "new": 0, "carried": 0}
+    for it in new_items:
+        path = item_path(it)
+        old = prev_by_path.get(path)
+        if old:
+            merged.append({**old, "title": it["title"], "severity": it["severity"], "notes": it["notes"]})
+            stats["kept"] += 1
+        else:
+            while next_n <= 999 and f"{prefix}-CAP-{next_n:03d}" in used:
+                next_n += 1
+            if next_n > 999:
+                break
+            merged.append({**it, "id": f"{prefix}-CAP-{next_n:03d}"})
+            used.add(merged[-1]["id"])
+            next_n += 1
+            stats["new"] += 1
+        seen.add(path)
+    for it in previous:
+        if item_path(it) not in seen:
+            merged.append(it)
+            stats["carried"] += 1
+    merged.sort(key=lambda it: it["id"])
+    return merged, stats
+
+
+def load_previous_backlog(path: Path) -> list[dict]:
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    items = data.get("items") if isinstance(data, dict) else data
+    return [it for it in items or [] if isinstance(it, dict) and "id" in it]
 
 
 def validate_backlog(items: list[dict]) -> None:
@@ -537,22 +656,31 @@ def backlog_csv_rows(items: list[dict]) -> list[dict]:
     return [{**it, "requirements": " ".join(it["requirements"]), "hazards": " ".join(it["hazards"]), "closed": it["closed"] or ""} for it in items]
 
 
-def write_outputs(result: dict, out_dir: Path, name: str, top: int, prefix: str, opened: str) -> dict[str, Path]:
+def write_outputs(result: dict, out_dir: Path, name: str, top: int, prefix: str, opened: str, fresh: bool = False) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    items = build_backlog(result["rows"], top, prefix, opened)
-    validate_backlog(items)
     paths = {
         "inventory": out_dir / f"{name}-fleet-inventory.csv",
         "summary": out_dir / f"{name}-fleet-summary.json",
         "backlog": out_dir / f"{name}-migration-backlog.json",
         "backlog_csv": out_dir / f"{name}-migration-backlog.csv",
     }
+    items = build_backlog(result["rows"], top, prefix, opened)
+    previous = [] if fresh else load_previous_backlog(paths["backlog"])
+    notes = list(result["summary"]["notes"])
+    if previous:
+        items, stats = merge_backlog(items, previous, prefix)
+        notes.append(f"backlog merged with the previous {paths['backlog'].name}: {stats['kept']} kept (id/status/owner preserved), "
+                     f"{stats['new']} new, {stats['carried']} carried forward from the previous run; use --fresh to start over")
+    validate_backlog(items)
     paths["inventory"].write_text(csv_text(result["rows"], COLUMNS), encoding="utf-8")
-    summary = {**result["summary"], "name": name, "backlog_items": len(items), "outputs": {k: str(v.relative_to(ROOT)) if v.is_relative_to(ROOT) else str(v) for k, v in paths.items()}}
+    summary = {**result["summary"], "notes": notes, "name": name, "backlog_items": len(items), "outputs": {k: str(v.relative_to(ROOT)) if v.is_relative_to(ROOT) else str(v) for k, v in paths.items()}}
     paths["summary"].write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    about = (f"Migration backlog generated by tools/vi_fleet_scan.py from {name}: top {len(items)} port/wrap candidates by priority. "
-             f"Report with: python tools/tracker_report.py --file {paths['backlog'].relative_to(ROOT) if paths['backlog'].is_relative_to(ROOT) else paths['backlog']}. "
-             f"Merge into a tracker with: python tools/tracker_import.py --from csv --prefix <PREFIX> {paths['backlog_csv'].name}")
+    rel = lambda p: p.relative_to(ROOT) if p.is_relative_to(ROOT) else p  # noqa: E731
+    about = (f"Migration backlog generated by tools/vi_fleet_scan.py from {name}: top port/wrap candidates by priority; rescans with the "
+             f"same --name keep ids and statuses (identity = the path at the end of notes). "
+             f"Report with: python tools/tracker_report.py --file {rel(paths['backlog'])}. "
+             f"Merge into a tracker with: python tools/tracker_import.py --from csv --in {rel(paths['backlog_csv'])} "
+             f"--out outputs/{name}-tracker.json --merge <your tracker.json> --prefix <PREFIX>")
     paths["backlog"].write_text(json.dumps({"_about": about, "items": items}, indent=2) + "\n", encoding="utf-8")
     paths["backlog_csv"].write_text(csv_text(backlog_csv_rows(items), BACKLOG_COLUMNS), encoding="utf-8")
     return paths
@@ -638,6 +766,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limit", type=int, help="scan only the first N VIs (smoke test on a huge tree)")
     ap.add_argument("--no-index", action="store_true", help="skip lvkit index/query (no callers/impact columns)")
     ap.add_argument("--json", action="store_true", help="print the summary as JSON")
+    ap.add_argument("--fresh", action="store_true", help="ignore an existing <name>-migration-backlog.json instead of preserving its ids and statuses")
     ap.add_argument("--check", action="store_true", help="scan the fixture and compare with example-system/fleet/expected/")
     ap.add_argument("--write-expected", action="store_true", help="with --check: rewrite the expected CSV for this reader")
     a = ap.parse_args(argv)
@@ -649,7 +778,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"not a directory: {a.tree}", file=sys.stderr)
         return 2
     result = scan_tree(a.tree, jobs=max(1, a.jobs), use_index=not a.no_index, limit=a.limit)
-    paths = write_outputs(result, a.out_dir, a.name or safe_name(a.tree), a.top, a.prefix, a.opened)
+    paths = write_outputs(result, a.out_dir, a.name or safe_name(a.tree), a.top, a.prefix, a.opened, fresh=a.fresh)
     summary = json.loads(paths["summary"].read_text(encoding="utf-8"))
     print(json.dumps(summary, indent=2) if a.json else render_text(summary, paths))
     return 0

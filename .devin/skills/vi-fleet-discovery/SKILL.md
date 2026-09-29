@@ -84,12 +84,12 @@ Columns, in order, and where each number comes from:
 | `structure_count`, `structures`, `max_nesting` | `describe` body scopes | `case:6;for:1`; deep nesting means the port needs a state machine, not straight-line code |
 | `callers_count`, `impact_score` | `lvkit index` + `query` | How many VIs in the indexed project call this one; blank when the index step failed |
 | `health` | `describe` health flags | `ok` or the flags LabVIEW itself raised (`bad_subvi_link`, ...) |
-| `lvproj`, `target` | `.lvproj` XML | Which project file lists the VI and under which target (`My Computer`, `RT ...`, `FPGA Target`) |
-| `sequences` | text `.seq` files | Which TestStand sequences call this VI by name (binary `.seq` files are listed in the summary with the conversion note) |
+| `lvproj`, `target` | `.lvproj` XML | Which project file lists the VI and the target chain above it, outermost first (`RT Controller [RT CompactRIO] > Chassis [cRIO Chassis] > FPGA Target [FPGA Target]`); any RT/FPGA target in the chain means retain |
+| `sequences` | text `.seq` files | Which TestStand sequences call this VI: a relative `VIPath` is resolved against the sequence's folder; a bare name or a path from another machine matches by name and is marked `(name match, ambiguous)` when several VIs share it. Binary `.seq` files are listed in the summary with the conversion note |
 | `classification`, `reasons` | the rules below | One of `port`, `wrap`, `retain`, `unreadable`, and the evidence that decided it |
 | `complexity` | formula in the script docstring | `primitives + 2*structures + 3*SubVIs + 5*unresolved + 2*nesting + terminals` |
 | `priority` | formula in the script docstring | Higher = start sooner: many callers, a recording beside it, exported docs, low complexity |
-| `missing_inputs` | siblings of the file | `recording`, `exported docs`, `readable diagram`: what to ask the owner for before porting |
+| `missing_inputs` | siblings of the file | `recording` (a `<VI name>*.csv/.tdms/.tsv` beside the VI that is not the input side: `_samples`, `_input`, `_stimulus`, `_vectors` do not count), `exported docs` (`<VI name>*.html`), `readable diagram`, `unresolved-primitive count` (the `lvkit unresolved` call failed, so `unresolved_count` is blank and complexity is a lower bound): what to ask the owner for before porting |
 
 Classification rules, applied in this order (first match wins), with the evidence catalogue in
 `tools/vi_fleet_scan.py` (`RETAIN_SIGNALS`, `WRAP_SIGNALS`):
@@ -124,7 +124,13 @@ is proven by `tools/bench_compare.py` against a recording". No VI is called port
   export). When it finishes, set the tracker item to `in_review`, then `closed` when the compare passes.
 - Leadership: `/exec-deck Migration readiness from outputs/<name>-fleet-summary.json and the fleet report`.
   Every number on a slide comes from the summary JSON or `tracker_report.py`.
-- Re-run the scan after a sprint with the same `--name`; the `sha256` column shows which files changed.
+- Re-run the scan after a sprint with the same `--name`. The inventory is rewritten (the `sha256` column shows
+  which files changed) but the backlog is *merged*: a VI keeps its id, status, owner, and dates and only its
+  title, severity, and notes are refreshed; a new VI gets the next unused id; an item whose VI dropped out of
+  the top N or was re-classified is carried forward untouched. The summary `notes` say how many were kept, new,
+  and carried. `--fresh` throws the old backlog away. Identity is the `path:` at the end of each item's notes,
+  so keep it when you edit items. Backlog `component` is the owning library or top folder, slugged to the
+  tracker's `^[a-z0-9_-]{1,32}$` rule (the full library name stays in the notes).
 
 ## Worked example (offline, ships with the repository)
 

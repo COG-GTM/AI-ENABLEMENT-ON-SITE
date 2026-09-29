@@ -171,7 +171,7 @@
         "Run it first, before anyone promises a schedule: it answers how many VIs, what is in them, and where to start",
         "Have a read-only copy of the folder tree. It may hold .vi, .lvproj, .lvlib, .lvclass, TestStand .seq, exported HTML, and recordings; all are picked up",
         "Check python tools/doctor.py: the Optional tools row says whether lvkit is installed. Without it, VIs are listed but not read",
-        "Decide a label per run (--name lab-a). Re-running with the same label after a sprint shows which files changed (sha256 column)",
+        "Decide a label per run (--name lab-a). Re-running with the same label after a sprint rewrites the inventory (sha256 shows what changed) and merges the backlog: ids and statuses survive",
         "For a huge tree, smoke-test with --limit 200 first, then run per project folder; expect about one second per VI with lvkit",
         "The scanner only reads. lvkit writes a cache under the user's home folder, never into the tree"
       ],
@@ -532,7 +532,7 @@
         "To live in the team tracker: python tools/tracker_import.py --from csv --in outputs/<name>-migration-backlog.csv --out t.json --merge <your tracker.json> --prefix <PREFIX>",
         "Statuses: proposed, open, in_review (port written), closed (bench_compare PASS on the owner's recording); wont_fix for rows re-classified retain",
         "Owner is a role, never a person; component is the VI's folder; requirements and hazards link to your own IDs when you have them",
-        "Re-run the scan after each sprint with the same --name; changed files show a new sha256 and the report shows the burndown"
+        "Re-run the scan after each sprint with the same --name: existing items keep id, status, owner; new VIs get new ids; --fresh starts over. The report shows the burndown"
       ],
       "note": "Source: .devin/skills/track-and-report/SKILL.md, templates/tracker-item.json, tools/tracker_import.py --help"
     },
