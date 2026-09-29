@@ -21,6 +21,7 @@ When the user's request matches a row, invoke that skill (or tell them the slash
 | connect to Jira (Cloud or on-prem / Data Center), GitLab, Confluence, GitHub, Azure DevOps; CLI, API, token, PAT | `/connect-tools` |
 | MCP server, add a server by hand, expose a tool, mcp_config | `/mcp-server` |
 | LabVIEW, VI, .vi, TestStand, test rig, bench, instrument, "get out of LabVIEW", port to Python | `/labview-to-python` |
+| inventory a folder of VIs, migration backlog, how many VIs, where do we start, fleet, whole estate | `/vi-fleet-discovery` |
 | MATLAB, Simulink, .m, .slx, model, algorithm to C, Embedded Coder output, equivalence | `/matlab-to-code` |
 | my firmware, our C/C++ tree, HAL, host build, GoogleTest, Unity, Ceedling, MISRA, run this on our code | `/bring-your-firmware` |
 

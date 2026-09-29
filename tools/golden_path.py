@@ -9,7 +9,7 @@ Usage:
 This is the proof that the repository works on a fresh checkout with no network: readiness, research
 brief, what-if analysis, tracker report, traceability matrix, executive deck (HTML and, when the exporter
 is present, PPTX), the spec worked example, the MCP handshake, the model-to-code and LabVIEW-rig
-equivalence checks, the host harness, and the firmware twins. Every expected number is derived from the
+equivalence checks, the VI fleet scan, the host harness, and the firmware twins. Every expected number is derived from the
 source files, never typed in here. Exit 1 if any stage fails.
 Standard library only.
 """
@@ -272,6 +272,28 @@ def stage_real_vi() -> None:
            + (f"{m.group(1)} rows differ from MQTT 3.1.1 (documented)" if m else "spec-diff summary missing"))
 
 
+def stage_fleet() -> None:
+    """Fleet discovery over example-system/: the scanner's own --check, then a real scan whose counts we report."""
+    r = run([PY, "tools/vi_fleet_scan.py", "--check"])
+    if r.returncode:
+        record("fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    r = run([PY, "tools/vi_fleet_scan.py", "example-system", "--name", "fleet", "--out-dir", str(OUT), "--opened", "2026-01-05", "--json"])
+    if r.returncode:
+        record("fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    s = json.loads(r.stdout)
+    c, k = s["counts"], s["classification"]
+    backlog = load(OUT / "fleet-migration-backlog.json")["items"]
+    ok = c["vi"] == c["vi_scanned"] and sum(k.values()) == c["vi"] and (OUT / "fleet-fleet-inventory.csv").is_file()
+    record(
+        "fleet",
+        ok,
+        f"{c['vi']} VIs, {c['lvproj']} .lvproj, {c['seq']} .seq found; port {k['port']}, wrap {k['wrap']}, retain {k['retain']}, "
+        f"unreadable {k['unreadable']}; {len(backlog)} backlog items; reader: {s['reader']}",
+    )
+
+
 def stage_host_harness() -> None:
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     if not (cc and shutil.which("make")):
@@ -322,7 +344,7 @@ def main(argv=None) -> int:
     results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
-              stage_model, stage_bench, stage_real_vi, stage_host_harness]
+              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_host_harness]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:

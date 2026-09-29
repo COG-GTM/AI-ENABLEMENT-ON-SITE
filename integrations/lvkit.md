@@ -38,6 +38,23 @@ The review of what that did and did not prove is `example-system/real-vi/VI-REVI
 the folder still works: `inventory.py --check` verifies the binaries by hash and the port and its cases
 run on the standard library.
 
+## Reading a whole tree (`/vi-fleet-discovery`)
+
+`tools/vi_fleet_scan.py` calls lvkit once per VI and once per tree. What we verified with 0.8.4:
+
+| Command | Behaviour that matters at fleet scale |
+| --- | --- |
+| `lvkit describe --format json --no-auto-vilib X.vi` | About one second per VI. JSON with `inputs`, `outputs`, a nested `body` (`scope` nodes for case/for/while frames, `instance` nodes for SubVIs and primitives), `properties` (`lv_version`, `lock_state`), `health`. Exits non-zero on a corrupt file or a non-`.vi` input |
+| `lvkit unresolved --json --no-auto-vilib X.vi` | List of `{kind: unknown_primitive \| terminal_mapping, identifier, name, count, vi_names}`. Run per file: the directory form stops at the first unreadable VI |
+| `lvkit index <tree>` | Indexes the **enclosing project** (nearest `.lvkit/` or `.git` root, else the folder), not just the tree, into `~/.lvkit/cache/`; prints `{"vis": N, "collisions": 0, "ms": ...}`. Also stops at the first unreadable VI, so the scanner treats it as optional enrichment |
+| `lvkit query --no-refresh --format json <tree> "SELECT path, callers_count, impact_score FROM vi"` | Read-only SQL over that index: `{"columns": [...], "rows": [[...]]}` with absolute paths. Views: `vi`, `terminal`, `constant`, `node`, `type_use`, `class_fact`, `lvproj` |
+| `lvkit structure --json <dir>` | Members of `.lvlib` / `.lvclass` files and the standalone VIs beside them |
+
+`--no-auto-vilib` keeps the output independent of any LabVIEW install on the machine (upstream recommends it
+for CI). lvkit never writes into the scanned tree. Versions move quickly (0.8.5 and 0.8.6 appeared within two
+weeks of 0.8.4, adding `.ctl` reading and a fix for parallel runs on a cold cache); the scanner records the
+version it used in the `reader` column, and `example-system/fleet/expected/` is tied to 0.8.4.
+
 ## Install
 
 Online laptop:

@@ -1,0 +1,738 @@
+{
+  "title": "LabVIEW to Python, at fleet scale",
+  "subtitle": "Walkthrough of this repository: what was built, which skill to run when, exactly how, and what each step proves. Offline, on Devin Desktop, no cloud.",
+  "footer": "Synthetic and public open-source example data only. No customer system, program, or site.",
+  "slides": [
+    {
+      "type": "title"
+    },
+    {
+      "type": "section",
+      "title": "Part 1. What you are holding"
+    },
+    {
+      "type": "bullets",
+      "title": "This repository in one slide",
+      "bullets": [
+        "A library of 15 ready-to-run Devin Desktop skills (slash commands) plus small Python tools they call",
+        "Everything runs on a laptop: Python 3.10+, standard library only, no network, no cloud service",
+        "Two skills carry the LabVIEW work: /vi-fleet-discovery (the whole estate) and /labview-to-python (one rig)",
+        "Three more close the loop: /track-and-report (backlog status), /exec-deck (the brief), /tour (first run)",
+        "A synthetic example system and four real public-domain-licensed VIs are included so every step can be rehearsed offline",
+        "Every number in every report comes from a tool, never typed by hand; every result lands in outputs/"
+      ],
+      "note": "Sources: README.md, AGENTS.md, tools/check_repo.py (15 skills), tools/golden_path.py (14 stages)"
+    },
+    {
+      "type": "two-column",
+      "title": "What it promises, and what it refuses to promise",
+      "left_title": "Real",
+      "left": [
+        "Count and read every VI in a tree without a LabVIEW licence (lvkit, optional)",
+        "Classify each VI: port / wrap / retain / unreadable, with the evidence written next to it",
+        "Rebuild a rig's behaviour in Python from its documentation and diagram",
+        "Prove the rebuild row by row against a recording of the original rig",
+        "Track the backlog and brief leadership from the same numbers"
+      ],
+      "right_title": "Not real",
+      "right": [
+        "\"Point at the .vi, get equivalent Python.\" A .vi is a proprietary binary; nobody can read intent out of it",
+        "Proving timing, FPGA, Real-Time, or instrument behaviour on a laptop",
+        "A classification that replaces the recording: it orders the work, it does not prove a port",
+        "Automatic code generation as the deliverable (lvkit generate failed on 4 of 4 real VIs)"
+      ]
+    },
+    {
+      "type": "stats",
+      "title": "What ships and what it proves, by the numbers",
+      "stats": [
+        {
+          "value": "15",
+          "label": "skills, each one a slash command"
+        },
+        {
+          "value": "14/14",
+          "label": "golden-path stages pass offline"
+        },
+        {
+          "value": "4",
+          "label": "real public VIs read from the bare binary"
+        },
+        {
+          "value": "39",
+          "label": "recorded cases replayed through the Python port"
+        },
+        {
+          "value": "9/9",
+          "label": "columns matching the soak-rig recording"
+        }
+      ],
+      "note": "Source: outputs/golden/REPORT.md written by python tools/golden_path.py; python tools/check_repo.py"
+    },
+    {
+      "type": "section",
+      "title": "Part 2. Before the first run"
+    },
+    {
+      "type": "bullets",
+      "title": "Setup, step by step (no assumptions)",
+      "bullets": [
+        "1. Copy the repository folder onto the laptop that has Devin Desktop. Nothing else is downloaded",
+        "2. Open a terminal in that folder and run: python tools/doctor.py . Expect the last line READY",
+        "3. If it says Python is too old, install Python 3.10 or newer; nothing else is required",
+        "4. Optional: lvkit (reads .vi files). Online: python3 -m pip install lvkit . Offline: an administrator runs pip download on a connected machine, copies the wheels folder, then pip install --no-index --find-links",
+        "5. Run python tools/check_repo.py once. It validates every skill, link, and test; expect OK",
+        "6. Open the folder in Devin Desktop. Skills appear as /commands in the chat box because they live in .devin/skills/",
+        "7. First time: type /tour . It checks the laptop, runs every test, and opens the example deck"
+      ],
+      "note": "Sources: README.md (Quick start), integrations/lvkit.md (Install), .devin/skills/tour/SKILL.md"
+    },
+    {
+      "type": "bullets",
+      "title": "How a skill is run, every time",
+      "bullets": [
+        "Type the slash command followed by its argument, for example: /vi-fleet-discovery example-system --name demo-fleet",
+        "Devin reads the SKILL.md for that command and follows its steps in order; you can read the same file",
+        "Each skill asks before it executes a tool or writes a file (the permissions block in its frontmatter). Say yes to the commands you see here",
+        "Results go to outputs/ (ignored by git). Copy anything you want to keep",
+        "Every skill names the file it produced and the file the next skill should read; hand that path over explicitly",
+        "The chain for this work is in WORKFLOWS.md, section 9; the routing table in AGENTS.md maps phrases to skills",
+        "Stuck? python tools/doctor.py again, then read the skill file. Nothing needs an account or a network"
+      ]
+    },
+    {
+      "type": "section",
+      "title": "Part 3. The end-to-end chain"
+    },
+    {
+      "type": "table",
+      "title": "Five stages, five skills, one estate",
+      "columns": [
+        "Stage",
+        "Skill",
+        "When",
+        "Leaves behind"
+      ],
+      "rows": [
+        [
+          "1 Discover",
+          "/vi-fleet-discovery",
+          "Day one, per lab folder",
+          "inventory CSV, summary JSON, backlog"
+        ],
+        [
+          "2 Choose",
+          "you, with the CSV",
+          "After each scan",
+          "fleet report: first sprint, asks"
+        ],
+        [
+          "3 Migrate",
+          "/labview-to-python",
+          "Per VI, backlog order",
+          "inventory, Python rig, compare, review"
+        ],
+        [
+          "4 Track",
+          "/track-and-report",
+          "Weekly, when a rig closes",
+          "status per component and severity"
+        ],
+        [
+          "5 Brief",
+          "/exec-deck",
+          "Milestones",
+          "HTML deck, PPTX on request"
+        ]
+      ],
+      "note": "Source: WORKFLOWS.md section 9"
+    },
+    {
+      "type": "bullets",
+      "title": "The four verdicts, in plain words",
+      "bullets": [
+        "port: the VI is sequencing, maths, strings, limits, file I/O, or reporting. Python can do this; /labview-to-python rebuilds and proves it",
+        "wrap: the VI talks to hardware through a driver (DAQmx, VISA, IVI, a DLL, .NET, TestStand). Keep the VI or driver, call it from Python, port the logic around it",
+        "retain: FPGA, Real-Time, timed loops, DAQmx hardware timing, anything under an RT or FPGA target. It stays in LabVIEW; document why and move on",
+        "unreadable: the reader failed, the diagram is password protected, or lvkit is not installed. Ask the owner for the HTML export before deciding anything",
+        "Rules are applied in the order unreadable, retain, wrap, port; the first match wins and the evidence is written in the reasons column",
+        "Evidence tagged [file name only] came from the path, not the diagram. Treat it as a hint"
+      ],
+      "note": "Source: .devin/skills/vi-fleet-discovery/SKILL.md, tools/vi_fleet_scan.py (RETAIN_SIGNALS, WRAP_SIGNALS)"
+    },
+    {
+      "type": "section",
+      "title": "Stage 1. /vi-fleet-discovery: the whole estate"
+    },
+    {
+      "type": "bullets",
+      "title": "When to run it, and what to have ready",
+      "bullets": [
+        "Run it first, before anyone promises a schedule: it answers how many VIs, what is in them, and where to start",
+        "Have a read-only copy of the folder tree. It may hold .vi, .lvproj, .lvlib, .lvclass, TestStand .seq, exported HTML, and recordings; all are picked up",
+        "Check python tools/doctor.py: the Optional tools row says whether lvkit is installed. Without it, VIs are listed but not read",
+        "Decide a label per run (--name lab-a). Re-running with the same label after a sprint shows which files changed (sha256 column)",
+        "For a huge tree, smoke-test with --limit 200 first, then run per project folder; expect about one second per VI with lvkit",
+        "The scanner only reads. lvkit writes a cache under the user's home folder, never into the tree"
+      ],
+      "note": "Source: .devin/skills/vi-fleet-discovery/SKILL.md, Step 0 and Step 1"
+    },
+    {
+      "type": "bullets",
+      "title": "Exactly how to run it",
+      "bullets": [
+        "In Devin Desktop: /vi-fleet-discovery <path to the tree> --name <label>",
+        "Or in a terminal: python tools/vi_fleet_scan.py <tree> --name <label> --top 30",
+        "Rehearsal on the shipped example: python tools/vi_fleet_scan.py example-system --name demo-fleet",
+        "Then: python tools/tracker_report.py --file outputs/demo-fleet-migration-backlog.json (the backlog, ranked)",
+        "Then open outputs/demo-fleet-fleet-inventory.csv in any spreadsheet and sort by priority, largest first",
+        "Self-test at any time: python tools/vi_fleet_scan.py --check compares a fresh scan of the example with the checked-in expected CSV",
+        "Options: --jobs 4 (parallel, after a first serial run), --no-index (skip the call graph), --json (summary to stdout)"
+      ]
+    },
+    {
+      "type": "table",
+      "title": "The four files it leaves in outputs/",
+      "columns": [
+        "File",
+        "What is in it",
+        "Who reads it next"
+      ],
+      "rows": [
+        [
+          "<name>-fleet-inventory.csv",
+          "One row per VI, 30 columns",
+          "You, the LabVIEW owner, a spreadsheet"
+        ],
+        [
+          "<name>-fleet-summary.json",
+          "Counts, classification split, project targets, sequences, reader version, notes",
+          "/exec-deck for numbers; the fleet report"
+        ],
+        [
+          "<name>-migration-backlog.json",
+          "Top N port/wrap candidates in the tracker schema (templates/tracker-item.json)",
+          "python tools/tracker_report.py --file ..."
+        ],
+        [
+          "<name>-migration-backlog.csv",
+          "Same items, 12 tracker columns",
+          "python tools/tracker_import.py --from csv --merge <your tracker>"
+        ]
+      ],
+      "note": "Source: tools/vi_fleet_scan.py docstring"
+    },
+    {
+      "type": "table",
+      "title": "Reading the inventory CSV (1 of 2): the verdict and the diagram",
+      "columns": [
+        "Column",
+        "Comes from",
+        "Use it to"
+      ],
+      "rows": [
+        [
+          "classification, reasons",
+          "the rules",
+          "see the verdict and its evidence"
+        ],
+        [
+          "connector_signature",
+          "lvkit describe",
+          "read the future Python signature"
+        ],
+        [
+          "subvis, subvi_count",
+          "diagram nodes ending .vi",
+          "see what it calls, which library owns them"
+        ],
+        [
+          "unresolved",
+          "lvkit unresolved",
+          "count primitives a human reads by hand"
+        ],
+        [
+          "structures, max_nesting",
+          "diagram scopes",
+          "case:6;for:1 and depth: state machine or not"
+        ],
+        [
+          "health, lock_state",
+          "lvkit describe",
+          "broken flags; password protected"
+        ]
+      ],
+      "note": "Full column table: .devin/skills/vi-fleet-discovery/SKILL.md, Step 2"
+    },
+    {
+      "type": "table",
+      "title": "Reading the inventory CSV (2 of 2): the estate around the VI",
+      "columns": [
+        "Column",
+        "Comes from",
+        "Use it to"
+      ],
+      "rows": [
+        [
+          "callers_count, impact_score",
+          "lvkit index + query",
+          "port shared utilities first"
+        ],
+        [
+          "lvproj, target",
+          ".lvproj XML",
+          "see RT and FPGA targets"
+        ],
+        [
+          "sequences",
+          "text .seq files",
+          "see which sequences call it"
+        ],
+        [
+          "complexity, priority",
+          "formulas in the script",
+          "sort: higher priority = start sooner"
+        ],
+        [
+          "missing_inputs",
+          "files beside the VI",
+          "ask for recording, exported docs, password"
+        ],
+        [
+          "sha256, reader",
+          "file, lvkit --version",
+          "prove no change; name the reader version"
+        ]
+      ],
+      "note": "Formulas: complexity = primitives + 2*structures + 3*SubVIs + 5*unresolved + 2*nesting + terminals; priority in tools/vi_fleet_scan.py"
+    },
+    {
+      "type": "table",
+      "title": "Classification evidence catalogue",
+      "columns": [
+        "Verdict",
+        "Evidence the scanner looks for"
+      ],
+      "rows": [
+        [
+          "retain",
+          "FPGA, NI-RIO, Real-Time, timed loop, RT FIFO, Scan Engine, DAQmx timing or sample clock, or listed under an RT/FPGA target in a .lvproj"
+        ],
+        [
+          "wrap",
+          "DAQmx (other), VISA, IVI, modular-instrument drivers, NI-XNET, Call Library Function (DLL), .NET/ActiveX, TestStand API, shared variables, fieldbus/OPC"
+        ],
+        [
+          "port",
+          "Everything else: sequencing, arithmetic, strings and arrays, limits and verdicts, file I/O, reporting"
+        ],
+        [
+          "unreadable",
+          "Reader error on the file, password protected, no block diagram, or lvkit absent with no name or project signal"
+        ]
+      ],
+      "note": "Source: RETAIN_SIGNALS and WRAP_SIGNALS in tools/vi_fleet_scan.py; edit them there if your estate uses other driver names"
+    },
+    {
+      "type": "stats",
+      "title": "What it found on the shipped example (lvkit 0.8.4 installed)",
+      "stats": [
+        {
+          "value": "4",
+          "label": "VIs found and read, 1 .lvproj, 1 .seq"
+        },
+        {
+          "value": "4",
+          "label": "port; 0 wrap, 0 retain, 0 unreadable"
+        },
+        {
+          "value": "157",
+          "label": "total complexity score"
+        },
+        {
+          "value": "2",
+          "label": "callers of Create TopicFilter.vi (port it first)"
+        },
+        {
+          "value": "4",
+          "label": "VIs with no recording beside them"
+        }
+      ],
+      "note": "Source: example-system/fleet/expected/fleet-inventory.lvkit.csv and the summary JSON from python tools/vi_fleet_scan.py example-system"
+    },
+    {
+      "type": "two-column",
+      "title": "With lvkit and without: what changes",
+      "left_title": "lvkit installed",
+      "left": [
+        "Every VI's connector pane, structures, SubVIs, primitives, unresolved mappings, health flags",
+        "Call graph: callers_count and impact_score from lvkit index + query",
+        "Verdicts come from the diagram; reasons cite nodes by name",
+        "About one second per VI; corrupt files become one unreadable row each"
+      ],
+      "right_title": "lvkit absent",
+      "right": [
+        "Every VI still listed with size, hash, project file, target, sequences, missing inputs",
+        "Verdict unreadable with reason lvkit absent, unless the name or .lvproj target says retain or wrap",
+        "The doctor row and the summary say lvkit absent in those words",
+        "Fix: the offline wheel install in integrations/lvkit.md; then re-run with the same --name"
+      ],
+      "note": "Both outcomes are checked in: example-system/fleet/expected/fleet-inventory.lvkit.csv and .nolvkit.csv"
+    },
+    {
+      "type": "bullets",
+      "title": "Nuances at a hundred thousand VIs",
+      "bullets": [
+        "Time: two reader calls per file, about a second in all. Plan a day of machine time per hundred thousand VIs; run per lab, overnight, --name per run",
+        "Failures are isolated: lvkit stops at the first corrupt file when given a folder, so the scanner calls it per file and keeps going",
+        "lvkit index covers the nearest enclosing .git or .lvkit root, which can be larger than the tree; the summary note says how many VIs it covered",
+        "Password-protected diagrams and VIs saved without a diagram stay unreadable until the owner supplies the export",
+        "TestStand .seq files are binary by default; only XML or INI forms are read. Binary ones are listed with a conversion note",
+        "Verdicts are static evidence; the reader column records the lvkit version, and the checked-in expected CSV is tied to 0.8.4"
+      ],
+      "note": "Source: integrations/lvkit.md (Reading a whole tree), .devin/skills/vi-fleet-discovery/SKILL.md"
+    },
+    {
+      "type": "section",
+      "title": "Stage 2. Choose where to start"
+    },
+    {
+      "type": "bullets",
+      "title": "Picking the first sprint from the CSV",
+      "bullets": [
+        "Sort by priority, largest first: it rewards many callers, a recording beside the VI, exported docs, and low complexity",
+        "Take the first ten port rows whose owner can produce a recording of one real run. Without a recording nothing can be proven",
+        "Prefer shared utility VIs (high callers_count): one port retires work in every caller",
+        "Skip retain entirely; skip unreadable until the export or password arrives; queue wrap rows behind the port rows that use them",
+        "Write outputs/<name>-fleet-report.md: counts from the summary JSON, the top candidates with reasons, the asks, and the sentence that classification is static evidence",
+        "Ask Devin to draft it: Read outputs/<name>-fleet-inventory.csv and write the fleet report: counts, top ten port candidates with reasons, what is missing",
+        "Hand the report and the backlog to Stage 3 and Stage 4"
+      ],
+      "note": "Source: .devin/skills/vi-fleet-discovery/SKILL.md, Step 3"
+    },
+    {
+      "type": "section",
+      "title": "Stage 3. /labview-to-python: one rig at a time"
+    },
+    {
+      "type": "bullets",
+      "title": "When to run it, and what to gather first",
+      "bullets": [
+        "Run it once per candidate VI, in backlog order, after Stage 2 named the rig and its recording",
+        "Best input: LabVIEW's own HTML export (File > Print > HTML, VI documentation with block diagram). Ask the owner; it needs LabVIEW once",
+        "Next best: front-panel and block-diagram screenshots, one per case-structure frame; a VI Analyzer report; the .lvproj",
+        "TestStand .seq (XML) or its run report gives step order, limits, loop counts, pass/fail rules",
+        "Bare .vi only: lvkit describe, lvkit render (SVG drawing), lvkit unresolved. No lvkit and no export means stop and ask; do not guess",
+        "Always: a recording of one real run (CSV or TDMS) plus the raw samples that produced it. This is the contract",
+        "Invoke: /labview-to-python <path to .vi or export> <recording.csv>"
+      ],
+      "note": "Source: .devin/skills/labview-to-python/SKILL.md, Step 1"
+    },
+    {
+      "type": "table",
+      "title": "Its five steps and the file each leaves behind",
+      "columns": [
+        "Step",
+        "What Devin does",
+        "File in outputs/"
+      ],
+      "rows": [
+        [
+          "1 Inventory",
+          "purpose, I/O, constants, loops, errors, instruments, SubVIs, unknowns",
+          "<rig>-inventory.md"
+        ],
+        [
+          "2 Decide",
+          "retain / wrap / port per SubVI or block, with the reason",
+          "table in the inventory"
+        ],
+        [
+          "3 Reconstruct",
+          "Python, VI constant names, injected instruments, --replay CLI",
+          "<rig>.py"
+        ],
+        [
+          "4 Prove",
+          "replay samples, compare with the recording, stated tolerances",
+          "<rig>-compare.md"
+        ],
+        [
+          "5 Review",
+          "proven, not proven, decision table, one recommendation",
+          "<rig>-review.md"
+        ]
+      ],
+      "note": "Source: .devin/skills/labview-to-python/SKILL.md; shape of the review: example-system/bench/RIG-REVIEW.md"
+    },
+    {
+      "type": "bullets",
+      "title": "Step 4 exactly: the proof commands",
+      "bullets": [
+        "python example-system/bench/rig.py --replay example-system/bench/rig_samples.csv --out outputs/rig-python.csv",
+        "python tools/bench_compare.py example-system/bench/rig_recording.csv outputs/rig-python.csv --markdown > outputs/rig-compare.md",
+        "Swap the example paths for <rig>.py, the owner's samples, and the owner's recording",
+        "Exact match for integers and verdict strings; a stated tolerance per float column, with the reason (--tol mean_temp_cc=1)",
+        "A FAIL row in the recording must stay a FAIL row in the Python; the example keeps one on purpose",
+        "PASS means the Python agrees with this recording on every compared column, not that it equals the VI everywhere. Say specification-level reconstruction until one live run matches"
+      ],
+      "note": "Source: .devin/skills/labview-to-python/SKILL.md, Step 4; tools/bench_compare.py --help"
+    },
+    {
+      "type": "bullets",
+      "title": "LabVIEW to Python nuances the skill checks for you",
+      "bullets": [
+        "Round To Nearest is ties-to-even: Python round() matches, int(x + 0.5) does not",
+        "I16 saturates, Python int does not; DBL vs SGL; NaN in Mean and Max; integer division and modulo on negatives",
+        "The error cluster becomes one exception type; try/finally where the VI had a cleanup frame",
+        "Shift registers and feedback nodes become variables that outlive the loop; local and global variables become arguments and return values",
+        "While Loop + case on an enum becomes a state machine with one function per state; producer/consumer becomes queue.Queue",
+        "Front panels and charts are not rebuilt; results go to a CSV and, if wanted, a deck",
+        "Instruments are injected functions so the same code runs live and in replay; pyvisa or pyserial only behind that seam, installed from a wheel folder offline"
+      ],
+      "note": "Source: .devin/skills/labview-to-python/SKILL.md, Step 3"
+    },
+    {
+      "type": "stats",
+      "title": "The two shipped rehearsals",
+      "stats": [
+        {
+          "value": "3",
+          "label": "soak steps replayed from the synthetic HTML export"
+        },
+        {
+          "value": "9/9",
+          "label": "columns match its recording; verdicts PASS, PASS, FAIL kept"
+        },
+        {
+          "value": "4/4",
+          "label": "real public VIs inventoried from the bare binary"
+        },
+        {
+          "value": "10/10",
+          "label": "columns match the diagram reading over 39 cases"
+        },
+        {
+          "value": "12",
+          "label": "rows where the VI differs from the public specification, reported not fixed"
+        }
+      ],
+      "note": "Source: outputs/golden/REPORT.md (labview-to-python and real-vi stages); example-system/real-vi/VI-REVIEW.md"
+    },
+    {
+      "type": "section",
+      "title": "Stage 4. /track-and-report: backlog status"
+    },
+    {
+      "type": "bullets",
+      "title": "Stage 4, when and how",
+      "bullets": [
+        "The scan already wrote the backlog in tracker form: outputs/<name>-migration-backlog.json (top N capabilities, ids VI-CAP-001 ...)",
+        "Report it: python tools/tracker_report.py --file outputs/<name>-migration-backlog.json (--markdown for a document), or /track-and-report status of that file",
+        "To live in the team tracker: python tools/tracker_import.py --from csv --in outputs/<name>-migration-backlog.csv --out t.json --merge <your tracker.json> --prefix <PREFIX>",
+        "Statuses: proposed, open, in_review (port written), closed (bench_compare PASS on the owner's recording); wont_fix for rows re-classified retain",
+        "Owner is a role, never a person; component is the VI's folder; requirements and hazards link to your own IDs when you have them",
+        "Re-run the scan after each sprint with the same --name; changed files show a new sha256 and the report shows the burndown"
+      ],
+      "note": "Source: .devin/skills/track-and-report/SKILL.md, templates/tracker-item.json, tools/tracker_import.py --help"
+    },
+    {
+      "type": "section",
+      "title": "Stage 5. /exec-deck: the migration-readiness brief"
+    },
+    {
+      "type": "bullets",
+      "title": "Stage 5, when and how",
+      "bullets": [
+        "At a milestone, when leadership needs the decision: how big the estate is, how it splits, what the first sprint proved, what is unproven",
+        "Invoke: /exec-deck Migration readiness from outputs/<name>-fleet-summary.json and outputs/<name>-fleet-report.md",
+        "Devin writes an outline JSON (like templates/deck-outline-example.json), then builds it: python tools/build_deck.py <outline.json> outputs/<name>.html",
+        "PowerPoint on request: python tools/export_pptx.py <outline.json> outputs/<name>.pptx",
+        "Every number on a slide is copied from the summary JSON, tracker_report.py, or bench_compare.py output, with a source note under the slide",
+        "Rules baked in: one idea per slide, at most 8 bullets, no organisation or person names, a footer that says the data is synthetic or public",
+        "The HTML is self-contained (no fonts, scripts, or images fetched); this deck was built the same way"
+      ],
+      "note": "Source: .devin/skills/exec-deck/SKILL.md, tools/build_deck.py --help"
+    },
+    {
+      "type": "section",
+      "title": "Part 4. Running it on your estate"
+    },
+    {
+      "type": "table",
+      "title": "Day-one plan (1 of 2): discover",
+      "columns": [
+        "Step",
+        "Command or prompt",
+        "Evidence it leaves"
+      ],
+      "rows": [
+        [
+          "Laptop ready",
+          "python tools/doctor.py",
+          "READY; lvkit OK or absent"
+        ],
+        [
+          "Rehearse",
+          "python tools/vi_fleet_scan.py --check",
+          "fleet check ok"
+        ],
+        [
+          "Scan one lab",
+          "/vi-fleet-discovery <tree> --name lab-a",
+          "outputs/lab-a-fleet-inventory.csv + summary + backlog"
+        ],
+        [
+          "Read",
+          "sort the CSV by priority; tracker_report.py --file",
+          "outputs/lab-a-fleet-report.md"
+        ],
+        [
+          "Ask owners",
+          "recordings, HTML exports, passwords, .seq as XML",
+          "missing_inputs column empties"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Day-one plan (2 of 2): prove, track, brief",
+      "columns": [
+        "Step",
+        "Command or prompt",
+        "Evidence it leaves"
+      ],
+      "rows": [
+        [
+          "Port one",
+          "/labview-to-python <first .vi> <its recording>",
+          "<rig>-compare.md PASS, <rig>-review.md"
+        ],
+        [
+          "Track",
+          "/track-and-report status of outputs/lab-a-migration-backlog.json",
+          "status report"
+        ],
+        [
+          "Brief",
+          "/exec-deck Migration readiness from outputs/lab-a-fleet-summary.json",
+          "outputs/lab-a.html"
+        ],
+        [
+          "Repeat",
+          "next lab folder, next VI in backlog order",
+          "burndown in the tracker report"
+        ]
+      ]
+    },
+    {
+      "type": "bullets",
+      "title": "What to ask the LabVIEW owners for, in this order",
+      "bullets": [
+        "A read-only copy of the project tree, .lvproj files included: targets tell the scanner what is RT or FPGA",
+        "One recording of a real run per candidate VI, plus the raw samples that produced it. Nothing else proves anything",
+        "The HTML export (File > Print > HTML) for the first sprint's VIs; screenshots per case frame where that is not possible",
+        "Passwords or unlocked copies for password-protected diagrams, or accept them as unreadable",
+        "TestStand sequences saved in the XML file format (Sequence File Properties > File Format) so their VI calls are visible",
+        "Which VIs are certified as-is: they go straight to retain regardless of what the diagram says"
+      ]
+    },
+    {
+      "type": "bullets",
+      "title": "Limits to state out loud",
+      "bullets": [
+        "Static inventory is not runtime proof. Only bench_compare.py against a recording proves a port, and only for that recording",
+        "Nothing here runs a VI, reads FPGA or Real-Time semantics, or measures timing; those stay retain until a hardware test says otherwise",
+        "lvkit is alpha, open source, optional. It read 4 of 4 real VIs here; another estate may differ. Its generate command is not the deliverable",
+        "Classification uses names and node types; a proprietary driver named unusually will look like port until someone reads it",
+        "Everything runs locally with no network. Whether a laptop or a tool sits inside any accreditation boundary is your administrator's statement, not this repository's",
+        "The shipped example is four small VIs; the schedule for your estate comes from your first scan, not from these slides"
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Where everything lives (1 of 2): skills and tools",
+      "columns": [
+        "Path",
+        "What it is"
+      ],
+      "rows": [
+        [
+          ".devin/skills/vi-fleet-discovery/SKILL.md",
+          "Stage 1: preflight, run, read, choose, hand off"
+        ],
+        [
+          ".devin/skills/labview-to-python/SKILL.md",
+          "Stage 3: inventory, decide, reconstruct, prove, review"
+        ],
+        [
+          "tools/vi_fleet_scan.py",
+          "the scanner; --check self-test"
+        ],
+        [
+          "tools/bench_compare.py",
+          "two CSVs in, PASS/FAIL per column out"
+        ],
+        [
+          "tools/tracker_report.py, tools/tracker_import.py",
+          "backlog report; merge into your tracker"
+        ],
+        [
+          "tools/build_deck.py, tools/export_pptx.py",
+          "outline JSON to HTML deck / PPTX"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Where everything lives (2 of 2): docs and examples",
+      "columns": [
+        "Path",
+        "What it is"
+      ],
+      "rows": [
+        [
+          "WORKFLOWS.md section 9, AGENTS.md",
+          "the chain and the routing table"
+        ],
+        [
+          "integrations/lvkit.md",
+          "lvkit: what it does, offline install, whole-tree notes, MCP entry"
+        ],
+        [
+          "example-system/real-vi/",
+          "four public VIs with provenance, inventory, port, review"
+        ],
+        [
+          "example-system/fleet/",
+          "synthetic .lvproj and .seq; expected scanner output"
+        ],
+        [
+          "example-system/bench/",
+          "synthetic HTML export, samples, recording, Python rig, review"
+        ],
+        [
+          "templates/deck-labview-migration-walkthrough.json",
+          "this deck's outline; rebuild with tools/build_deck.py"
+        ]
+      ]
+    },
+    {
+      "type": "bullets",
+      "title": "Verify it yourself before trusting any slide here",
+      "bullets": [
+        "python tools/check_repo.py : skills, links, forbidden terms, every tool, every test",
+        "python tools/golden_path.py : 14 stages end to end; evidence in outputs/golden/REPORT.md",
+        "python tools/vi_fleet_scan.py --check : fresh scan of the example equals the checked-in expected CSV",
+        "python -m unittest discover -s tools/tests -q : includes the scanner's tests with a fake lvkit (classification, corrupt file, ordering, backlog schema)",
+        "python example-system/real-vi/inventory.py --check : the four public VIs still match their recorded hashes",
+        "Rebuild this deck: python tools/build_deck.py templates/deck-labview-migration-walkthrough.json outputs/labview-migration-walkthrough.html"
+      ]
+    },
+    {
+      "type": "quote",
+      "text": "Count everything, read what can be read, port what can be proven, and write down the rest.",
+      "source": "WORKFLOWS.md section 9; every number on these slides is reproduced by python tools/golden_path.py and python tools/vi_fleet_scan.py"
+    }
+  ]
+}

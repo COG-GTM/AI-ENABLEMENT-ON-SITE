@@ -63,6 +63,7 @@ plain English; `AGENTS.md` maps phrases like "make me a deck" to the right skill
 | `/connect-tools` | Picks the lane (REST/curl, vendor CLI, MCP) and credential (PAT, API token, OAuth) for Jira, Confluence, GitLab, GitHub, Azure DevOps; read-only, token never in chat, dry run first. Jira on-premises (Data Center) from zero, including what the Jira admin must expose and a `jira-cli` walkthrough: `integrations/jira-on-prem.md` | `integrations/` recipes | redacted request shown, then JSON in `outputs/` |
 | `/mcp-server` | Runs the offline reference MCP server, adds a tool to it, or registers a server by hand in `.devin/mcp_config.json`; `host` asks about your environment first and picks laptop, shared, team-hosted, or vendor-hosted (`integrations/mcp-hosting.md`); no marketplace needed | `integrations/reference-mcp/` | new tool + test, config entry |
 | `/labview-to-python` | Inventories what a VI or TestStand sequence does, rebuilds that behaviour in Python, proves it against a recording of the real rig, and says retain / wrap / port for each part. Not a converter | exported VI docs (HTML), screenshots, TestStand XML, a recording CSV; a bare `.vi` with optional `lvkit` | `outputs/<rig>-inventory.md`, `rig.py`, `<rig>-compare.md`, `<rig>-review.md` |
+| `/vi-fleet-discovery` | Inventories a whole tree of `.vi` / `.lvproj` / `.seq` files in one pass with `tools/vi_fleet_scan.py`: every VI's signature, SubVIs, structures, unresolved primitives, a port / wrap / retain / unreadable call with reasons, complexity, and a prioritised backlog for `/track-and-report`. Discovery only | folder tree, optional `lvkit` | `outputs/<tree>-fleet-inventory.csv`, `-fleet-summary.json`, `-migration-backlog.json` |
 | `/matlab-to-code` | Reads a `.m` or `.slx`, writes down the numeric semantics (indexing, rounding, saturation, fixed point), exports golden vectors, implements in C and/or Python, proves equivalence; reviews Embedded Coder output instead of re-porting it | `example-system/model/` or your model | `outputs/<model>-notes.md`, vectors CSV, code + tests, compare report |
 | `/bring-your-firmware` | Maps your C/C++ tree (build, toolchain, RTOS, HAL seam), stands up a host-side harness with stubbed hardware from `templates/host-harness/`, gets three tests running on a laptop, then hands over to `/tdd`, `/design-artifacts`, `/track-and-report`, `/exec-deck` | your firmware tree (read-only first) | `outputs/<tree>-firmware-map.md`, `host-tests/` in your tree |
 
@@ -83,6 +84,7 @@ Full prompt list, ready to paste:
 | Jira on-prem, first time | `/connect-tools Our Jira is on-prem (Data Center). Walk me through the options and connect read-only with a PAT` |
 | MCP server by hand | `/mcp-server run-reference` then `/mcp-server new-tool return the timing budget` |
 | Leave LabVIEW, safely | `/labview-to-python example-system/bench/rig.vi.html example-system/bench/rig_recording.csv` |
+| Whole LabVIEW estate, where to start | `/vi-fleet-discovery example-system --name demo-fleet` |
 | MATLAB model to C | `/matlab-to-code example-system/model/moving_avg.m --target c` |
 | Your firmware, host tests | `/bring-your-firmware ../my-firmware` |
 | Mimic on your code | `Mimic the /design-artifacts workflow on my project in ../my-firmware` |
@@ -102,6 +104,7 @@ input. Full tables with every prompt are in `WORKFLOWS.md`; here is what each on
 | 6 | LabVIEW / TestStand rig to Python | `/labview-to-python`, `tools/bench_compare.py`, `/exec-deck` | "Which parts of this rig can leave LabVIEW, and how do I prove the Python does the same thing?" |
 | 7 | MATLAB / Simulink model to code | `/matlab-to-code`, `/tdd`, `tools/bench_compare.py`, `/design-artifacts` | "Does the C match the model, bit for bit, on the vectors the model owner signed off?" |
 | 8 | Bring your own firmware | `/bring-your-firmware`, `/tdd`, then workflows 1 to 5 | "Run all of this on our code, on a laptop, without a board." |
+| 9 | LabVIEW estate: fleet discovery to the first ported rig | `/vi-fleet-discovery`, `/labview-to-python`, `/track-and-report`, `/exec-deck` | "We have thousands of VIs. How many, what is in them, which leave LabVIEW first, and how do we track it?" |
 
 Ask for the end result and Devin runs the whole row: `Swap the IMU for imu-c and brief leadership`.
 
@@ -154,6 +157,7 @@ Each lane has a finished example in this repository so you can see the shape bef
 | MATLAB / Simulink | `example-system/model/` | `moving_avg.m` (the model), `export_vectors.m` (how the owner exports vectors), `filter_vectors.csv` (26 rows: warm-up, extremes, negatives, rounding), `run_vectors.py` (replays through the Python twin or the C via `vectors_driver.c`), `MODEL-NOTES.md` (the numeric-semantics table) |
 | LabVIEW / TestStand | `example-system/bench/` | `rig.vi.html` (what LabVIEW's own HTML export of a thermal-soak VI looks like), `rig_samples.csv` (24 raw readings), `rig_recording.csv` (the VI's own 3-step results, one step failing on purpose), `rig.py` (the Python port, instruments as callbacks, `--replay`), `RIG-REVIEW.md` (the manual review); its test is `example-system/tests/test_rig.py` |
 | LabVIEW, real `.vi` files | `example-system/real-vi/` | Four real VIs from a public open-source LabVIEW project (0BSD licence, provenance in `sources.json`), `VI-INVENTORY.md` (what `lvkit` read out of them, generated), `topic_filter.py` (the Python port of two of them), `cases.csv` (39 expected rows: 9 from the project's own test VIs, 30 from the MQTT specification), `VI-REVIEW.md` (what held, what did not, what is still unproven); its test is `example-system/tests/test_topic_filter.py` |
+| LabVIEW, whole tree | `example-system/fleet/` | Synthetic `fleet.lvproj` (lists the four real VIs under `My Computer` beside an empty RT/FPGA target) and `bench-sequence.seq` (XML stand-in that calls two of them); `expected/` holds what `tools/vi_fleet_scan.py` writes for the tree with and without `lvkit` |
 | Shared | `tools/bench_compare.py` | Two CSVs in, PASS/FAIL per column out, with tolerance per column, max error, and the first divergent row. Standard library only |
 
 ### C/C++: run the workflows on your firmware
@@ -278,6 +282,7 @@ example-system/      the synthetic battery sensor node everything practises on
   model/             MATLAB lane: moving_avg.m, export_vectors.m, filter_vectors.csv, run_vectors.py, MODEL-NOTES.md
   bench/             LabVIEW lane: rig.vi.html (exported VI docs), rig_samples.csv, rig_recording.csv, rig.py, RIG-REVIEW.md
   real-vi/           LabVIEW lane on real VIs: 4 .vi files (public, 0BSD), sources.json, VI-INVENTORY.md, topic_filter.py, cases.csv, VI-REVIEW.md
+  fleet/             LabVIEW fleet fixture: fleet.lvproj + bench-sequence.seq (synthetic) over real-vi/, expected/ scanner output
   tracker.json       bugs (SN-BUG-*) and capabilities (SN-CAP-*) linked to requirement and hazard IDs
   Makefile           make test runs both twins
 specs/               001-diagnostics-packet/: a finished spec -> plan -> tasks example
@@ -289,6 +294,7 @@ tools/               small Python scripts the skills call. Standard library only
   golden_path.py     runs every workflow end to end      tests/           tests for the tools
   tracker_import.py  Jira / GitLab / Azure DevOps / CSV export -> tracker.json schema
   bench_compare.py   two CSVs -> PASS/FAIL per column (tolerances, max error, first divergent row)
+  vi_fleet_scan.py   tree of .vi/.lvproj/.seq -> fleet inventory CSV, summary JSON, tracker-shaped migration backlog
 integrations/        README.md (which lane, which credential), curl-recipes.md, cli-recipes.md,
                      jira-on-prem.md (Jira Data Center for a first-time user: every option, admin checklist, CLI how-to,
                                       the self-hosted COG-GTM/jira-mcp connector as the MCP example),
@@ -297,7 +303,7 @@ integrations/        README.md (which lane, which credential), curl-recipes.md, 
                      fake_server.py (offline stand-in for Jira Data Center, GitLab, Azure DevOps; enough Jira for jira-cli; fixtures/ holds its data),
                      reference-mcp/ (one-file MCP server + handshake + tests),
                      lvkit.md (optional .vi reader: what it did here, install offline, MCP entry)
-templates/           spec.md, plan.md, tracker-item.json, deck-outline-example.json,
+templates/           spec.md, plan.md, tracker-item.json, deck-outline-example.json, deck-labview-migration-walkthrough.json,
                      research-brief-example.json: the input shapes the tools accept
   host-harness/      C host-test harness (Makefile, hal_stub.c, harness.h, test_main.c) to copy onto your firmware
 outputs/             where generated decks, briefs, and reports land (not committed)
@@ -316,8 +322,11 @@ python example-system/bench/rig.py --replay example-system/bench/rig_samples.csv
 python tools/bench_compare.py example-system/bench/rig_recording.csv outputs/rig-python.csv   # LabVIEW port vs recording
 python example-system/real-vi/topic_filter.py --replay example-system/real-vi/cases.csv --out outputs/topic-filter-python.csv
 python tools/bench_compare.py example-system/real-vi/cases.csv outputs/topic-filter-python.csv   # real-VI port vs the diagram reading
+python tools/vi_fleet_scan.py example-system --name demo-fleet   # fleet inventory + migration backlog over every VI in the tree
+python tools/vi_fleet_scan.py --check                           # the fixture scans to example-system/fleet/expected/
 python tools/build_deck.py templates/deck-outline-example.json outputs/example-deck.html
 python tools/export_pptx.py templates/deck-outline-example.json outputs/example-deck.pptx
+python tools/build_deck.py templates/deck-labview-migration-walkthrough.json outputs/labview-migration-walkthrough.html   # the LabVIEW-estate walkthrough deck (workflow 9, every skill, every command)
 ```
 
 Open `outputs/example-deck.html` in the browser preview to see a finished deck, or
