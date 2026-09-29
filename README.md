@@ -354,3 +354,4 @@ Requirements: Python 3.10+. Optional: a C compiler and `make` for the C tests. N
 
 Customer-neutral, synthetic data only, least privilege, read-only integrations by default, ask
 before any network access, never paste a token into chat. Details: `AGENTS.md`, `SECURITY.md`.
+Tool-by-tool FedRAMP and software-approval status for a site administrator: `integrations/tool-approval-status.md`.
