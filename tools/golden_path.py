@@ -326,6 +326,32 @@ def stage_m_fleet() -> None:
     )
 
 
+def stage_c_fleet() -> None:
+    """Repository-scale C/C++ discovery over example-system/firmware-repo/: the scanner's --check, then a real scan (gcc cross-check if present)."""
+    r = run([PY, "tools/c_fleet_scan.py", "--check"])
+    if r.returncode:
+        record("c-fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    r = run([PY, "tools/c_fleet_scan.py", "example-system/firmware-repo", "--name", "firmware-repo", "--out-dir", str(OUT), "--opened", "2026-01-05", "--json"])
+    if r.returncode:
+        record("c-fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    s = json.loads(r.stdout)
+    c, k = s["counts"], s["classification"]
+    backlog = load(OUT / "firmware-repo-c-migration-backlog.json")["items"]
+    dep = load(OUT / "firmware-repo-c-dependency-map.json")
+    ok = (c["files"] == c["parsed"] + c["unreadable"] and sum(k.values()) == c["files"] and len(dep["nodes"]) == c["parsed"]
+          and (OUT / "firmware-repo-c-repo-map.md").is_file() and c["target_only_files"] == k["retain"])
+    record(
+        "c-fleet",
+        ok,
+        f"{c['files']} C/C++ files ({c['sources']} sources, {c['headers']} headers, {c['cpp_files']} C++); {c['include_edges']} include edges, "
+        f"{c['call_edges']} call edges, {c['unresolved_calls']} unresolved, {c['indirect_calls']} indirect; port {k['port']}, wrap {k['wrap']}, "
+        f"retain {k['retain']}, unreadable {k['unreadable']}; {c['seam_candidates']} seam candidates; {len(backlog)} backlog items; "
+        f"include reader: {s['include_reader']}",
+    )
+
+
 def stage_host_harness() -> None:
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     if not (cc and shutil.which("make")):
@@ -376,7 +402,7 @@ def main(argv=None) -> int:
     results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
-              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_host_harness]
+              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_c_fleet, stage_host_harness]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:
