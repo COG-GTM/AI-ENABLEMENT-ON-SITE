@@ -134,6 +134,7 @@ works from exported VI documentation; without `cppcheck`, `/bring-your-firmware`
 tests logic; without Docker, the Jira connector has a Python form; without any approved external
 service, lanes 2-4 in `integrations/README.md` are replaced by lane 1, the offline fake server and
 the local reference MCP server. A site administrator who approves nothing beyond Python and this
-folder still gets every Python tool in `tools/` and `integrations/`; running the skills in `AGENTS.md`
-themselves additionally needs Devin Desktop (see that row), which is the one item the base path
-cannot remove.
+folder still gets every Python tool in `tools/`, the offline fake server and reference MCP server in
+`integrations/`, and `integrations/rest_client.py` in `--dry-run` mode (its real requests need an
+approved service); running the skills in `AGENTS.md` themselves additionally needs Devin Desktop (see
+that row), which is the one item the base path cannot remove.
