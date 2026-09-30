@@ -28,8 +28,10 @@ inputs is skipped when --resume is given):
 Placeholders for --agent-cmd / --compare-cmd: {pack} pack file, {results} results dir for the unit, {id}, {unit} tree-relative
 path, {tree} absolute tree path, {out} pipeline dir. The command runs through the shell; quote the whole command as one
 argument but not the placeholders - each value is shell-quoted before substitution (a file name is never shell syntax).
-A result.json is reused on the next run only while its pack is byte-identical; when a rescan changes the pack the old
-result is renamed result.stale-<hash>.json and the unit is run (or reported `stale` in a dry run). An agent command that
+A result.json is reused on the next run only while its pack is byte-identical; when a rescan changes the pack the unit's
+whole results directory (result.json and its evidence) moves to results/<id>.stale-<old hash>-<n>/ and the unit is run
+again (or reported `stale` in a dry run or outside --limit). The check covers every pack in the manifest, in both the
+agent and the compare stage. An agent command that
 exits non-zero after writing status done has that result rewritten to failed; only exit 0 keeps done.
 
 Offline by default: no network, no agent, no writes outside <out>. Standard library only.
@@ -180,32 +182,48 @@ class Pipeline:
         return template.format(**{k: shlex.quote(v) for k, v in values.items()})
 
     def stale_result(self, pid: str, pack: dict) -> bool:
-        """True when a kept result.json was produced for different pack bytes; the old result is renamed, not deleted."""
-        marker = self.results / pid / "pack.sha256"
+        """True when a kept result.json was produced for different pack bytes. The whole unit directory (result and its
+        evidence files) moves to results/<id>.stale-<old pack hash>-<n>/ so old proof cannot back a new result."""
+        unit_dir = self.results / pid
+        marker = unit_dir / "pack.sha256"
         current = self.file_hash(self.pack_file(pack))
         if not marker.is_file():
             marker.write_text(current + "\n", encoding="utf-8")   # hand-placed result: bind it to the pack it was read against
             return False
-        if marker.read_text(encoding="utf-8").strip() == current:
+        old_hash = marker.read_text(encoding="utf-8").strip()
+        if old_hash == current:
             return False
-        old = self.results / pid / "result.json"
-        old.rename(self.results / pid / f"result.stale-{marker.read_text(encoding='utf-8').strip()}.json")
-        marker.unlink()
+        n = 1
+        while (self.results / f"{pid}.stale-{old_hash}-{n}").exists():
+            n += 1
+        unit_dir.rename(self.results / f"{pid}.stale-{old_hash}-{n}")
         return True
 
+    def retire_stale_results(self, stage: str, packs: list[dict]) -> set[str]:
+        """Run the pack-hash check over every pack in the manifest (not just the ones a --limit run will process)."""
+        stale: set[str] = set()
+        for pack in packs:
+            pid = pack["id"]
+            if self.result_of(pid) and self.stale_result(pid, pack):
+                stale.add(pid)
+                self.log(stage, "stale", id=pid, reason="pack changed since result.json was written; old result and evidence kept under results/<id>.stale-*/")
+        return stale
+
     def stage_agent(self) -> None:
-        packs = self.packs()[: self.a.limit or None]
+        all_packs = self.packs()
+        packs = all_packs[: self.a.limit or None]
         mode = "external command" if self.a.agent_cmd else "dry run"
         self.log("agent", "start", mode=mode, packs=len(packs), limit=self.a.limit or "none")
         agent_state = self.state["stages"].setdefault("agent", {"status": "running", "units": {}})
         agent_state["status"], agent_state["mode"] = "running", mode
+        stale_ids = self.retire_stale_results("agent", all_packs)
+        for pack in all_packs[len(packs):]:
+            if pack["id"] in stale_ids:
+                agent_state["units"][pack["id"]] = {"status": "stale", "reason": "pack changed since the last result; outside --limit, not re-run"}
         for pack in packs:
             pid = pack["id"]
+            stale = pid in stale_ids
             existing = self.result_of(pid)
-            stale = bool(existing) and self.stale_result(pid, pack)
-            if stale:
-                self.log("agent", "stale", id=pid, reason="pack changed since result.json was written; old result kept as result.stale-*.json")
-                existing = None
             if existing and existing.get("status") in ("done", "blocked"):
                 agent_state["units"][pid] = {"status": existing["status"], "source": "existing result.json"}
                 self.log("agent", "kept", id=pid, status=existing["status"])
@@ -249,6 +267,7 @@ class Pipeline:
         cmp_state["status"] = "running"
         cmp_state["mode"] = "external command" if self.a.compare_cmd else "evidence files exist"
         self.log("compare", "start", mode=cmp_state["mode"])
+        self.retire_stale_results("compare", packs)   # --from-stage compare must not accept a result for other pack bytes
         for pack in packs:
             pid = pack["id"]
             res = self.result_of(pid)

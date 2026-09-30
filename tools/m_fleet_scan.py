@@ -110,6 +110,7 @@ RETAIN_MARKERS = {
 DYNAMIC = frozenset("eval evalc evalin assignin feval str2func run".split())
 DYNAMIC_STRING_FUNCS = frozenset("cellfun arrayfun structfun".split())
 IDENT_RE = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*")
+LITERAL_CALL_RE = re.compile(r"([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*(?:\(.*)?;?\s*$", re.S)
 FUNC_DEF_RE = re.compile(r"^\s*function\b\s*(?:(\[[^\]]*\]|[A-Za-z_]\w*)\s*=\s*)?([A-Za-z_]\w*)\s*(\(([^)]*)\))?")
 CLASSDEF_RE = re.compile(r"^\s*classdef\b\s*(?:\([^)]*\)\s*)?([A-Za-z_]\w*)")
 ASSIGN_RE = re.compile(r"^\s*(\[[^\]]*\]|[A-Za-z_]\w*)(?:\s*(?:\([^()]*\)|\{[^{}]*\}|\.\w+))*\s*=(?!=)")
@@ -312,8 +313,8 @@ def parse_file(path: Path, tree: Path) -> dict:
                 lit = re.match(r"\x00(\d+)", arg)
                 literal = None
                 if lit:
-                    ident = IDENT_RE.match(strings[int(lit.group(1))].strip())   # 'fn' or 'fn(args)'; anything else is not a name
-                    literal = ident.group(0) if ident else None
+                    ident = LITERAL_CALL_RE.match(strings[int(lit.group(1))].strip())   # 'fn' or 'fn(args)'; 'x = 3' etc. is not a name
+                    literal = ident.group(1) if ident else None
                 dynamic.append({"call": base, "literal": bool(lit), "name": literal})
             if base in DYNAMIC:
                 del candidates[name]

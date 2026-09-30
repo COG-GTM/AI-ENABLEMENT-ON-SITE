@@ -92,7 +92,8 @@ class Resolution(unittest.TestCase):
     def test_unrelated_strings_do_not_become_dynamic_edges(self):
         r = self.scan({
             "d.m": "function d(name)\ndisp('target');\nfprintf('%s', 'other');\nfeval(name, 2);\nend\n",
-            "e.m": "function e()\ndisp('helper text');\nfeval('target', 1);\neval('other(3)');\nend\n",
+            "e.m": "function e()\ndisp('helper text');\nfeval('target', 1);\neval('other(3);');\nend\n",
+            "f.m": "function f()\neval('target = 3');\neval('x = other(2)');\nend\n",
             "target.m": "function target(x)\nend\n",
             "other.m": "function other(x)\nend\n",
         })
@@ -101,6 +102,9 @@ class Resolution(unittest.TestCase):
         self.assertEqual(rows["e.m"]["calls_tree"], "other (dynamic-literal);target (dynamic-literal)")
         kinds = {(e["from"], e["to"]): e["kind"] for e in r["dep_map"]["edges"]}
         self.assertNotIn(("d.m", "target.m"), kinds)
+        self.assertEqual(rows["f.m"]["calls_tree"], "")            # assignments and expressions are not function names
+        self.assertNotIn(("f.m", "target.m"), kinds)
+        self.assertNotIn(("f.m", "other.m"), kinds)
         self.assertEqual(kinds[("e.m", "target.m")], "dynamic-literal")
         self.assertEqual(kinds[("e.m", "other.m")], "dynamic-literal")
 

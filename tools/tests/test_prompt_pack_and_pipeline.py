@@ -316,8 +316,11 @@ class PipelineTests(unittest.TestCase):
         units = json.loads(r.stdout)["stages"]["agent"]["units"]
         self.assertEqual({units[k]["status"] for k in kept}, {"stale"})
         for pid in kept:
-            self.assertFalse((self.out / "results" / pid / "result.json").exists())
-            self.assertEqual(len(list((self.out / "results" / pid).glob("result.stale-*.json"))), 1)
+            self.assertFalse((self.out / "results" / pid).exists())
+            archived = list((self.out / "results").glob(f"{pid}.stale-*-1"))
+            self.assertEqual(len(archived), 1)
+            self.assertTrue((archived[0] / "result.json").is_file())
+        self.assertFalse(any((self.out / "results" / pid / "proof.txt").exists() for pid in kept))   # old evidence went with the old result
         self.assertEqual({v["status"] for v in json.loads(r.stdout)["stages"]["compare"]["units"].values()}, {"no result"})
         self.assertIn("3 stale (pack changed, not re-run)", (self.out / "REPORT.md").read_text(encoding="utf-8"))
         # with the agent command again, the stale units are re-run against the new packs
@@ -325,6 +328,42 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         units = json.loads(r.stdout)["stages"]["agent"]["units"]
         self.assertEqual(sorted(k for k, v in units.items() if v["status"] in ("done", "blocked", "failed") and "source" not in v), sorted(kept))
+
+    def test_stale_check_covers_units_outside_limit_and_compare_stage(self) -> None:
+        agent = f"{PY} {self.agent} {{pack}} {{results}} {{id}} {{unit}}"
+        r = self.base("--agent-cmd", agent, "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        proven = [k for k, v in json.loads(r.stdout)["stages"]["compare"]["units"].items() if v["status"] == "evidence present"]
+        self.assertEqual(len(proven), 1)
+        task = self.tmp / "task.md"
+        task.write_text("Different instructions.\n", encoding="utf-8")
+        # --limit 1 processes one pack; the proven unit is elsewhere in the order and must still be retired
+        r = self.base("--resume", "--task-file", str(task), "--agent-cmd", agent, "--limit", "1", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        state = json.loads(r.stdout)
+        self.assertEqual(state["stages"]["compare"]["units"][proven[0]]["status"], "no result")
+        self.assertEqual(state["stages"]["agent"]["units"][proven[0]]["status"], "stale")
+        status = json.loads((self.out / "fw-backlog-status.json").read_text())
+        self.assertEqual([i for i in status["items"] if i["status"] == "in_review"], [])
+        # a second flip-flop of the same pack does not overwrite the first archive
+        r = self.base("--resume", "--agent-cmd", agent, "--json")            # back to the default task: every pack changes again
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.base("--resume", "--task-file", str(task), "--json")        # and once more, dry run
+        self.assertEqual(r.returncode, 0, r.stderr)
+        archives = sorted(p.name for p in (self.out / "results").glob(f"{proven[0]}.stale-*"))
+        self.assertEqual(len(archives), 2)
+        self.assertEqual(len({a.rsplit("-", 1)[0] for a in archives}), 1)    # same old hash, suffixes -1 and -2
+        # --from-stage compare alone also refuses a result written for other pack bytes
+        r = self.base("--resume", "--agent-cmd", agent, "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)["stages"]["compare"]["units"][proven[0]]["status"], "evidence present")
+        r = self.base("--resume", "--task-file", str(task), "--from-stage", "pack", "--until", "pack")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.base("--resume", "--from-stage", "compare", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        state = json.loads(r.stdout)
+        self.assertEqual(state["stages"]["compare"]["units"][proven[0]]["status"], "no result")
+        self.assertTrue(any(e["stage"] == "compare" and e["event"] == "stale" for e in self.journal()))
 
     def test_placeholders_are_shell_quoted(self) -> None:
         a = pipeline_run.argparse.Namespace(tree=FW, out=self.out, name="fw", lang="c", resume=False, json=True)
