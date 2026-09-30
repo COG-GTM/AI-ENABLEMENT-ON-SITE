@@ -118,6 +118,7 @@ input. Full tables with every prompt are in `WORKFLOWS.md`; here is what each on
 | 12 | Reusable pipeline, unattended | `tools/pipeline_run.py` (scan, pack, agent, compare, report), `.github/workflows/migration-scan.yml` | "How do we run this across many programs in a job we own, without feeding the whole repo to an agent every step?" |
 
 Ask for the end result and Devin runs the whole row: `Swap the IMU for imu-c and brief leadership`.
+One-hour executive briefing of workflows 6 to 9 as flow diagrams: `templates/deck-exec-briefing.json` (rebuild it with `tools/build_deck.py`; speaker notes and timing in `TALK-TRACK.md`).
 
 ## Migration at scale (use cases)
 
