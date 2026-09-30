@@ -22,8 +22,8 @@
       "right_title": "Where this hour answers it",
       "right": [
         "Slides 4-5: fleet scan, backlog, one ported rig, its numbers",
-        "Slide 7: the model lane today; repo-scale scan lands in the next PR",
-        "Slide 8: structured files, one bounded prompt per unit, offline CI",
+        "Slide 7: repo-scale .m scan, then one model at a time, proven on vectors",
+        "Slide 8: scan once, one bounded prompt pack per unit, journaled runs, offline CI",
         "Slides 4, 6, 7: each lane ends in an example under example-system/",
         "Slides 9-12: static vs runtime, retain / wrap / port, not covered"
       ],
@@ -66,14 +66,13 @@
             },
             {
               "id": "map_c",
-              "label": "Firmware map",
+              "label": "Repo scan + firmware map",
               "sub": "/bring-your-firmware, read only"
             },
             {
               "id": "scan_m",
-              "label": "Model tree scan",
-              "sub": "tools/m_fleet_scan.py",
-              "kind": "pending"
+              "label": "Repo scan",
+              "sub": "tools/m_fleet_scan.py"
             }
           ]
         },
@@ -199,7 +198,7 @@
         }
       ],
       "caption": "One scan reads the whole tree and writes a backlog. A skill migrates one unit at a time. A comparison says PASS or FAIL per column. The tracker and the deck recompute their numbers from those files, so nothing on a slide is typed by hand.",
-      "notes": "The picture to remember. Discovery is static evidence and orders the work; the gate in the middle is runtime proof and closes an item. Dashed box: designed, not merged."
+      "notes": "The picture to remember. Discovery is static evidence and orders the work; the gate in the middle is runtime proof and closes an item."
     },
     {
       "type": "flow",
@@ -403,6 +402,11 @@
           "label": "/bring-your-firmware",
           "nodes": [
             {
+              "id": "cscan",
+              "label": "Repo scan",
+              "sub": "c_fleet_scan.py"
+            },
+            {
               "id": "map",
               "label": "Map the tree",
               "sub": "build, RTOS, HAL seam, pure logic"
@@ -481,6 +485,10 @@
       "edges": [
         {
           "from": "src",
+          "to": "cscan"
+        },
+        {
+          "from": "cscan",
           "to": "map"
         },
         {
@@ -524,8 +532,8 @@
           "to": "dk"
         }
       ],
-      "caption": "Your C is compiled on a laptop against the stubbed HAL in templates/host-harness and tested there (on the example: host tests: 58 checks passed). The Python twin is a second implementation kept honest by the same tests and vectors. Nothing converts C to Python, and host tests do not prove target timing, interrupts or certification objectives.",
-      "notes": "Workflow 8. Already on GoogleTest, Unity or Ceedling? The skill uses yours. Keep the on-target tests you have."
+      "caption": "Repo scan first (fixture: 30 files; port 21, wrap 4, retain 5; 2 seam candidates). Your C compiles on a laptop against the stubbed HAL (host tests: 58 checks passed); the Python twin is kept honest by the same tests and vectors. Nothing converts C to Python; host tests do not prove target timing or interrupts.",
+      "notes": "Workflows 11 then 8. Already on GoogleTest, Unity or Ceedling? The skill uses yours. Keep the on-target tests you have."
     },
     {
       "type": "flow",
@@ -547,9 +555,8 @@
           "nodes": [
             {
               "id": "mscan",
-              "label": "Model tree scan, repo scale",
-              "sub": "m_fleet_scan.py + /repo-discovery",
-              "kind": "pending"
+              "label": "Repo scan",
+              "sub": "m_fleet_scan.py"
             },
             {
               "id": "notes",
@@ -648,8 +655,8 @@
           "to": "dk"
         }
       ],
-      "caption": "Today: one model at a time. The notes make rounding, saturation and warm-up explicit before code exists; both twins must reproduce the owner's vectors (26 vectors replayed through the python and c twins; python 3/3 columns, c 3/3 columns match exactly). Dashed: the repo-scale model scan is landing in the next PR.",
-      "notes": "Workflow 7. Vector equivalence proves the code matches the model on those rows, not that the design is right."
+      "caption": "Repo scan first (fixture: 27 files, 23 call edges, 4 dynamic calls, 2 toolboxes; port 24, wrap 2, retain 1), then one model at a time: numeric notes before code, both twins reproducing the owner's vectors (26 vectors replayed through the python and c twins; python 3/3 columns, c 3/3 columns match exactly).",
+      "notes": "Workflows 10 then 7. Vector equivalence proves the code matches the model on those rows, not that the design is right. The static graph is a candidate graph: dynamic calls and toolbox names are listed, not resolved."
     },
     {
       "type": "flow",
@@ -677,8 +684,7 @@
             {
               "id": "s_x",
               "label": "m_fleet_scan.py, c_fleet_scan.py",
-              "sub": "same CSV / JSON shape",
-              "kind": "pending"
+              "sub": "same CSV / JSON shape"
             }
           ]
         },
@@ -699,14 +705,12 @@
             {
               "id": "pack",
               "label": "prompt_pack.py",
-              "sub": "one bounded prompt per row; dry-run by default",
-              "kind": "pending"
+              "sub": "one bounded prompt per row; dry-run by default"
             },
             {
               "id": "run",
               "label": "pipeline_run.py",
-              "sub": "journaled state machine, resumable",
-              "kind": "pending"
+              "sub": "journaled state machine, resumable"
             }
           ]
         },
@@ -715,7 +719,7 @@
           "nodes": [
             {
               "id": "ci",
-              "label": "CI: check.yml",
+              "label": "CI: check.yml, migration-scan.yml",
               "sub": "check_repo.py + golden_path.py",
               "kind": "gate"
             },
@@ -762,8 +766,8 @@
           "to": "art"
         }
       ],
-      "caption": "Token use is bounded by the files, not by the prompt: the scanner reads the tree once and writes rows; each unit then gets one prompt carrying only its row. .github/workflows/check.yml already runs every check offline on Python 3.10 and 3.12 and keeps the proof as an artifact. Dashed boxes are designed in the research plan and not merged; the golden path will stop at 'prompt pack generated' and will not claim an agent ran.",
-      "notes": "Slide 8 is the one with the most unmerged content. Say which boxes exist today (solid) and which are next PR (dashed)."
+      "caption": "Scan once, then one pack per unit with only its source, dependencies and callers (fixture: 15 packs, largest about 1,600 tokens, whole tree about 4,900). pipeline_run.py journals and resumes; without an agent command it is a dry run and says so. check.yml and migration-scan.yml run offline on Python 3.10 and 3.12.",
+      "notes": "Slide 8 answers the token question. Every box exists; the agent stage is the one seam where the customer plugs in a runner, and the dry run proves the rest without one."
     },
     {
       "type": "table",
@@ -848,7 +852,7 @@
       ],
       "right_title": "This repository with Devin",
       "right": [
-        "The scanner reads the whole tree once; each unit is then one skill run on its backlog row (the prompt pack that automates this is not merged yet)",
+        "The scanner reads the whole tree once; each unit is then one skill run on its own bounded prompt pack",
         "Every lane ends in bench_compare.py or make test saying PASS or FAIL per column",
         "Skills print what is not proven, in their own output, every run",
         "Skills, tracker, backlog and deck rebuild offline from plain CSV and JSON anyone can open"
@@ -864,7 +868,7 @@
         "Host tests do not prove target timing, interrupts, RTOS scheduling, DMA, power modes, MISRA or DO-178C objectives",
         "Vector equivalence does not prove the design, only that the code matches the model on those rows",
         "Without a recording a LabVIEW port is a draft, and the skill labels it as one",
-        "Repo-scale MATLAB and C scanners, the prompt pack and the pipeline runner are designed, not merged",
+        "Repo-scale scanners build candidate graphs: no macro expansion, no dynamic dispatch, no numeric proof; they order the work, they do not close it",
         "No TestStand or TDMS file ships here; the real-VI lane stops at the diagram reading until someone records a run"
       ],
       "notes": "Read this slide slowly. It is the slide that earns trust."
@@ -876,6 +880,7 @@
         "python tools/doctor.py   (is this laptop ready? prints READY)",
         "python tools/golden_path.py   (every workflow end to end, offline; proof left in outputs/golden/)",
         "python tools/vi_fleet_scan.py <your tree> --name <estate>   (inventory CSV + migration backlog)",
+        "/repo-discovery <your .m or C tree> --lang matlab|c --name <estate>   (inventory, repo map, backlog, prompt packs)",
         "/labview-to-python <rig export or .vi> <recording.csv>   (one rig, proven against its recording)",
         "/bring-your-firmware <your C tree>   (map, host harness, first three tests)",
         "/matlab-to-code <model.m> --target both   (notes, vectors, Python + C, comparison)",

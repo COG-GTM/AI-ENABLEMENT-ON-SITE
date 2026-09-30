@@ -244,20 +244,23 @@ class ExecBriefingDeck(unittest.TestCase):
         self.assertNotIn("@import", html)
         self.assertNotRegex(html, r"url\((?!#arrow)")
 
-    def test_unmerged_work_is_labelled_pending(self):
-        pending = {n["label"] + " " + n.get("sub", "") for s in self.outline["slides"] if s["type"] == "flow"
-                   for c in s["columns"] for n in c["nodes"] if n.get("kind") == "pending"}
-        for name in ("m_fleet_scan.py", "c_fleet_scan.py", "prompt_pack.py", "pipeline_run.py", "/repo-discovery"):
-            self.assertTrue(any(name in p for p in pending), name)
-            self.assertFalse((ROOT / "tools" / name).exists() and not name.startswith("/"),
-                             f"{name} exists now: turn its pending box into a real one")
+    def test_no_pending_boxes_for_merged_tools(self):
+        pending = [n["label"] for s in self.outline["slides"] if s["type"] == "flow"
+                   for c in s["columns"] for n in c["nodes"] if n.get("kind") == "pending"]
+        self.assertEqual(pending, [])
+        for name in ("m_fleet_scan.py", "c_fleet_scan.py", "prompt_pack.py", "pipeline_run.py"):
+            self.assertTrue((ROOT / "tools" / name).is_file(), name)
+            self.assertIn(name, self.text)
+        self.assertIn("/repo-discovery", self.text)
+        self.assertNotIn("not merged", self.text)
+        self.assertNotIn("next PR", self.text)
 
     def test_paths_named_on_slides_exist(self):
         for m in set(re.findall(r"(?<![\w/])((?:tools|templates|example-system|\.devin|\.github|integrations)/[\w./-]+)", self.text)):
-            self.assertTrue((ROOT / m.rstrip(".")).exists() or "m_fleet_scan" in m, m)
+            self.assertTrue((ROOT / m.rstrip(".")).exists(), m)
         for skill in set(re.findall(r"(?<![\w/])/([a-z][a-z-]+)(?=[\s,<)\"])", self.text)):
             if skill in ("vi-fleet-discovery", "labview-to-python", "bring-your-firmware", "tdd", "matlab-to-code",
-                         "design-artifacts", "track-and-report", "exec-deck", "tour"):
+                         "design-artifacts", "track-and-report", "exec-deck", "tour", "repo-discovery"):
                 self.assertTrue((ROOT / ".devin" / "skills" / skill / "SKILL.md").is_file(), skill)
 
     def test_numbers_match_tool_output(self):
@@ -283,6 +286,16 @@ class ExecBriefingDeck(unittest.TestCase):
         self.assertIn("26 vectors replayed through the python and c twins; python 3/3 columns, c 3/3 columns match exactly", self.text)
         self.assertIn("58 checks", detail["host-harness"])
         self.assertIn("host tests: 58 checks passed", self.text)
+        m = json.loads((ROOT / "example-system" / "matlab-repo" / "expected" / "m-fleet.json").read_text(encoding="utf-8"))
+        c = json.loads((ROOT / "example-system" / "firmware-repo" / "expected" / "c-fleet.json").read_text(encoding="utf-8"))
+        self.assertEqual((m["counts"]["m_files"], m["counts"]["edges"], m["counts"]["dynamic_calls"], m["counts"]["toolboxes"]), (27, 23, 4, 2))
+        self.assertEqual(m["classification"], {"port": 24, "wrap": 2, "retain": 1, "unreadable": 0})
+        self.assertEqual(c["counts"]["files"], 30)
+        self.assertEqual(c["classification"], {"port": 21, "wrap": 4, "retain": 5, "unreadable": 0})
+        self.assertEqual(len(c["seam_candidates"]), 2)
+        for fragment in ("27 files, 23 call edges, 4 dynamic calls, 2 toolboxes; port 24, wrap 2, retain 1",
+                         "30 files; port 21, wrap 4, retain 5; 2 seam candidates"):
+            self.assertIn(fragment, self.text)
         expected = json.loads((ROOT / "example-system" / "fleet" / "expected" / "fleet.json").read_text(encoding="utf-8"))
         self.assertEqual(expected["classification_with_lvkit"]["port"], 4)
         if shutil.which("lvkit"):

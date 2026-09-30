@@ -11,8 +11,8 @@ installed) or `make -C templates/host-harness test`; `tools/tests/test_flow_deck
 tools disagree. Run `python tools/doctor.py` and `python tools/golden_path.py` the evening before so the live
 commands below are warm (the golden path takes a few minutes the first time; the harness compiles in seconds).
 
-Dashed boxes on slides 3, 7 and 8 are designed and not merged (`m_fleet_scan.py`, `c_fleet_scan.py`,
-`prompt_pack.py`, `pipeline_run.py`, `/repo-discovery`). Say so out loud; never demo them.
+Every box on slides 3, 6, 7 and 8 exists in the repository (`tools/m_fleet_scan.py`, `tools/c_fleet_scan.py`,
+`tools/prompt_pack.py`, `tools/pipeline_run.py`, `/repo-discovery`); `python tools/golden_path.py` exercises all of them.
 
 | # | Slide | Minutes | Running total |
 | --- | --- | --- | --- |
@@ -46,8 +46,8 @@ Live (optional): `python tools/doctor.py` prints `READY` in a second; it shows t
 
 **Message:** Each ask maps to a slide and to a file you can open afterwards.
 
-- Repo-scale LabVIEW is slides 4 and 5; repo-scale MATLAB is slide 7 and is partly "next PR"; say that now.
-- The low-touch pipeline is slide 8: the pattern exists and one scanner implements it; the other pieces are designed.
+- Repo-scale LabVIEW is slides 4 and 5; repo-scale MATLAB is slide 7; repo-scale C/C++ is slide 6.
+- The low-touch pipeline is slide 8: three scanners, one prompt-pack generator, one journaled runner, two CI workflows.
 - Related examples: every lane ends in `example-system/` with a fixture, a port and a comparison.
 - Advanced topics are slides 9 to 12, the boundaries; those are the slides that earn trust.
 
@@ -58,7 +58,7 @@ Live (optional): `python tools/doctor.py` prints `READY` in a second; it shows t
 - Read left to right: inputs are your files, read only. Discovery is static evidence and produces a backlog, not code.
 - The middle is the skill that works on one unit; the blue gate is runtime proof, PASS or FAIL per column.
 - The last column never invents numbers: `/track-and-report` reads the backlog, `/exec-deck` recomputes from files.
-- The dashed model-tree scan is designed and not merged; the LabVIEW scanner is the shape it will copy.
+- The three repo scans emit the same dependency-map and backlog shape, so the pack and pipeline steps are shared.
 
 Live (optional): `python tools/vi_fleet_scan.py example-system --name demo-fleet` writes the backlog in under a minute.
 
@@ -109,8 +109,9 @@ Live (optional, seconds): `make -C templates/host-harness test`.
   (`export_vectors.m` to `filter_vectors.csv`).
 - Proof: `run_vectors.py` replays through the Python twin or the C via `vectors_driver.c`; `bench_compare.py` at tolerance 0 for
   integer outputs. The golden path prints `26 vectors replayed ... python 3/3 columns, c 3/3 columns match exactly`.
-- The dashed repo-scale model scan (`m_fleet_scan.py`, `/repo-discovery`) is landing in the next PR; today the lane is one
-  model at a time. Generated C from Embedded Coder is reviewed against the vectors, not replaced.
+- The repo scan (`/repo-discovery <tree> --lang matlab`, `tools/m_fleet_scan.py`) is a lexical candidate graph: 27 files, 23 call
+  edges, 4 dynamic calls and 2 toolboxes on the fixture; it orders the work, then the lane is one model at a time. Generated C
+  from Embedded Coder is reviewed against the vectors, not replaced.
 
 Live (optional): `python example-system/model/run_vectors.py --impl c --out outputs/model-c.csv` then
 `python tools/bench_compare.py example-system/model/filter_vectors.csv outputs/model-c.csv --markdown`.
@@ -119,11 +120,12 @@ Live (optional): `python example-system/model/run_vectors.py --impl c --out outp
 
 **Message:** Token use is bounded by files, not by prompts: scan once, write rows, give each unit one prompt carrying only its row.
 
-- Solid boxes exist today: `tools/vi_fleet_scan.py`, its CSV / JSON / backlog, and `.github/workflows/check.yml`, which runs
-  `check_repo.py` and `golden_path.py` offline on Python 3.10 and 3.12 and uploads `outputs/golden/` as the artifact.
-- Dashed boxes are designed in the research plan and not merged: `m_fleet_scan.py`, `c_fleet_scan.py`, `prompt_pack.py`
-  (dry-run by default) and `pipeline_run.py` (journaled, resumable).
-- When they land, the golden path will stop at "prompt pack generated" and will not claim an agent ran.
+- Scanners: `tools/vi_fleet_scan.py`, `tools/m_fleet_scan.py`, `tools/c_fleet_scan.py`; all write the same CSV / JSON / backlog shape.
+- `tools/prompt_pack.py` writes one bounded Markdown pack per unit (source, direct dependencies, callers, boundaries) with a
+  manifest of bytes and estimated tokens; on the C fixture 15 packs, the largest about 1,600 tokens, the whole tree about 4,900.
+- `tools/pipeline_run.py` runs scan, pack, agent, compare, report; journaled and resumable; with no `--agent-cmd` it is a dry run
+  and records `skipped`, never a result. `.github/workflows/check.yml` and `migration-scan.yml` run offline on Python 3.10 and 3.12.
+- The golden path stops at "prompt pack generated" and does not claim an agent ran.
 - Nothing here needs a cloud service; the customer has Devin Desktop and this folder.
 
 ## 9. The evidence boundary (3 min)
@@ -160,7 +162,7 @@ Live (optional): `python example-system/model/run_vectors.py --impl c --out outp
 - No `.vi` to Python converter and no C to Python converter.
 - Host tests do not prove target timing, interrupts, RTOS scheduling, DMA, power modes, MISRA or DO-178C objectives.
 - Vector equivalence proves the code matches the model on those rows, not that the design is right.
-- Repo-scale MATLAB and C scanners, the prompt pack and the pipeline runner are designed, not merged; no TestStand or TDMS file ships.
+- Repo-scale scanners build candidate graphs (no macro expansion, no dynamic dispatch, no numeric proof); no TestStand or TDMS file ships.
 
 ## 13. Day one on your tree (2 min)
 
@@ -183,4 +185,4 @@ Live (optional): `python tools/tracker_report.py --file outputs/demo-fleet-migra
 
 Likely ones and where the answer lives: "Can it read our `.vi` files?" (`lvkit` gives inventory; the recording is the proof;
 slide 4). "Does it replace Embedded Coder?" (no; it reviews generated C against the vectors; slide 7). "What runs in the cloud?"
-(nothing on these slides; slide 11). "When do the scanners for MATLAB and C land?" (designed, not merged; slide 8).
+(nothing on these slides; slide 11). "How big is one prompt?" (the manifest says; about 1,600 tokens for the largest C unit; slide 8).
