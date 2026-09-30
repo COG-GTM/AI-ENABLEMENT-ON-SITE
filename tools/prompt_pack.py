@@ -149,9 +149,10 @@ def head_tail(text: str, max_bytes: int) -> tuple[str, bool]:
 
 class PackBuilder:
     def __init__(self, dep_map: dict, tree: Path, language: str, inventory: dict, backlog: dict, name: str, out_dir: Path,
-                 budget: int, neighbor_lines: int, task_text: str | None):
+                 budget: int, neighbor_lines: int, task_text: str | None, results_dir: str | None = None):
         self.m, self.tree, self.language = dep_map, tree, language
         self.inv, self.backlog, self.name, self.out_dir = inventory, backlog, name, out_dir
+        self.results_dir = (results_dir or f"outputs/pipeline/{name}/results").rstrip("/")
         self.budget, self.neighbor_lines = budget, neighbor_lines
         self.task_text = task_text or TASKS[language]
         self.nodes = {n["path"]: n for n in dep_map["nodes"]}
@@ -234,7 +235,7 @@ class PackBuilder:
             s1.append(f"- connector: `{row['connector']}`")
         s2 = ["", "## 2. Task", "", self.task_text, "",
               f"Skill: `{SKILL_OF[self.language]}`. Scope: this unit. Read section 5 before opening any other file."]
-        results_dir = f"outputs/pipeline/{self.name}/results/{pack_id}/"
+        results_dir = f"{self.results_dir}/{pack_id}/"
         s3 = ["", "## 3. Contract", "",
               f"- write everything you produce under `{results_dir}` (code, notes, vectors, comparison output)",
               f"- finish by writing `{results_dir}result.json`:", "",
@@ -317,6 +318,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tree", type=Path, help="override the tree path recorded in the map (e.g. after moving the outputs)")
     ap.add_argument("--out-dir", type=Path, help="default outputs/packs/<name>")
     ap.add_argument("--name", help="pipeline name used in the results path (default: derived from the map file name)")
+    ap.add_argument("--results-dir", type=Path, help="where the pack's contract tells the agent to write results "
+                    "(default outputs/pipeline/<name>/results; tools/pipeline_run.py passes its own --out/results)")
     ap.add_argument("--budget", type=int, default=8000, help="per-pack budget in estimated tokens (bytes/4)")
     ap.add_argument("--neighbor-lines", type=int, default=40, help="excerpt length for each dependency")
     ap.add_argument("--all", action="store_true", help="one pack per node, not only backlog (port/wrap) units")
@@ -335,9 +338,11 @@ def main(argv: list[str] | None = None) -> int:
     inventory = load_inventory(sibling(map_path, "-fleet-inventory.csv"))
     backlog = load_backlog(sibling(map_path, "-migration-backlog.json"))
     task_text = a.task_file.read_text(encoding="utf-8").strip() if a.task_file else None
-    b = PackBuilder(dep_map, tree, language, inventory, backlog, name, out_dir, a.budget, a.neighbor_lines, task_text)
+    results_dir = str(rel(a.results_dir.resolve())) if a.results_dir else None
+    b = PackBuilder(dep_map, tree, language, inventory, backlog, name, out_dir, a.budget, a.neighbor_lines, task_text, results_dir)
     b.map_path = map_path
     order = [p for p in dep_map.get("leaf_first_order", []) if p in b.nodes] + sorted(p for p in b.nodes if p not in set(dep_map.get("leaf_first_order", [])))
+    not_packed: list[str] = []
     if a.unit:
         missing = [u for u in a.unit if u not in b.nodes]
         if missing:
@@ -346,8 +351,11 @@ def main(argv: list[str] | None = None) -> int:
     elif a.all:
         units = order
     else:
-        units = [p for p in order if p in backlog]
-        if not units:
+        # backlog items survive rescans (ids and statuses are kept), so a unit reclassified retain/unreadable since it was
+        # first listed still has an entry; only units the current map still calls port/wrap get a pack
+        units = [p for p in order if p in backlog and b.nodes[p].get("classification") in ("port", "wrap")]
+        not_packed = sorted(p for p in backlog if p not in b.nodes or b.nodes[p].get("classification") not in ("port", "wrap"))
+        if not units and not backlog:
             units = [p for p in order if b.nodes[p].get("classification") in ("port", "wrap")]
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in out_dir.glob("*.md"):
@@ -371,6 +379,9 @@ def main(argv: list[str] | None = None) -> int:
                   "(a rough estimate, not a tokenizer). Packs are ordered leaf-first; ids are tracker ids when the unit is in the backlog.",
         "map": str(rel(map_path)), "tree": str(tree), "language": language, "name": name, "budget_tokens": a.budget,
         "neighbor_lines": a.neighbor_lines, "task_source": str(a.task_file) if a.task_file else f"default ({language})",
+        "results_dir": b.results_dir,
+        "backlog_units_not_packed": [{"unit": p, "id": backlog[p]["id"], "classification": b.nodes[p].get("classification") if p in b.nodes else "not in map"}
+                                     for p in not_packed],
         "packs": entries,
         "totals": {"packs": len(entries), "bytes": sum(e["bytes"] for e in entries), "tokens_est": sum(e["tokens_est"] for e in entries),
                    "max_pack_tokens_est": max((e["tokens_est"] for e in entries), default=0),

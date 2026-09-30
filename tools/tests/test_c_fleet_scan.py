@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 import c_fleet_scan as c  # noqa: E402
+import fleet_common as fc  # noqa: E402
 
 PY = sys.executable
 
@@ -192,6 +193,29 @@ class Resolution(unittest.TestCase):
                        "Makefile": "CC=arm-none-eabi-gcc\n", "link.ld": "ENTRY(Reset_Handler)\n", "CMakeLists.txt": "project(x)\n"})
         self.assertEqual([n["path"] for n in r["dep_map"]["nodes"]], ["src/a.c"])
         self.assertEqual(r["dep_map"]["build_files"], ["CMakeLists.txt", "Makefile", "link.ld"])
+
+
+class LeafFirstOrder(unittest.TestCase):
+    @staticmethod
+    def edges(*pairs: str) -> list[dict]:
+        return [{"from": a, "to": b, "kind": "call"} for a, b in (x.split(">") for x in pairs)]
+
+    def test_callers_of_a_cycle_are_not_cycles_and_come_after_it(self):
+        order, cycles = fc.leaf_first_order(["a", "b", "aa"], self.edges("a>b", "b>a", "aa>a"))
+        self.assertEqual(cycles, [["a", "b"]])
+        self.assertEqual(order, ["a", "b", "aa"])
+
+    def test_two_cycles_chain_and_leaf(self):
+        order, cycles = fc.leaf_first_order(["e", "d", "c", "b", "a", "leaf"], self.edges("c>d", "d>c", "e>c", "a>b", "b>a", "e>leaf"))
+        self.assertEqual(cycles, [["a", "b"], ["c", "d"]])
+        self.assertEqual(order, ["leaf", "a", "b", "c", "d", "e"])
+        for e in self.edges("c>d", "e>c", "a>b", "e>leaf"):
+            if e["to"] not in ("c", "d", "a", "b") or e["from"] not in ("c", "d", "a", "b"):
+                self.assertLess(order.index(e["to"]), order.index(e["from"]))
+
+    def test_self_loop_and_ambiguous_edges_are_ignored(self):
+        order, cycles = fc.leaf_first_order(["a", "b"], self.edges("a>a") + [{"from": "a", "to": "b", "kind": "ambiguous"}])
+        self.assertEqual((order, cycles), (["a", "b"], []))
 
 
 class Backlog(unittest.TestCase):

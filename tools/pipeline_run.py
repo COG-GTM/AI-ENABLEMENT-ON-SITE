@@ -18,7 +18,7 @@ inputs is skipped when --resume is given):
   agent    for each pack, in leaf-first order, up to --limit:
              with --agent-cmd: run it with the placeholders filled; it must write <results>/<id>/result.json (shape in the pack)
              without:          record `skipped: no --agent-cmd (dry run)` - nothing is invented, no result.json is written
-           a unit whose result.json already says done/blocked is not re-run (delete it to redo)
+           a unit whose result.json already says done/blocked for the same pack bytes is not re-run (delete it to redo)
   compare  for each result.json with status done: with --compare-cmd run it (exit 0 = proven), else check that every file
            listed under `evidence` exists; done without evidence is reported as `unproven`
   report   <out>/REPORT.md (table per unit), <out>/state.json, and <out>/<name>-backlog-status.json: the scan's backlog with
@@ -26,7 +26,11 @@ inputs is skipped when --resume is given):
            never moved to closed by this tool - a person does that.
 
 Placeholders for --agent-cmd / --compare-cmd: {pack} pack file, {results} results dir for the unit, {id}, {unit} tree-relative
-path, {tree} absolute tree path, {out} pipeline dir. The command runs through the shell; quote it as one argument.
+path, {tree} absolute tree path, {out} pipeline dir. The command runs through the shell; quote the whole command as one
+argument but not the placeholders - each value is shell-quoted before substitution (a file name is never shell syntax).
+A result.json is reused on the next run only while its pack is byte-identical; when a rescan changes the pack the old
+result is renamed result.stale-<hash>.json and the unit is run (or reported `stale` in a dry run). An agent command that
+exits non-zero after writing status done has that result rewritten to failed; only exit 0 keeps done.
 
 Offline by default: no network, no agent, no writes outside <out>. Standard library only.
 """
@@ -139,11 +143,13 @@ class Pipeline:
         return self.scan_dir / f"{self.prefix}-migration-backlog.json"
 
     def stage_pack(self) -> None:
-        ih = self.file_hash(self.map_path) + self.file_hash(self.backlog_path) + f"|{self.a.budget}"
+        ih = (self.file_hash(self.map_path) + self.file_hash(self.backlog_path) + f"|{self.a.budget}|"
+              + (self.file_hash(self.a.task_file) if self.a.task_file else "default-task"))
         if self.skip_if_done("pack", ih):
             return
         self.log("pack", "start", map=str(rel(self.map_path)), budget=self.a.budget)
-        cmd = [PY, "tools/prompt_pack.py", "--map", str(self.map_path), "--out-dir", str(self.pack_dir), "--name", self.a.name, "--budget", str(self.a.budget), "--json"]
+        cmd = [PY, "tools/prompt_pack.py", "--map", str(self.map_path), "--out-dir", str(self.pack_dir), "--name", self.a.name,
+               "--results-dir", str(self.results), "--budget", str(self.a.budget), "--json"]
         if self.a.task_file:
             cmd += ["--task-file", str(self.a.task_file)]
         r = self.run(cmd, "pack")
@@ -165,9 +171,27 @@ class Pipeline:
         except json.JSONDecodeError:
             return {"status": "failed", "notes": "result.json is not valid JSON"}
 
+    def pack_file(self, pack: dict) -> Path:
+        return Path(pack["file"]) if Path(pack["file"]).is_absolute() else ROOT / pack["file"]
+
     def fill(self, template: str, pack: dict) -> str:
-        return template.format(pack=str(ROOT / pack["file"]) if not Path(pack["file"]).is_absolute() else pack["file"],
-                               results=str(self.results / pack["id"]), id=pack["id"], unit=pack["unit"], tree=str(self.tree), out=str(self.out))
+        values = {"pack": str(self.pack_file(pack)), "results": str(self.results / pack["id"]), "id": pack["id"],
+                  "unit": pack["unit"], "tree": str(self.tree), "out": str(self.out)}
+        return template.format(**{k: shlex.quote(v) for k, v in values.items()})
+
+    def stale_result(self, pid: str, pack: dict) -> bool:
+        """True when a kept result.json was produced for different pack bytes; the old result is renamed, not deleted."""
+        marker = self.results / pid / "pack.sha256"
+        current = self.file_hash(self.pack_file(pack))
+        if not marker.is_file():
+            marker.write_text(current + "\n", encoding="utf-8")   # hand-placed result: bind it to the pack it was read against
+            return False
+        if marker.read_text(encoding="utf-8").strip() == current:
+            return False
+        old = self.results / pid / "result.json"
+        old.rename(self.results / pid / f"result.stale-{marker.read_text(encoding='utf-8').strip()}.json")
+        marker.unlink()
+        return True
 
     def stage_agent(self) -> None:
         packs = self.packs()[: self.a.limit or None]
@@ -178,13 +202,20 @@ class Pipeline:
         for pack in packs:
             pid = pack["id"]
             existing = self.result_of(pid)
+            stale = bool(existing) and self.stale_result(pid, pack)
+            if stale:
+                self.log("agent", "stale", id=pid, reason="pack changed since result.json was written; old result kept as result.stale-*.json")
+                existing = None
             if existing and existing.get("status") in ("done", "blocked"):
                 agent_state["units"][pid] = {"status": existing["status"], "source": "existing result.json"}
                 self.log("agent", "kept", id=pid, status=existing["status"])
                 continue
             if not self.a.agent_cmd:
-                agent_state["units"][pid] = {"status": "skipped", "reason": "no --agent-cmd (dry run)"}
-                self.log("agent", "skipped", id=pid, reason="no --agent-cmd (dry run)")
+                if stale:
+                    agent_state["units"][pid] = {"status": "stale", "reason": "pack changed since the last result; no --agent-cmd to re-run"}
+                else:
+                    agent_state["units"][pid] = {"status": "skipped", "reason": "no --agent-cmd (dry run)"}
+                    self.log("agent", "skipped", id=pid, reason="no --agent-cmd (dry run)")
                 continue
             (self.results / pid).mkdir(parents=True, exist_ok=True)
             cmd = self.fill(self.a.agent_cmd, pack)
@@ -193,10 +224,15 @@ class Pipeline:
             r = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=ROOT)
             (self.results / pid / "agent-stdout.txt").write_text(r.stdout, encoding="utf-8")
             (self.results / pid / "agent-stderr.txt").write_text(r.stderr, encoding="utf-8")
+            (self.results / pid / "pack.sha256").write_text(self.file_hash(self.pack_file(pack)) + "\n", encoding="utf-8")
             res = self.result_of(pid)
             status = res.get("status", "failed") if res else "failed"
             if r.returncode and status == "done":
                 status = "failed"
+                res = {**res, "status": "failed", "agent_status": "done", "agent_exit": r.returncode,
+                       "notes": f"agent command exited {r.returncode} after writing status done; treated as failed. " + str(res.get("notes", ""))}
+                (self.results / pid / "result.json").write_text(json.dumps(res, indent=2) + "\n", encoding="utf-8")
+                self.log("agent", "result overridden", id=pid, reason=f"exit {r.returncode} with status done")
             if res is None:
                 self.log("agent", "no result.json", id=pid, exit=r.returncode)
             agent_state["units"][pid] = {"status": status, "exit": r.returncode, "seconds": round(time.time() - t0, 1)}
@@ -205,7 +241,7 @@ class Pipeline:
         agent_state["status"] = "done"
         agent_state["finished"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
         self.save()
-        self.log("agent", "done", **{k: sum(1 for u in agent_state["units"].values() if u["status"] == k) for k in ("done", "blocked", "failed", "skipped")})
+        self.log("agent", "done", **{k: sum(1 for u in agent_state["units"].values() if u["status"] == k) for k in ("done", "blocked", "failed", "skipped", "stale")})
 
     def stage_compare(self) -> None:
         packs = self.packs()
@@ -266,7 +302,8 @@ class Pipeline:
                 counts["proven"] += 1
             lines.append(f"| {i} | `{p['id']}` | `{p['unit']}` | {p['classification']} | {p['tokens_est']} | {a_st} | {c_st} | {str(note)[:80]} |")
         lines += ["", "## Totals", "",
-                  f"- agent: {counts.get('done', 0)} done, {counts.get('blocked', 0)} blocked, {counts.get('failed', 0)} failed, {counts.get('skipped', 0)} skipped (dry run)",
+                  f"- agent: {counts.get('done', 0)} done, {counts.get('blocked', 0)} blocked, {counts.get('failed', 0)} failed, {counts.get('skipped', 0)} skipped (dry run)"
+                  + (f", {counts['stale']} stale (pack changed, not re-run)" if counts.get("stale") else ""),
                   f"- proof: {counts['proven']} units with a passing comparison or present evidence; everything else is unproven",
                   "", "## Next", "",
                   f"- status view: `python tools/tracker_report.py --file {rel(self.out / (self.a.name + '-backlog-status.json'))}`",
@@ -322,7 +359,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(state, indent=2, sort_keys=True))
     else:
         rep = state["stages"].get("report", {})
-        print(f"{a.name}: stages {', '.join(f'{k}={v.get('status')}' for k, v in state['stages'].items())}; report {rep.get('report', '(not run)')}")
+        stages = ", ".join(f"{k}={v.get('status')}" for k, v in state["stages"].items())
+        print(f"{a.name}: stages {stages}; report {rep.get('report', '(not run)')}")
     return 0
 
 

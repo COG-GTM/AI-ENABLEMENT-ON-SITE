@@ -157,6 +157,31 @@ class PromptPackTests(ScanOnce):
         self.assertEqual(b1, b2)
 
 
+class PromptPackSelectionTests(ScanOnce):
+    def test_results_dir_flag_drives_the_contract_and_reclassified_backlog_units_are_not_packed(self) -> None:
+        scan2 = self.tmp / "scan2"
+        shutil.copytree(self.scan, scan2)
+        map2 = scan2 / "fw-c-dependency-map.json"
+        dep = json.loads(map2.read_text(encoding="utf-8"))
+        backlog = prompt_pack.load_backlog(scan2 / "fw-c-migration-backlog.json")
+        victim = sorted(backlog)[0]
+        for n in dep["nodes"]:
+            if n["path"] == victim:
+                n["classification"] = "retain"
+        map2.write_text(json.dumps(dep), encoding="utf-8")
+        out = self.tmp / "packs-results-dir"
+        r = run("tools/prompt_pack.py", "--map", str(map2), "--out-dir", str(out), "--results-dir", str(self.tmp / "run" / "results"), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        man = json.loads(r.stdout)
+        self.assertNotIn(victim, [e["unit"] for e in man["packs"]])
+        self.assertEqual(man["backlog_units_not_packed"], [{"unit": victim, "id": backlog[victim]["id"], "classification": "retain"}])
+        self.assertEqual(len(man["packs"]), len(backlog) - 1)
+        first = man["packs"][0]
+        text = (ROOT / first["file"]).read_text(encoding="utf-8") if not Path(first["file"]).is_absolute() else Path(first["file"]).read_text(encoding="utf-8")
+        self.assertIn(f"{self.tmp / 'run' / 'results'}/{first['id']}/result.json", text)
+        self.assertNotIn("outputs/pipeline/", text)
+
+
 class PipelineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
@@ -241,6 +266,71 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual([k for k, v in comp.items() if v["status"] == "proven"], done_ok)
         self.assertTrue(any(v["status"] == "failed" for v in comp.values()))   # fixed_point.h: done but compare exit 1
         self.assertTrue((self.out / "results" / done_ok[0] / "compare-output.txt").is_file())
+
+    def test_pack_contract_points_at_the_pipeline_results_dir(self) -> None:
+        self.assertEqual(self.base().returncode, 0)
+        man = json.loads((self.out / "packs" / "manifest.json").read_text(encoding="utf-8"))
+        text = Path(man["packs"][0]["file"]).read_text(encoding="utf-8")
+        self.assertIn(f"{self.out / 'results'}/{man['packs'][0]['id']}/result.json", text)
+        self.assertEqual(man["results_dir"], str(self.out / "results"))
+
+    def test_nonzero_exit_after_done_result_is_failed_everywhere(self) -> None:
+        bad = self.tmp / "bad_agent.py"
+        bad.write_text(FAKE_AGENT + "sys.exit(1)\n", encoding="utf-8")
+        r = self.base("--agent-cmd", f"{PY} {bad} {{pack}} {{results}} {{id}} {{unit}}", "--limit", "3", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        state = json.loads(r.stdout)
+        ran = {k: v for k, v in state["stages"]["agent"]["units"].items() if v["status"] != "skipped"}
+        self.assertEqual({v["status"] for v in ran.values()}, {"failed", "blocked"})   # done -> failed; blocked stays blocked
+        comp = state["stages"]["compare"]["units"]
+        self.assertEqual({comp[k]["status"] for k in ran}, {"failed", "blocked"})
+        pid = next(k for k, v in ran.items() if v["status"] == "failed")
+        res = json.loads((self.out / "results" / pid / "result.json").read_text(encoding="utf-8"))
+        self.assertEqual((res["status"], res["agent_status"], res["agent_exit"]), ("failed", "done", 1))
+        status = json.loads((self.out / "fw-backlog-status.json").read_text())
+        self.assertEqual([i for i in status["items"] if i["status"] == "in_review"], [])
+        self.assertTrue(any(e["event"] == "result overridden" for e in self.journal()))
+
+    def test_changed_task_file_regenerates_packs_and_marks_old_results_stale(self) -> None:
+        r = self.base("--agent-cmd", f"{PY} {self.agent} {{pack}} {{results}} {{id}} {{unit}}", "--limit", "3", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        kept = [k for k, v in json.loads(r.stdout)["stages"]["agent"]["units"].items() if v["status"] != "skipped"]
+        self.assertEqual(len(kept), 3)
+        for pid in kept:
+            self.assertTrue((self.out / "results" / pid / "pack.sha256").is_file())
+        # same inputs: pack stage skipped, results kept
+        n = len(self.journal())
+        r = self.base("--resume", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any(e["stage"] == "pack" and e["event"] == "skipped" for e in self.journal()[n:]))
+        self.assertEqual({json.loads(r.stdout)["stages"]["agent"]["units"][k]["source"] for k in kept}, {"existing result.json"})
+        # a new task file changes every pack: the pack stage must re-run and old results no longer count
+        task = self.tmp / "task.md"
+        task.write_text("Port this unit to Rust instead.\n", encoding="utf-8")
+        n = len(self.journal())
+        r = self.base("--resume", "--task-file", str(task), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        new = self.journal()[n:]
+        self.assertTrue(any(e["stage"] == "pack" and e["event"] == "start" for e in new))
+        self.assertEqual(sorted(e["id"] for e in new if e["event"] == "stale"), sorted(kept))
+        units = json.loads(r.stdout)["stages"]["agent"]["units"]
+        self.assertEqual({units[k]["status"] for k in kept}, {"stale"})
+        for pid in kept:
+            self.assertFalse((self.out / "results" / pid / "result.json").exists())
+            self.assertEqual(len(list((self.out / "results" / pid).glob("result.stale-*.json"))), 1)
+        self.assertEqual({v["status"] for v in json.loads(r.stdout)["stages"]["compare"]["units"].values()}, {"no result"})
+        self.assertIn("3 stale (pack changed, not re-run)", (self.out / "REPORT.md").read_text(encoding="utf-8"))
+        # with the agent command again, the stale units are re-run against the new packs
+        r = self.base("--resume", "--task-file", str(task), "--agent-cmd", f"{PY} {self.agent} {{pack}} {{results}} {{id}} {{unit}}", "--limit", "3", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        units = json.loads(r.stdout)["stages"]["agent"]["units"]
+        self.assertEqual(sorted(k for k, v in units.items() if v["status"] in ("done", "blocked", "failed") and "source" not in v), sorted(kept))
+
+    def test_placeholders_are_shell_quoted(self) -> None:
+        a = pipeline_run.argparse.Namespace(tree=FW, out=self.out, name="fw", lang="c", resume=False, json=True)
+        pl = pipeline_run.Pipeline(a)
+        cmd = pl.fill("run {pack} {unit} {id}", {"file": "/x/p.md", "unit": "src/evil; rm -rf $HOME.c", "id": "FW-CAP-001"})
+        self.assertEqual(cmd, "run /x/p.md 'src/evil; rm -rf $HOME.c' FW-CAP-001")
 
     def test_agent_without_result_json_is_failed_not_done(self) -> None:
         r = self.base("--agent-cmd", "true", "--limit", "1", "--json")

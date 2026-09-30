@@ -151,42 +151,78 @@ CLASS_FILL = {"port": "#DDF4DD", "wrap": "#FFF1C2", "retain": "#F8D0D0", "unread
 
 
 def leaf_first_order(node_ids: list[str], edges: list[dict], skip_kinds: tuple[str, ...] = ("ambiguous",)) -> tuple[list[str], list[list[str]]]:
-    """Kahn's algorithm over `from -> to` dependency edges: units with no unported dependencies first. Nodes left
-    over sit in cycles; they are grouped by mutual reachability and appended after the ordered part."""
-    deps: dict[str, set[str]] = defaultdict(set)
+    """Order units so every dependency comes before its callers. Strongly connected components (Tarjan) collapse
+    each genuine cycle into one group; the condensed graph is then walked leaf-first (Kahn), acyclic units before
+    a ready cycle, alphabetical within a step. Returns (order, cycles) where cycles lists only components with
+    two or more members; a cycle's members appear together in `order` at the point their dependencies are met."""
     ids = set(node_ids)
+    deps: dict[str, set[str]] = defaultdict(set)
     for e in edges:
-        if e["kind"] not in skip_kinds and e["from"] in ids and e["to"] in ids:
+        if e["kind"] not in skip_kinds and e["from"] in ids and e["to"] in ids and e["from"] != e["to"]:
             deps[e["from"]].add(e["to"])
-    done, order = set(), []
-    remaining = set(node_ids)
-    while remaining:
-        ready = sorted(p for p in remaining if not (deps[p] - done))
-        if not ready:
-            break
-        order += ready
-        done |= set(ready)
-        remaining -= set(ready)
-    cycles: list[list[str]] = []
-    if remaining:
-        rest = sorted(remaining)
-        reach: dict[str, set[str]] = {}
-        for p in rest:
-            stack, seen = [p], set()
-            while stack:
-                for y in deps[stack.pop()]:
-                    if y in remaining and y not in seen:
-                        seen.add(y)
-                        stack.append(y)
-            reach[p] = seen
-        grouped: set[str] = set()
-        for p in rest:
-            if p in grouped:
+    index: dict[str, int] = {}
+    low: dict[str, int] = {}
+    on_stack: set[str] = set()
+    stack: list[str] = []
+    comps: list[list[str]] = []
+    comp_of: dict[str, int] = {}
+    for root in sorted(node_ids):
+        if root in index:
+            continue
+        index[root] = low[root] = len(index)
+        stack.append(root)
+        on_stack.add(root)
+        work = [(root, iter(sorted(deps[root])))]
+        while work:
+            v, it = work[-1]
+            pushed = False
+            for w in it:
+                if w not in index:
+                    index[w] = low[w] = len(index)
+                    stack.append(w)
+                    on_stack.add(w)
+                    work.append((w, iter(sorted(deps[w]))))
+                    pushed = True
+                    break
+                if w in on_stack:
+                    low[v] = min(low[v], index[w])
+            if pushed:
                 continue
-            group = sorted({p} | {q for q in rest if p in reach[q] and q in reach[p]})
-            grouped |= set(group)
-            cycles.append(group)
-        order += rest
+            work.pop()
+            if work:
+                parent = work[-1][0]
+                low[parent] = min(low[parent], low[v])
+            if low[v] == index[v]:
+                comp = []
+                while True:
+                    w = stack.pop()
+                    on_stack.discard(w)
+                    comp.append(w)
+                    if w == v:
+                        break
+                comp.sort()
+                for w in comp:
+                    comp_of[w] = len(comps)
+                comps.append(comp)
+    cdeps: dict[int, set[int]] = defaultdict(set)
+    for v in ids:
+        for w in deps[v]:
+            if comp_of[v] != comp_of[w]:
+                cdeps[comp_of[v]].add(comp_of[w])
+    done: set[int] = set()
+    remaining = set(range(len(comps)))
+    order: list[str] = []
+    cycles: list[list[str]] = []
+    while remaining:
+        ready = sorted((c for c in remaining if not (cdeps[c] - done)), key=lambda c: comps[c][0])
+        pick = [c for c in ready if len(comps[c]) == 1] or ready[:1]
+        for c in pick:
+            order += comps[c]
+            if len(comps[c]) > 1:
+                cycles.append(comps[c])
+        done |= set(pick)
+        remaining -= set(pick)
+    cycles.sort()
     return order, cycles
 
 

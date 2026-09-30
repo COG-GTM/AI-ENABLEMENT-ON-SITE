@@ -39,7 +39,7 @@ runs steps 1 and 3 and writes a report (`use-cases/reusable-pipeline/`).
 
 `example-system/matlab-repo/`: 27 `.m` files built to exercise what a repository scan meets: a `+sn` package
 with sub-packages, an `@BatteryModel` class folder and a classdef file, `private/` helpers, scripts with local
-functions, `eval` / `feval` / `str2func` / `cellfun`, toolbox calls (Signal Processing, Statistics), a shadowed
+functions, `eval` / `feval` / `str2func` / `cellfun`, toolbox calls (Signal Processing, Optimization), a shadowed
 built-in, an unresolved name, tests with vectors, a graphics-only script, a legacy file, and a malformed file.
 
 - 27 parsed, 0 unreadable; 4 scripts, 30 functions, 2 classes, 4 packages, 2 tests

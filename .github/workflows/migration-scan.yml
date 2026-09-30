@@ -27,15 +27,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # dispatch inputs reach the shell only through environment variables (never expanded into the script text)
       - name: scan -> pack -> report (dry run, no agent)
+        env:
+          SCAN_LANG: ${{ github.event.inputs.lang || 'c' }}
+          SCAN_TREE: ${{ github.event.inputs.tree || 'example-system/firmware-repo' }}
+          SCAN_NAME: ${{ github.event.inputs.name || 'firmware-repo' }}
         run: |
           python tools/pipeline_run.py \
-            --lang "${{ github.event.inputs.lang || 'c' }}" \
-            --tree "${{ github.event.inputs.tree || 'example-system/firmware-repo' }}" \
-            --name "${{ github.event.inputs.name || 'firmware-repo' }}" \
+            --lang "$SCAN_LANG" \
+            --tree "$SCAN_TREE" \
+            --name "$SCAN_NAME" \
             --resume
       - name: backlog status
-        run: python tools/tracker_report.py --file "outputs/pipeline/${{ github.event.inputs.name || 'firmware-repo' }}/${{ github.event.inputs.name || 'firmware-repo' }}-backlog-status.json"
+        env:
+          SCAN_NAME: ${{ github.event.inputs.name || 'firmware-repo' }}
+        run: python tools/tracker_report.py --file "outputs/pipeline/$SCAN_NAME/$SCAN_NAME-backlog-status.json"
       - uses: actions/upload-artifact@v4
         with:
           name: migration-scan-${{ github.event.inputs.name || 'firmware-repo' }}

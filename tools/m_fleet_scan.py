@@ -121,7 +121,7 @@ STRING_RE = re.compile(r"'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\"")
 # --- lexing ---------------------------------------------------------------------------------------------------
 
 
-def strip_line(line: str) -> tuple[str, list[str], bool]:
+def strip_line(line: str, base: int = 0) -> tuple[str, list[str], bool]:
     """Return (code with strings/comments removed, string literals, continues) for one physical line.
     A quote starts a char array unless the previous non-blank char makes it a transpose (identifier, `)`, `]`, `}`,
     digit, `.`, or another quote)."""
@@ -142,8 +142,8 @@ def strip_line(line: str) -> tuple[str, list[str], bool]:
                         continue
                     break
                 j += 1
+            out.append(f" \x00{base + len(strings)} ")  # numbered placeholder keeps token boundaries and finds the literal again
             strings.append(line[i + 1:j].replace(ch * 2, ch))
-            out.append(" \x00 ")  # placeholder keeps token boundaries
             i = j + 1
             prev = "\x00"
             continue
@@ -169,7 +169,7 @@ def strip_code(text: str) -> tuple[list[str], list[str]]:
         if s == "%{":
             block += 1
             continue
-        line, strs, cont = strip_line(raw)
+        line, strs, cont = strip_line(raw, len(strings))
         strings += strs
         pending += line + " "
         if cont:
@@ -309,11 +309,16 @@ def parse_file(path: Path, tree: Path) -> dict:
         if base in DYNAMIC or (base in DYNAMIC_STRING_FUNCS and name in candidates):
             for mm in re.finditer(r"\b" + re.escape(name) + r"\s*\(", joined):
                 arg = joined[mm.end():mm.end() + 40].strip()
-                dynamic.append({"call": base, "literal": arg.startswith("\x00")})
+                lit = re.match(r"\x00(\d+)", arg)
+                literal = None
+                if lit:
+                    ident = IDENT_RE.match(strings[int(lit.group(1))].strip())   # 'fn' or 'fn(args)'; anything else is not a name
+                    literal = ident.group(0) if ident else None
+                dynamic.append({"call": base, "literal": bool(lit), "name": literal})
             if base in DYNAMIC:
                 del candidates[name]
-    # string literals that name something (for dynamic-literal resolution)
-    literal_names = sorted({s for s in strings if re.fullmatch(r"[A-Za-z_]\w*(\.[A-Za-z_]\w*)*", s)})
+    # names that appear as the string argument of a dynamic call (the only literals that can become an edge)
+    literal_names = sorted({d["name"] for d in dynamic if d["name"]})
 
     main = funcs[0] if funcs and not is_script else None
     if main:
@@ -379,7 +384,7 @@ def resolve(files: list[dict], builtins: frozenset[str]) -> dict:
             if b in by_name and b not in f["local_names"] and b not in names:
                 names[b] = 0  # command syntax or bare script call
         for lit in f["literal_names"]:
-            if any(d["literal"] for d in f["dynamic"]) and (lit in by_name or lit in by_qualified):
+            if lit in by_name or lit in by_qualified:
                 target = by_qualified.get(lit) or by_name[lit][0]
                 add_edge(f, target, "dynamic-literal", lit)
                 tree_calls.append(lit + " (dynamic-literal)")

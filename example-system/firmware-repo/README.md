@@ -18,7 +18,7 @@ shows how each one is reported rather than guessed:
 | Interrupt handler and `volatile` shared state | `drivers/adc_isr.c` (`ADC_IRQHandler`), `drivers/spi_driver.c` | ISR name pattern -> `retain`, entry point; `volatile` counted and flagged for host testing |
 | Inline assembly | `app/main.c` (`__asm volatile("wfi")`), `bsp/startup.c` | `retain` |
 | Startup code, linker symbols, section attributes | `bsp/startup.c` (`_sidata`, `_estack`, `__attribute__((section(".isr_vector")))`), `bsp/sensor_hub.ld` | `retain`; the linker script is listed under build files |
-| Board/architecture conditionals with `#error` | `bsp/system_init.c` (`BOARD_REV_C` / `BOARD_REV_B`) | counted per file; the `gcc -MM` cross-check fails on it until `--cflags "-DBOARD_REV_C"` is passed, which is the point |
+| Board/architecture conditionals with `#error` | `bsp/system_init.c` (`BOARD_REV_C` / `BOARD_REV_B`) | counted per file; the `gcc -MM` cross-check fails on it until `--cflags=-DBOARD_REV_C` is passed, which is the point |
 | Vendor / CMSIS calls | `bsp/system_init.c` (`HAL_Init`, `NVIC_SetPriority`, `__enable_irq`) | `calls_vendor` by prefix, never `unresolved` |
 | Function pointers | `app/scheduler.c` (`t->fn(t->ctx)`), `cpp/command_parser.cpp` | `indirect_calls`, reported not followed |
 | `static inline` in a header | `algo/fixed_point.h` (`q16_mul`, `q16_clamp`) | resolves for any file whose include closure reaches the header |

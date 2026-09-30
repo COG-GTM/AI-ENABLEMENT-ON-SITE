@@ -27,7 +27,7 @@ deliberate scope: it gives an executable specification and a host-side oracle wi
 
 | # | Do | Leaves behind |
 | --- | --- | --- |
-| 1 | `/repo-discovery example-system/firmware-repo --lang c --name firmware-repo` (or `python tools/c_fleet_scan.py example-system/firmware-repo --name firmware-repo`; add `--cflags "-DBOARD_REV_C"` when headers need target flags) | `outputs/firmware-repo-c-fleet-inventory.csv`, `-c-fleet-summary.json`, `-c-repo-map.md`, `-c-dependency-map.json` + `.dot`, `-c-migration-backlog.json` + `.csv` |
+| 1 | `/repo-discovery example-system/firmware-repo --lang c --name firmware-repo` (or `python tools/c_fleet_scan.py example-system/firmware-repo --name firmware-repo`; add `--cflags=-DBOARD_REV_C` when headers need target flags) | `outputs/firmware-repo-c-fleet-inventory.csv`, `-c-fleet-summary.json`, `-c-repo-map.md`, `-c-dependency-map.json` + `.dot`, `-c-migration-backlog.json` + `.csv` |
 | 2 | Read `outputs/firmware-repo-c-repo-map.md`: entry points, target-only files with the marker that made them so, seam candidates, vendor code, include and call trees, leaf-first order | where the host/target boundary is |
 | 3 | `/bring-your-firmware example-system/firmware-repo` with the seam candidates from step 2 | `outputs/<tree>-firmware-map.md`, a `host-tests/` folder from `templates/host-harness/` with stubs on the seam |
 | 4 | `python tools/prompt_pack.py --map outputs/firmware-repo-c-dependency-map.json` | `outputs/packs/firmware-repo-c/<ID>.md`, `manifest.json` |
@@ -49,7 +49,7 @@ a cross-compiler `Makefile`.
 - classification: port 21, wrap 4, retain 5; 2 seam candidates (`hal_gpio_write`, `crc16_vendor`); 15 backlog items
 - include reader: `gcc -MM` cross-check when gcc is present; `gcc disabled (--no-gcc)` otherwise
 - `python tools/c_fleet_scan.py --check` compares a fresh scan with `expected/`
-- Finished twin: `example-system/src` (C) and `sim/` (Python) pass the same 57 tests; the MATLAB vector run matches
+- Finished twin: `example-system/src` (C) and `example-system/sim` (Python) pass the same 57 tests; the MATLAB vector run matches
   both exactly; `templates/host-harness` runs 58 checks against the C through `hal_stub.c`
 
 ## How the scanner works

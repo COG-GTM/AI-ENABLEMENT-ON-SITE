@@ -76,7 +76,7 @@
         },
         {
           "value": "2",
-          "label": "toolboxes detected (Signal Processing, Statistics)"
+          "label": "toolboxes detected (Optimization, Signal Processing)"
         }
       ],
       "note": "python tools/m_fleet_scan.py --check compares a fresh scan with example-system/matlab-repo/expected/."

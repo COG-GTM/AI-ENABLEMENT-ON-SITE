@@ -89,6 +89,21 @@ class Resolution(unittest.TestCase):
         self.assertIn("dynamic call (eval, feval, str2func; 1 of 3 with a string literal)", rows["d.m"]["reasons"])
         self.assertEqual(r["dep_map"]["dynamic"]["d.m"], ["eval (computed)", "feval (computed)", "str2func (string literal)"])
 
+    def test_unrelated_strings_do_not_become_dynamic_edges(self):
+        r = self.scan({
+            "d.m": "function d(name)\ndisp('target');\nfprintf('%s', 'other');\nfeval(name, 2);\nend\n",
+            "e.m": "function e()\ndisp('helper text');\nfeval('target', 1);\neval('other(3)');\nend\n",
+            "target.m": "function target(x)\nend\n",
+            "other.m": "function other(x)\nend\n",
+        })
+        rows = self.rows(r)
+        self.assertEqual(rows["d.m"]["calls_tree"], "")            # 'target' is only displayed, never dispatched
+        self.assertEqual(rows["e.m"]["calls_tree"], "other (dynamic-literal);target (dynamic-literal)")
+        kinds = {(e["from"], e["to"]): e["kind"] for e in r["dep_map"]["edges"]}
+        self.assertNotIn(("d.m", "target.m"), kinds)
+        self.assertEqual(kinds[("e.m", "target.m")], "dynamic-literal")
+        self.assertEqual(kinds[("e.m", "other.m")], "dynamic-literal")
+
     def test_classification_retain_wrap_port_shadow(self):
         r = self.scan({
             "s.m": "function s(mdl)\nsim(mdl);\nend\n",
