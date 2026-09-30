@@ -99,7 +99,9 @@ class FlowValidation(unittest.TestCase):
         self.assertGreater(back[0]["lane"], max(nd["y"] + nd["h"] for nd in lay["nodes"]))
         self.assertLessEqual(back[0]["lane"], lay["h"])
         self.assertLess(build_deck.flow_layout(flow_slide(edges=[])).get("h"), lay["h"])
-        self.check(flow_slide(edges=[{"from": "d", "to": "a"}]), "bottom node of its column")
+        mid = build_deck.flow_layout(flow_slide(edges=[{"from": "d", "to": "a"}]))["edges"][0]  # a non-bottom source is routed via the gap
+        self.assertEqual(mid["route"], "back")
+        self.assertTrue(all(nd["x"] >= mid["gx1"] or nd["x"] + nd["w"] <= mid["gx1"] for nd in lay["nodes"]))
 
     def test_text_limits(self):
         self.check(flow_slide(columns=[{"label": "A", "nodes": [{"id": "a", "label": "x", "kind": "magic"}]}], edges=[]), "kind")
@@ -169,6 +171,25 @@ class FlowHtml(unittest.TestCase):
 
 
 class FlowPptx(unittest.TestCase):
+    def test_dense_flow_keeps_shape_ids_unique(self):
+        cols = [{"label": f"C{i}", "nodes": [{"id": f"n{i}{j}", "label": "x"} for j in range(3 if i < 6 else 2)]} for i in range(7)]
+        ids = [nd["id"] for c in cols for nd in c["nodes"]]
+        edges = [{"from": ids[i], "to": ids[(i * 7 + 3) % 20]} for i in range(20)]
+        edges = [e for e in edges if e["from"] != e["to"]]
+        edges += [{"from": ids[19], "to": ids[k]} for k in range(10)]
+        slide = flow_slide(columns=cols, edges=edges[:30])
+        slide["note"] = "n"
+        with tempfile.TemporaryDirectory() as td:
+            src, out = Path(td) / "d.json", Path(td) / "d.pptx"
+            src.write_text(json.dumps(outline(slide)), encoding="utf-8")
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(export_pptx.main([str(src), str(out)]), 0)
+            with zipfile.ZipFile(out) as z:
+                xml = z.read("ppt/slides/slide2.xml").decode("utf-8")
+        cnv = re.findall(r'<p:cNvPr id="(\d+)"', xml)
+        self.assertGreater(len(cnv), 80)
+        self.assertEqual(len(cnv), len(set(cnv)))
+
     def test_native_shapes_connectors_and_legend(self):
         with tempfile.TemporaryDirectory() as td:
             src = Path(td) / "d.json"
@@ -183,7 +204,7 @@ class FlowPptx(unittest.TestCase):
             sps = list(root.iter(f"{NS_P}sp"))
             cxns = list(root.iter(f"{NS_P}cxnSp"))
             texts = [t.text or "" for t in root.iter(f"{NS_A}t")]
-            self.assertEqual(len(cxns), 7)  # 4 straight edges + 3 segments for the one return edge
+            self.assertEqual(len(cxns), 9)  # 4 straight edges + 5 segments for the one return edge
             self.assertGreaterEqual(len(sps), 5 + 3 + 1 + 1)  # nodes + column heads + legend + title
             for word in ("Tree", "Scan", "tool", "Skill", "Proof", "Later", "next", "Caption < & >"):
                 self.assertIn(word, texts)

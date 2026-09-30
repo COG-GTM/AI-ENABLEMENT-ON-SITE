@@ -56,7 +56,8 @@ FLOW_W, FLOW_H, FLOW_GAP, FLOW_ROW_GAP, FLOW_PAD, FLOW_HEAD, FLOW_HEAD_PX = 1136
 FLOW_MAX_COLS, FLOW_MAX_ROWS, FLOW_MAX_NODES, FLOW_MAX_EDGES = 7, 4, 20, 30
 FLOW_MAX_LABEL_LINES, FLOW_MAX_SUB_LINES, FLOW_MAX_LABEL, FLOW_MAX_EDGE_LABEL = 3, 2, 80, 32
 FLOW_LANE = 40  # px reserved below the nodes when an edge returns to an earlier column
-FLOW_BODY, FLOW_CAPTION_LINE, FLOW_CAPTION_FONT = 450, 27, 20  # px under the title for diagram + caption lines in the HTML slide
+FLOW_CAPTION_FONT = 20
+FLOW_FIT = ((462, 27), (408, 24))  # (px for diagram + caption lines, px per caption line) in the HTML slide and in the PPTX slide
 FLOW_FONT = {1: 20, 2: 20, 3: 20, 4: 19, 5: 18, 6: 15, 7: 14}  # label px by column count; sub is 3 px smaller
 FLOW_KINDS = {  # kind -> legend text
     "input": "Your files, read only",
@@ -343,8 +344,9 @@ def flow_layout(s: dict, where: str = "flow") -> dict:
 
     Returns {"font", "sub_font", "h" (box height used, at most FLOW_H), "columns": [{"label", "x", "w"}], "nodes": [{"id", "kind", "label", "sub", "x", "y",
     "w", "h", "lines", "sub_lines", "col"}], "edges": [{"from", "to", "label", "dashed", "x1", "y1", "x2", "y2",
-    "route", "lane"}], "kinds": [kinds used, legend order]}. route is "right" (to a later column), "down" / "up" (same
-    column) or "back" (to an earlier column: down into a lane reserved below the nodes, across, and up into the target).
+    "route", "lane", "gx1", "gx2"}], "kinds": [kinds used, legend order]}. route is "right" (to a later column), "down" / "up"
+    (same column) or "back" (to an earlier column: out of the left side into the column gap at gx1, down into a lane reserved
+    below the nodes, across, up the gap at gx2 and into the right side of the target; the gaps hold no nodes).
     Raises SystemExit on anything that would not fit, including a caption too long for the space left under the diagram.
     """
     cols = s.get("columns")
@@ -419,7 +421,7 @@ def flow_layout(s: dict, where: str = "flow") -> dict:
     height = body + lane
     if s.get("caption"):
         cap_lines = wrapped_lines(s["caption"], int(FLOW_W / FLOW_CAPTION_FONT * 10))
-        room = int((FLOW_BODY - height) / FLOW_CAPTION_LINE)
+        room = min(int((body_px - height) / line_px) for body_px, line_px in FLOW_FIT)
         if cap_lines > room:
             raise SystemExit(f"{where}.caption: wraps to {cap_lines} lines; only {room} fit under a {height:.0f} px diagram: shorten it")
     for placed, total in totals:
@@ -451,14 +453,12 @@ def flow_layout(s: dict, where: str = "flow") -> dict:
                 route, x1, y1, x2, y2 = "down", a["x"] + a["w"] / 2, a["y"] + a["h"], b["x"] + b["w"] / 2, b["y"]
             else:
                 route, x1, y1, x2, y2 = "up", a["x"] + a["w"] / 2, a["y"], b["x"] + b["w"] / 2, b["y"] + b["h"]
-        else:
-            for end in (a, b):
-                if end is not totals[end["col"]][0][-1]:
-                    raise SystemExit(f"{at}: a return edge must leave and enter the bottom node of its column so it can use the lane below")
-            route, x1, y1, x2, y2 = "back", a["x"] + a["w"] / 2, a["y"] + a["h"], b["x"] + b["w"] / 2, b["y"] + b["h"]
+        else:  # out of the left side into the column gap, down to the lane, across, up the gap left of the target, into its right side
+            route, x1, y1, x2, y2 = "back", a["x"], a["y"] + a["h"] / 2, b["x"] + b["w"], b["y"] + b["h"] / 2
         dashed = "pending" in (a["kind"], b["kind"])
         out_edges.append({"from": a["id"], "to": b["id"], "label": label, "dashed": dashed, "route": route,
-                          "x1": x1, "y1": y1, "x2": x2, "y2": y2, "lane": height - lane / 2})
+                          "x1": x1, "y1": y1, "x2": x2, "y2": y2, "lane": height - lane / 2,
+                          "gx1": x1 - FLOW_GAP / 2, "gx2": x2 + FLOW_GAP / 2})
     kinds = [k for k in FLOW_KINDS if any(n["kind"] == k for n in nodes)]
     return {"font": font, "sub_font": sub_font, "h": height, "columns": out_cols, "nodes": nodes, "edges": out_edges, "kinds": kinds}
 
@@ -556,9 +556,10 @@ def flow_svg(s: dict, n: int) -> str:
             d = f"M{x1:.1f},{y1:.1f} C{mx:.1f},{y1:.1f} {mx:.1f},{y2:.1f} {x2:.1f},{y2:.1f}"
             lx, ly = mx, (y1 + y2) / 2 - 6
         elif e["route"] == "back":
-            ly0 = e["lane"]
-            d = f"M{x1:.1f},{y1:.1f} L{x1:.1f},{ly0:.1f} L{x2:.1f},{ly0:.1f} L{x2:.1f},{y2:.1f}"
-            lx, ly = (x1 + x2) / 2, ly0 - 5
+            ly0, gx1, gx2 = e["lane"], e["gx1"], e["gx2"]
+            d = (f"M{x1:.1f},{y1:.1f} L{gx1:.1f},{y1:.1f} L{gx1:.1f},{ly0:.1f} L{gx2:.1f},{ly0:.1f} "
+                 f"L{gx2:.1f},{y2:.1f} L{x2:.1f},{y2:.1f}")
+            lx, ly = (gx1 + gx2) / 2, ly0 - 5
         else:
             d = f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}"
             lx, ly = x1 + 8, (y1 + y2) / 2 + 4

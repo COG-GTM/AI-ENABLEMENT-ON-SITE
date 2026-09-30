@@ -195,9 +195,10 @@ FLOW_STYLE = {  # kind -> (fill, line colour or accent marker, text colour, dash
 }
 
 
-def flow(s: dict, sid: int, accent: str) -> str:
+def flow(s: dict, sid: int, accent: str) -> tuple:
     """The flow diagram as native shapes: one rectangle per node, straight connectors per edge, legend and caption
-    below. Same layout as the HTML (build_deck.flow_layout), scaled from its pixel box into the body area."""
+    below. Same layout as the HTML (build_deck.flow_layout), scaled from its pixel box into the body area.
+    Returns (xml, next free shape id)."""
     lay = build_deck.flow_layout(s)
     cw = W - 2 * MX
     k = cw / build_deck.FLOW_W  # 1 HTML px = k EMU; flow_layout already checked diagram + caption fit in FLOW_BODY px
@@ -217,17 +218,16 @@ def flow(s: dict, sid: int, accent: str) -> str:
             out.append(sp(sid, "Column", X(c["x"]), Y(0), int(c["w"] * k), int(20 * k), para(str(c["label"]).upper(), build_deck.FLOW_HEAD_PX * pt, MUTED, True, algn="ctr"), anchor="ctr", inset=0))
             sid += 1
     for e in lay["edges"]:
-        if e["route"] == "back":  # down into the lane below the nodes, across, up into the target: three segments, one arrow head
-            ly0 = e["lane"]
-            out.append(connector(sid, X(e["x1"]), Y(e["y1"]), X(e["x1"]), Y(ly0), EDGE, e["dashed"], arrow=False))
-            out.append(connector(sid + 1, X(e["x1"]), Y(ly0), X(e["x2"]), Y(ly0), EDGE, e["dashed"], arrow=False))
-            out.append(connector(sid + 2, X(e["x2"]), Y(ly0), X(e["x2"]), Y(e["y2"]), EDGE, e["dashed"]))
-            sid += 3
+        if e["route"] == "back":  # same polyline as the SVG: into the gap, down to the lane, across, up, into the target
+            pts = [(e["x1"], e["y1"]), (e["gx1"], e["y1"]), (e["gx1"], e["lane"]), (e["gx2"], e["lane"]), (e["gx2"], e["y2"]), (e["x2"], e["y2"])]
+            for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+                out.append(connector(sid, X(ax), Y(ay), X(bx), Y(by), EDGE, e["dashed"], arrow=(bx, by) == pts[-1]))
+                sid += 1
         else:
             out.append(connector(sid, X(e["x1"]), Y(e["y1"]), X(e["x2"]), Y(e["y2"]), EDGE, e["dashed"]))
             sid += 1
         if e["label"]:
-            lx, ly = (e["x1"] + e["x2"]) / 2, e["lane"] - 4 if e["route"] == "back" else (e["y1"] + e["y2"]) / 2
+            lx, ly = ((e["gx1"] + e["gx2"]) / 2, e["lane"] - 4) if e["route"] == "back" else ((e["x1"] + e["x2"]) / 2, (e["y1"] + e["y2"]) / 2)
             out.append(sp(sid, "Edge label", X(lx - 60), Y(ly - 22), int(120 * k), int(18 * k), para(e["label"], 11 * pt, MUTED, algn="ctr"), anchor="b", inset=0))
             sid += 1
     for nd in lay["nodes"]:
@@ -246,9 +246,11 @@ def flow(s: dict, sid: int, accent: str) -> str:
         run("\u25a0 ", 1100, swatch[kd]) + run(build_deck.FLOW_KINDS[kd] + "    ", 1000, MUTED) for kd in lay["kinds"]) + "</a:p>"
     y = Y(lay["h"]) + 76200
     out.append(sp(sid, "Legend", MX, y, cw, 304800, legend, anchor="ctr", inset=0))
+    sid += 1
     if s.get("caption"):
-        out.append(sp(sid + 1, "Caption", MX, y + 304800, cw, 5943600 - (y + 304800), para(s["caption"], 1500, INK), inset=0))
-    return "".join(out)
+        out.append(sp(sid, "Caption", MX, y + 304800, cw, 5943600 - (y + 304800), para(s["caption"], 1500, INK), inset=0))
+        sid += 1
+    return "".join(out), sid
 
 
 def slide_shapes(s: dict, deck: dict, n: int, total: int, accent: str) -> str:
@@ -309,8 +311,8 @@ def slide_shapes(s: dict, deck: dict, n: int, total: int, accent: str) -> str:
                 out.append(sp(sid + 3, "Value", track_x + track_w + gap, ry, val_w, row_h, para(f"{value:g} {unit}".rstrip(), 1600, INK, algn="r"), anchor="ctr", inset=0))
                 sid += 4
         elif t == "flow":
-            out.append(flow(s, sid, accent))
-            sid += 80
+            xml, sid = flow(s, sid, accent)
+            out.append(xml)
     sid += 20
     if s.get("note"):
         out.append(sp(sid, "Note", MX, 5943600, cw, 381000, para(s["note"], 1200, MUTED), anchor="b", inset=0))
