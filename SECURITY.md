@@ -8,6 +8,7 @@ This repository contains reusable enablement material and synthetic demonstratio
 
 - Use the organization-approved Federal deployment and approved identity provider.
 - Confirm that each integration is approved and within its own documented boundary before enabling it.
+- Use `integrations/tool-approval-status.md` (FedRAMP Marketplace status per tool, with evidence dates) as the starting point for that confirmation; it records evidence, not approval.
 - Grant only the repository, filesystem, command, and network access required for the current demonstration.
 - Use synthetic data by default and minimize all context provided to an agent.
 - Review proposed commands, diffs, logs, and generated output before sharing or committing them.
