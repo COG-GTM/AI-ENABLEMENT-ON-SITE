@@ -95,7 +95,10 @@ Point at: the five JSON lines, `.devin/mcp_config.json`.
 Say: fork it, open it, paste `Mimic workflow 1 on ../your-firmware`. The skills are generic; the
 example system is just the thing they practise on.
 
-Ask them: which of the eight workflows in `WORKFLOWS.md` is closest to what your team does weekly? For LabVIEW, MATLAB, or C/C++ teams, point at workflows 6 to 8.
+Ask them: which of the twelve workflows in `WORKFLOWS.md` is closest to what your team does weekly? For LabVIEW, MATLAB,
+or C/C++ teams, point at workflows 6 to 8; for a whole estate (thousands of VIs, `.m` files, or C modules), point at
+workflows 9 to 12 and the matching folder under `use-cases/` (README plus a deck per lane). The one-hour version of that
+story is `templates/deck-exec-briefing.html` with `TALK-TRACK.md`.
 What is the artifact you rewrite most often? Who has to approve a token?
 
 ## If the slash commands are not recognised

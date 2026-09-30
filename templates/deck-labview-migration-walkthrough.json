@@ -21,7 +21,7 @@
         "A synthetic example system and four real public-domain-licensed VIs are included so every step can be rehearsed offline",
         "Every number in every report comes from a tool, never typed by hand; every result lands in outputs/"
       ],
-      "note": "Sources: README.md, AGENTS.md, tools/check_repo.py (15 skills), tools/golden_path.py (14 stages)"
+      "note": "Sources: README.md, AGENTS.md, tools/check_repo.py (16 skills), tools/golden_path.py (17 stages)"
     },
     {
       "type": "two-column",
@@ -47,11 +47,11 @@
       "title": "What ships and what it proves, by the numbers",
       "stats": [
         {
-          "value": "15",
+          "value": "16",
           "label": "skills, each one a slash command"
         },
         {
-          "value": "14/14",
+          "value": "17/17",
           "label": "golden-path stages pass offline"
         },
         {
@@ -722,7 +722,7 @@
       "title": "Verify it yourself before trusting any slide here",
       "bullets": [
         "python tools/check_repo.py : skills, links, forbidden terms, every tool, every test",
-        "python tools/golden_path.py : 14 stages end to end; evidence in outputs/golden/REPORT.md",
+        "python tools/golden_path.py : 17 stages end to end; evidence in outputs/golden/REPORT.md",
         "python tools/vi_fleet_scan.py --check : fresh scan of the example equals the checked-in expected CSV",
         "python -m unittest discover -s tools/tests -q : includes the scanner's tests with a fake lvkit (classification, corrupt file, ordering, backlog schema)",
         "python example-system/real-vi/inventory.py --check : the four public VIs still match their recorded hashes",
