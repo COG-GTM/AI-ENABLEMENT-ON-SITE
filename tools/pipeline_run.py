@@ -202,11 +202,16 @@ class Pipeline:
     def retire_stale_results(self, stage: str, packs: list[dict]) -> set[str]:
         """Run the pack-hash check over every pack in the manifest (not just the ones a --limit run will process)."""
         stale: set[str] = set()
+        agent_units = self.state["stages"].get("agent", {}).get("units", {})
         for pack in packs:
             pid = pack["id"]
             if self.result_of(pid) and self.stale_result(pid, pack):
                 stale.add(pid)
-                self.log(stage, "stale", id=pid, reason="pack changed since result.json was written; old result and evidence kept under results/<id>.stale-*/")
+                previous = agent_units.get(pid, {}).get("status")
+                agent_units[pid] = {"status": "stale", "previous_status": previous,
+                                    "reason": "pack changed since the last result; old result and evidence archived"}
+                self.log(stage, "stale", id=pid, previous_status=previous,
+                         reason="pack changed since result.json was written; old result and evidence kept under results/<id>.stale-*/")
         return stale
 
     def stage_agent(self) -> None:

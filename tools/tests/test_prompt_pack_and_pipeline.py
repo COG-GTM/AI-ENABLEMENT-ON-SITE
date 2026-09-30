@@ -363,6 +363,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         state = json.loads(r.stdout)
         self.assertEqual(state["stages"]["compare"]["units"][proven[0]]["status"], "no result")
+        self.assertEqual(state["stages"]["agent"]["units"][proven[0]]["status"], "stale")          # agent state follows the retirement
+        self.assertEqual(state["stages"]["agent"]["units"][proven[0]]["previous_status"], "done")
         self.assertTrue(any(e["stage"] == "compare" and e["event"] == "stale" for e in self.journal()))
 
     def test_placeholders_are_shell_quoted(self) -> None:

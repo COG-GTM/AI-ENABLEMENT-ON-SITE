@@ -110,7 +110,31 @@ RETAIN_MARKERS = {
 DYNAMIC = frozenset("eval evalc evalin assignin feval str2func run".split())
 DYNAMIC_STRING_FUNCS = frozenset("cellfun arrayfun structfun".split())
 IDENT_RE = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*")
-LITERAL_CALL_RE = re.compile(r"([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*(?:\(.*)?;?\s*$", re.S)
+
+
+def literal_callee(text: str) -> "str | None":
+    """Function named by a dynamic-call string: the whole literal must be one qualified name or one balanced call
+    `name(...)`, optionally ending in `;`. Assignments, operators, extra statements or unbalanced parentheses give None."""
+    body = text.strip().rstrip(";").rstrip()
+    m = IDENT_RE.match(body)
+    if not m:
+        return None
+    rest = body[m.end():].lstrip()
+    if not rest:
+        return m.group(0)
+    if not rest.startswith("("):
+        return None
+    depth = 0
+    for i, ch in enumerate(rest):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return m.group(0) if i == len(rest) - 1 else None
+            if depth < 0:
+                return None
+    return None
 FUNC_DEF_RE = re.compile(r"^\s*function\b\s*(?:(\[[^\]]*\]|[A-Za-z_]\w*)\s*=\s*)?([A-Za-z_]\w*)\s*(\(([^)]*)\))?")
 CLASSDEF_RE = re.compile(r"^\s*classdef\b\s*(?:\([^)]*\)\s*)?([A-Za-z_]\w*)")
 ASSIGN_RE = re.compile(r"^\s*(\[[^\]]*\]|[A-Za-z_]\w*)(?:\s*(?:\([^()]*\)|\{[^{}]*\}|\.\w+))*\s*=(?!=)")
@@ -313,8 +337,7 @@ def parse_file(path: Path, tree: Path) -> dict:
                 lit = re.match(r"\x00(\d+)", arg)
                 literal = None
                 if lit:
-                    ident = LITERAL_CALL_RE.match(strings[int(lit.group(1))].strip())   # 'fn' or 'fn(args)'; 'x = 3' etc. is not a name
-                    literal = ident.group(1) if ident else None
+                    literal = literal_callee(strings[int(lit.group(1))])   # 'fn' or 'fn(args)'; 'x = 3', 'a(1) + b(2)' are not names
                 dynamic.append({"call": base, "literal": bool(lit), "name": literal})
             if base in DYNAMIC:
                 del candidates[name]
