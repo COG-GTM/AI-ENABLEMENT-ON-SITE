@@ -26,6 +26,12 @@ Nothing here describes a real product or program.
 | `sim/sensor_node/` | Python twin of `src/` (runs anywhere, no compiler) | tdd, what-if-part-swap |
 | `tests/` | Python `unittest` suite + C tests via `make test` | tdd |
 | `tracker.json` | Bugs, defects, and capabilities for this system | track-and-report, exec-deck |
+| `bench/` | Synthetic LabVIEW-style test rig: recording, Python rig, comparison evidence | labview-to-python |
+| `real-vi/` | Four permissively licensed open-source `.vi` files with `sources.json` provenance and a proven Python port | labview-to-python, vi-fleet-discovery |
+| `fleet/` | Fleet-scan fixture markers and expected counts for the VI tree (`.lvproj`, `.seq`) | vi-fleet-discovery |
+| `model/` | MATLAB filter model, golden vectors, Python and C twins that reproduce them | matlab-to-code |
+| `matlab-repo/` | 27 synthetic `.m` files (packages, classes, `private/`, dynamic calls, toolbox use) for repository-scale discovery | repo-discovery |
+| `firmware-repo/` | 30 synthetic C/C++ files (ISR, registers, linker script, `#if` boards, C++ templates, vendor code) for repository-scale discovery | repo-discovery, bring-your-firmware |
 
 ## Run it
 

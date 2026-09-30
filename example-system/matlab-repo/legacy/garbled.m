@@ -1,0 +1,4 @@
+ÿþfunction y = garbled(x)
+% not valid UTF-8 and CRLF line endings
+y = x;
+end

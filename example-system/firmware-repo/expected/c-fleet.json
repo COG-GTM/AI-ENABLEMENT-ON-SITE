@@ -1,0 +1,67 @@
+{
+  "_about": "Expected shape of `python tools/c_fleet_scan.py --check` over example-system/firmware-repo/ (static include walk, no gcc). Regenerate with --check --write-expected after a deliberate change.",
+  "counts": {
+    "files": 30,
+    "parsed": 30,
+    "unreadable": 0,
+    "sources": 16,
+    "headers": 14,
+    "cpp_files": 5,
+    "functions": 47,
+    "tests": 1,
+    "build_files": 2,
+    "include_edges": 32,
+    "call_edges": 11,
+    "ambiguous_edges": 0,
+    "unresolved_calls": 1,
+    "indirect_calls": 4,
+    "vendor_calls": 6,
+    "target_only_files": 5,
+    "seam_candidates": 2,
+    "cycles": 0
+  },
+  "classification": {
+    "port": 21,
+    "wrap": 4,
+    "retain": 5,
+    "unreadable": 0
+  },
+  "entry_points": [
+    "app/main.c",
+    "bsp/startup.c",
+    "drivers/adc_isr.c",
+    "tests/test_scheduler.c"
+  ],
+  "orphans": [
+    "algo/pid.c",
+    "app/telemetry.c",
+    "cpp/command_parser.cpp",
+    "cpp/logger.cpp",
+    "legacy/garbled.c",
+    "legacy/old_filter.c"
+  ],
+  "target_only": [
+    "app/main.c",
+    "bsp/startup.c",
+    "bsp/system_init.c",
+    "drivers/adc_isr.c",
+    "include/board.h"
+  ],
+  "seam_candidates": [
+    {
+      "function": "hal_gpio_write",
+      "defined_in": "drivers/hal_gpio.c",
+      "callers": [
+        "drivers/spi_driver.c"
+      ]
+    },
+    {
+      "function": "crc16_vendor",
+      "defined_in": "third_party/crc16_vendor.c",
+      "callers": [
+        "app/telemetry.c"
+      ]
+    }
+  ],
+  "backlog_items": 15
+}

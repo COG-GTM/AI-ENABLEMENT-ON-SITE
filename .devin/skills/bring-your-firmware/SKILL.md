@@ -27,6 +27,10 @@ the same way it works on `example-system/`.
 
 Read-only until step 3. Never modify the customer's build files; add a harness beside the tree.
 
+For a large tree, `/repo-discovery <tree> --lang c` first: it writes the include and call graph, marks
+host-testable versus target-only files, names the HAL seam candidates, and emits one bounded prompt pack per
+unit, so step 1 here starts from evidence instead of a cold read. This skill then proves one module at a time.
+
 ## Step 1 - Map the tree (read, do not change)
 
 Report these in `outputs/<tree>-firmware-map.md`, each with the file that proves it:

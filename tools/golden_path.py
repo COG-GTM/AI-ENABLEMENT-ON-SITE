@@ -9,7 +9,7 @@ Usage:
 This is the proof that the repository works on a fresh checkout with no network: readiness, research
 brief, what-if analysis, tracker report, traceability matrix, executive deck (HTML and, when the exporter
 is present, PPTX), the spec worked example, the MCP handshake, the model-to-code and LabVIEW-rig
-equivalence checks, the VI fleet scan, the host harness, and the firmware twins. Every expected number is derived from the
+equivalence checks, the VI fleet scan, the MATLAB repository scan, the host harness, and the firmware twins. Every expected number is derived from the
 source files, never typed in here. Exit 1 if any stage fails.
 Standard library only.
 """
@@ -285,12 +285,107 @@ def stage_fleet() -> None:
     s = json.loads(r.stdout)
     c, k = s["counts"], s["classification"]
     backlog = load(OUT / "fleet-migration-backlog.json")["items"]
-    ok = c["vi"] == c["vi_scanned"] and sum(k.values()) == c["vi"] and (OUT / "fleet-fleet-inventory.csv").is_file()
+    dep = load(OUT / "fleet-dependency-map.json")
+    ok = (
+        c["vi"] == c["vi_scanned"]
+        and sum(k.values()) == c["vi"]
+        and (OUT / "fleet-fleet-inventory.csv").is_file()
+        and (OUT / "fleet-project-map.md").is_file()
+        and len(dep["nodes"]) == c["vi"]
+    )
     record(
         "fleet",
         ok,
         f"{c['vi']} VIs, {c['lvproj']} .lvproj, {c['seq']} .seq found; port {k['port']}, wrap {k['wrap']}, retain {k['retain']}, "
-        f"unreadable {k['unreadable']}; {len(backlog)} backlog items; reader: {s['reader']}",
+        f"unreadable {k['unreadable']}; {len(backlog)} backlog items; dependency map {len(dep['edges'])} edges, "
+        f"{len(dep['entry_points'])} entry points; reader: {s['reader']}",
+    )
+
+
+def stage_m_fleet() -> None:
+    """Repository-scale MATLAB discovery over example-system/matlab-repo/: the scanner's --check, then a real scan."""
+    r = run([PY, "tools/m_fleet_scan.py", "--check"])
+    if r.returncode:
+        record("m-fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    r = run([PY, "tools/m_fleet_scan.py", "example-system/matlab-repo", "--name", "matlab-repo", "--out-dir", str(OUT), "--opened", "2026-01-05", "--json"])
+    if r.returncode:
+        record("m-fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    s = json.loads(r.stdout)
+    c, k = s["counts"], s["classification"]
+    backlog = load(OUT / "matlab-repo-m-migration-backlog.json")["items"]
+    ok = (c["m_files"] == c["parsed"] + c["unreadable"] and sum(k.values()) == c["m_files"]
+          and (OUT / "matlab-repo-m-repo-map.md").is_file() and (OUT / "matlab-repo-m-dependency-map.json").is_file())
+    record(
+        "m-fleet",
+        ok,
+        f"{c['m_files']} .m files ({c['scripts']} scripts, {c['functions']} functions, {c['classes']} classes, {c['packages']} packages); "
+        f"{c['edges']} call edges, {c['unresolved_names']} unresolved, {c['dynamic_calls']} dynamic; port {k['port']}, wrap {k['wrap']}, "
+        f"retain {k['retain']}, unreadable {k['unreadable']}; {len(backlog)} backlog items; repo map + dependency map written",
+    )
+
+
+def stage_c_fleet() -> None:
+    """Repository-scale C/C++ discovery over example-system/firmware-repo/: the scanner's --check, then a real scan (gcc cross-check if present)."""
+    r = run([PY, "tools/c_fleet_scan.py", "--check"])
+    if r.returncode:
+        record("c-fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    r = run([PY, "tools/c_fleet_scan.py", "example-system/firmware-repo", "--name", "firmware-repo", "--out-dir", str(OUT), "--opened", "2026-01-05", "--json"])
+    if r.returncode:
+        record("c-fleet", False, (r.stdout + r.stderr)[-300:])
+        return
+    s = json.loads(r.stdout)
+    c, k = s["counts"], s["classification"]
+    backlog = load(OUT / "firmware-repo-c-migration-backlog.json")["items"]
+    dep = load(OUT / "firmware-repo-c-dependency-map.json")
+    ok = (c["files"] == c["parsed"] + c["unreadable"] and sum(k.values()) == c["files"] and len(dep["nodes"]) == c["parsed"]
+          and (OUT / "firmware-repo-c-repo-map.md").is_file() and c["target_only_files"] == k["retain"])
+    record(
+        "c-fleet",
+        ok,
+        f"{c['files']} C/C++ files ({c['sources']} sources, {c['headers']} headers, {c['cpp_files']} C++); {c['include_edges']} include edges, "
+        f"{c['call_edges']} call edges, {c['unresolved_calls']} unresolved, {c['indirect_calls']} indirect; port {k['port']}, wrap {k['wrap']}, "
+        f"retain {k['retain']}, unreadable {k['unreadable']}; {c['seam_candidates']} seam candidates; {len(backlog)} backlog items; "
+        f"include reader: {s['include_reader']}",
+    )
+
+
+def stage_pipeline() -> None:
+    """Reusable pipeline over example-system/firmware-repo/: scan -> pack -> agent (dry run: no agent is called) -> compare -> report,
+    then a --resume run that must skip the unchanged scan and pack stages. Proves the glue and the journal, not any migration."""
+    pipe = OUT / "pipeline-firmware-repo"
+    for old in pipe.glob("journal.jsonl"):
+        old.unlink()
+    for old in pipe.glob("state.json"):
+        old.unlink()
+    base = [PY, "tools/pipeline_run.py", "--lang", "c", "--tree", "example-system/firmware-repo", "--name", "firmware-repo",
+            "--out", str(pipe), "--opened", "2026-01-05", "--json"]
+    r = run(base)
+    if r.returncode:
+        record("pipeline", False, (r.stdout + r.stderr)[-300:])
+        return
+    state = json.loads(r.stdout)
+    st = state["stages"]
+    r2 = run(base + ["--resume"])
+    if r2.returncode:
+        record("pipeline", False, (r2.stdout + r2.stderr)[-300:])
+        return
+    journal = [json.loads(line) for line in (pipe / "journal.jsonl").read_text(encoding="utf-8").splitlines()]
+    resumed = {e["stage"] for e in journal if e["event"] == "skipped" and "--resume" in e.get("reason", "")}
+    agent = st["agent"]
+    n_units = len(agent["units"])
+    ok = (st["agent"]["mode"] == "dry run" and all(u["status"] == "skipped" for u in agent["units"].values())
+          and not (pipe / "results").exists() and resumed == {"scan", "pack"} and (pipe / "REPORT.md").is_file()
+          and (pipe / "firmware-repo-backlog-status.json").is_file() and st["pack"]["over_budget"] == 0
+          and st["report"]["status"] == "done")
+    record(
+        "pipeline",
+        ok,
+        f"scan -> pack -> agent -> compare -> report on firmware-repo: {st['pack']['packs']} packs, largest {st['pack']['max_pack_tokens_est']} tokens est. "
+        f"(whole tree {st['pack']['whole_tree_tokens_est']}); agent stage dry run, {n_units} units skipped, no result.json written; "
+        f"--resume skipped {', '.join(sorted(resumed))}; {len(journal)} journal events",
     )
 
 
@@ -344,7 +439,7 @@ def main(argv=None) -> int:
     results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
-              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_host_harness]
+              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_c_fleet, stage_pipeline, stage_host_harness]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:

@@ -22,6 +22,7 @@ When the user's request matches a row, invoke that skill (or tell them the slash
 | MCP server, add a server by hand, expose a tool, mcp_config | `/mcp-server` |
 | LabVIEW, VI, .vi, TestStand, test rig, bench, instrument, "get out of LabVIEW", port to Python | `/labview-to-python` |
 | inventory a folder of VIs, migration backlog, how many VIs, where do we start, fleet, whole estate | `/vi-fleet-discovery` |
+| whole MATLAB repository, hundreds of .m files, our C/C++ repo, what depends on what, repo map, migration backlog, prompt packs, pipeline | `/repo-discovery` |
 | MATLAB, Simulink, .m, .slx, model, algorithm to C, Embedded Coder output, equivalence | `/matlab-to-code` |
 | my firmware, our C/C++ tree, HAL, host build, GoogleTest, Unity, Ceedling, MISRA, run this on our code | `/bring-your-firmware` |
 

@@ -1,0 +1,60 @@
+{
+  "title": "Reusable, low-touch migration pipeline: scan, pack, run, compare, report",
+  "subtitle": "Use case walkthrough. Numbers from tools/golden_path.py (pipeline stage on example-system/firmware-repo/)",
+  "footer": "Standard-library Python; dry run by default; no agent ran during the golden path.",
+  "slides": [
+    {"type": "title"},
+    {"type": "bullets", "title": "Why 'convert this entire repo' fails", "bullets": [
+      "The whole tree is handed to the agent on every step: context and tokens run out",
+      "Nothing is left behind for a second engineer, a second program, or a CI job",
+      "'Done' is a sentence in a transcript, not a file with evidence",
+      "Needed: a pipeline the team owns in its repository, bounded per unit, resumable, honest about proof"
+    ]},
+    {"type": "table", "title": "Five stages, one command", "columns": ["Stage", "Does", "Leaves behind"], "rows": [
+      ["scan", "runs the scanner for --lang c | matlab | labview", "scan/: inventory, summary, repo map, dependency map, backlog"],
+      ["pack", "one bounded Markdown pack per unit, leaf-first", "packs/<ID>.md, manifest.json (bytes, tokens est.)"],
+      ["agent", "runs --agent-cmd per pack; dry run when absent", "results/<id>/result.json (or 'skipped: dry run')"],
+      ["compare", "--compare-cmd, or checks the evidence files exist", "proven / evidence present / unproven / failed / blocked / no result"],
+      ["report", "REPORT.md + tracker-shaped status", "REPORT.md, state.json, journal.jsonl, <name>-backlog-status.json"]
+    ], "note": "python tools/pipeline_run.py --lang c --tree example-system/firmware-repo --name firmware-repo   (add --resume, --from-stage, --until, --limit, --budget, --agent-cmd, --compare-cmd)"},
+    {"type": "stats", "title": "Fixture dry run", "stats": [
+      {"value": "15", "label": "packs; largest 1615 tokens est.; whole tree 4896"},
+      {"value": "0", "label": "packs over the 8000-token budget; 0 result.json written"},
+      {"value": "scan, pack", "label": "stages skipped on --resume (input hashes unchanged)"},
+      {"value": "46", "label": "journal events across the two runs"}
+    ], "note": "A fake agent in tools/tests drives done-with-evidence, done-without-evidence, and blocked: reported as proven, unproven, blocked."},
+    {"type": "bullets", "title": "Controlling context and tokens", "bullets": [
+      "Scan once; every later step reads dependency-map.json and one pack, never the tree",
+      "One pack per unit with a budget: source, dependency excerpts, callers, open questions, result contract",
+      "Over budget: dependency excerpts shrink first, then source is truncated, and the pack says so",
+      "Leaf-first order: callers' packs point at finished work instead of carrying it",
+      "manifest.json shows bytes and tokens per pack before anything runs; choose --limit from it",
+      "Results persist in results/<id>/; the next unit reads files, not a transcript",
+      "Resume, do not restart: unchanged stages are skipped, done / blocked results survive"
+    ]},
+    {"type": "table", "title": "Approaches compared", "columns": ["Approach", "Strength", "Weakness", "Here"], "rows": [
+      ["Structured intermediate files", "deterministic, diffable, tool-checkable", "only as good as the scanner; static", "tools/*_fleet_scan.py, prompt_pack.py"],
+      ["Reference repository", "shows house style and the proof pattern", "drifts; one example rarely covers an estate", "example-system/src + sim, model/, bench/"],
+      ["Skill / playbook files", "repeatable, reviewable, team-owned text", "needs the agent runtime", "16 skills routed by AGENTS.md"],
+      ["Graph-style controlled flow", "resumable, auditable, bounded per node", "another runtime to own; still needs a model per node", "tools/pipeline_run.py: stages, hashes, journal, resume"]
+    ], "note": "Use all four: files as contract, a reference pair for style, skills for the per-unit procedure, the runner for control."},
+    {"type": "two-column", "title": "What Devin adds, and where the offline path stops", "left_title": "Devin adds", "left": [
+      "AGENTS.md and skills read automatically per repository",
+      "CLI in the IDE against the working tree; Plan mode and least-privilege defaults",
+      "The same skill runs on the next program without re-explaining the method",
+      "Discovery, packing, compare, and report are plain Python: no agent required to run them"
+    ], "right_title": "Honest limits", "right": [
+      "Agent execution needs the Cognition backend; unattended runs need a runner with that access",
+      "The golden path is a dry run: it proves the glue and the journal, not a migration",
+      "'done' is a claim; 'proven' needs a comparison or the evidence files",
+      "No tool ever moves a backlog item to closed"
+    ]},
+    {"type": "bullets", "title": "In CI", "bullets": [
+      ".github/workflows/migration-scan.yml: manual (lang, tree, name inputs) or weekly",
+      "Runs scan -> pack -> report on the tree you name; uploads the pipeline folder as an artifact",
+      "Add --agent-cmd only where the runner has the agent available; otherwise it stays a dry run",
+      "check.yml already runs check_repo.py and golden_path.py on every push"
+    ]},
+    {"type": "quote", "text": "Bounded packs, files as the contract, a journal you can resume, and evidence before 'done'. The team owns the pipeline; the agent does one unit at a time.", "source": "use-cases/reusable-pipeline/README.md, WORKFLOWS.md section 12"}
+  ]
+}
