@@ -1,0 +1,44 @@
+{
+  "title": "Advanced topics to scope with engineering managers",
+  "subtitle": "Discussion only: model and sub-agent choice, AGENTS.md, Windows, remote containers, tool approval status",
+  "footer": "Product behaviour is quoted from docs.devin.ai pages named on each slide; verify against your environment.",
+  "slides": [
+    {"type": "title"},
+    {"type": "bullets", "title": "Token cost: structure first, then model choice", "bullets": [
+      "Structural, model-independent, repeatable: bounded packs per unit, leaf-first, files not transcripts, dry run first",
+      "manifest.json shows bytes and estimated tokens per pack before any agent runs",
+      "CLI: /model opus | sonnet | codex, or /model for a selector (docs.devin.ai/cli/models)",
+      "Default model in ~/.config/devin/config.json (Windows: %APPDATA%\\devin\\config.json)",
+      "Fusion pairs a lead model, an effort level, and a sidekick model (docs.devin.ai/desktop/fusion)",
+      "Availability depends on plan, team restrictions, and administrator allowlists"
+    ]},
+    {"type": "two-column", "title": "Writing AGENTS.md without over-constraining", "left_title": "What this repository does", "left": [
+      "Under 40 lines: routing table, short rules, pointer to README when nothing matches",
+      "Procedures live in skills, one file each; the agent reads long text only for the task at hand",
+      "One verification command before 'done': python tools/check_repo.py",
+      "The file's rules are enforced by a tool: routing, links, forbidden terms, skill cap"
+    ], "right_title": "To scope", "right": [
+      "Which team standards belong in AGENTS.md vs a skill vs CI",
+      "Constraints that protect people and data stay in AGENTS.md; method goes in skills",
+      "Who owns edits and how they are reviewed"
+    ]},
+    {"type": "two-column", "title": "Windows and remote containers", "left_title": "Windows", "left": [
+      "Tools are standard-library Python; they run on Windows as-is",
+      "integrations/mcp-hosting.md gives Windows paths; config at %APPDATA%\\devin\\config.json",
+      "C lanes need gcc + make: WSL 2 or a native toolchain; lvkit from the offline wheel",
+      "SSH password prompts may open cmd.exe windows (docs.devin.ai/desktop/advanced)"
+    ], "right_title": "Remote containers", "right": [
+      "Dev containers on Mac, Windows, Linux, local or over SSH, given Docker + devcontainer.json",
+      "Open Folder in Container / Reopen in Container / Attach to Running Container",
+      "SSH needs OpenSSH and Linux hosts; do not install the Microsoft Remote-SSH extensions alongside",
+      "This repository ships no devcontainer.json yet; one with Python, gcc, make, lvkit would run the whole golden path"
+    ]},
+    {"type": "bullets", "title": "Tool approval status", "bullets": [
+      "integrations/tool-approval-status.md: every tool, install, download, and service the repository mentions",
+      "Category per row: Authorized, In Process, Not on Marketplace, Not applicable, Unknown; evidence URL and date checked",
+      "FedRAMP authorizes cloud service offerings; desktop software and open-source libraries go through the agency's own process",
+      "No claim that a service is inside a boundary without the administrator's confirmation (AGENTS.md, SECURITY.md)"
+    ]},
+    {"type": "quote", "text": "These are questions to scope, not exercises to run. The repository shows the structural answers; the product settings and the environment decide the rest.", "source": "use-cases/advanced-topics/README.md"}
+  ]
+}

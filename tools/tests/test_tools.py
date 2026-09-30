@@ -250,6 +250,38 @@ class CheckRepoTests(unittest.TestCase):
         _, problems = self._with_skills(many)
         self.assertTrue(any("cap is" in p for p in problems))
 
+    def test_use_cases_are_complete_and_decks_fresh(self):
+        import check_repo
+        check_repo.problems = []
+        check_repo.check_use_cases()
+        self.assertEqual(check_repo.problems, [])
+        td = tempfile.TemporaryDirectory()
+        uc = Path(td.name) / "use-cases"
+        (uc / "good").mkdir(parents=True)
+        (uc / "README.md").write_text("| `good/` | lane | status |\n| `stale/` | x | y |\n| `bare/` | x | y |\n")
+        outline = {"title": "T", "slides": [{"type": "title"}]}
+        (uc / "good" / "README.md").write_text("why\n")
+        (uc / "good" / "deck.json").write_text(json.dumps(outline))
+        import build_deck
+        (uc / "good" / "deck.html").write_text(build_deck.build(outline), encoding="utf-8")
+        (uc / "stale").mkdir()
+        (uc / "stale" / "README.md").write_text("why\n")
+        (uc / "stale" / "deck.json").write_text(json.dumps(outline))
+        (uc / "stale" / "deck.html").write_text("<html>old</html>")
+        (uc / "bare").mkdir()
+        real, check_repo.USE_CASES, check_repo.problems = check_repo.USE_CASES, uc, []
+        try:
+            check_repo.check_use_cases()
+            problems = list(check_repo.problems)
+        finally:
+            check_repo.USE_CASES = real
+            check_repo.problems = []
+            td.cleanup()
+        self.assertTrue(any("use-cases/stale/deck.html is stale" in p for p in problems), problems)
+        self.assertTrue(any("use-cases/bare: missing README.md" in p for p in problems), problems)
+        self.assertTrue(any("README.md does not list use case good/" in p and not p.startswith("use-cases") for p in problems), problems)
+        self.assertFalse(any("good/deck.html is stale" in p for p in problems), problems)
+
     def test_routing_docs_only_mention_real_skills(self):
         import check_repo
         check_repo.problems = []

@@ -1,0 +1,138 @@
+{
+  "title": "MATLAB repository: interconnections first, then one function at a time",
+  "subtitle": "Use case walkthrough. Numbers from tools/golden_path.py on example-system/matlab-repo/",
+  "footer": "Synthetic MATLAB repository. No customer data.",
+  "slides": [
+    {
+      "type": "title"
+    },
+    {
+      "type": "bullets",
+      "title": "One script is easy; the repository is the problem",
+      "bullets": [
+        "Hundreds or thousands of .m files: scripts, functions, +packages, @classes, private/ folders",
+        "The cost is in interconnections: who calls what, through which path, and what is dynamic",
+        "Toolbox calls and shadowed built-ins decide what can leave MATLAB at all",
+        "Goal: document the repository and migrate it without feeding the whole codebase to an agent each step",
+        "No MATLAB licence needed for discovery; vectors from the original are needed for proof"
+      ]
+    },
+    {
+      "type": "table",
+      "title": "The lane, step by step",
+      "columns": [
+        "Step",
+        "Run",
+        "Leaves behind"
+      ],
+      "rows": [
+        [
+          "Discover",
+          "/repo-discovery <tree> --lang matlab --name <label>",
+          "inventory.csv, summary.json, repo-map.md, dependency-map, backlog"
+        ],
+        [
+          "Understand",
+          "read <label>-m-repo-map.md",
+          "entry points, toolbox and workspace boundaries, dynamic calls, order"
+        ],
+        [
+          "Pack",
+          "python tools/prompt_pack.py --map ... --budget 8000",
+          "one bounded pack per unit; manifest with bytes and tokens"
+        ],
+        [
+          "Migrate one",
+          "/matlab-to-code <unit> --target python | c | both",
+          "notes, vectors, code + tests, compare.md"
+        ],
+        [
+          "Track, brief",
+          "/track-and-report, /exec-deck",
+          "backlog status, leadership deck"
+        ],
+        [
+          "Unattended",
+          "python tools/pipeline_run.py --lang matlab ...",
+          "scan + packs + report, journaled, resumable"
+        ]
+      ]
+    },
+    {
+      "type": "stats",
+      "title": "Fixture: 27 files built to be awkward",
+      "stats": [
+        {
+          "value": "27 / 27",
+          "label": "parsed; 4 scripts, 30 functions, 2 classes, 4 packages, 2 tests"
+        },
+        {
+          "value": "23",
+          "label": "candidate call edges; 1 unresolved name, 4 dynamic calls, 0 cycles"
+        },
+        {
+          "value": "24 / 2 / 1",
+          "label": "port / wrap / retain; 24 backlog items"
+        },
+        {
+          "value": "2",
+          "label": "toolboxes detected (Signal Processing, Statistics)"
+        }
+      ],
+      "note": "python tools/m_fleet_scan.py --check compares a fresh scan with example-system/matlab-repo/expected/."
+    },
+    {
+      "type": "two-column",
+      "title": "How names are resolved",
+      "left_title": "In MATLAB's order, as far as text allows",
+      "left": [
+        "local function -> private/ -> function in tree -> frozen core list -> frozen toolbox lists",
+        "+package and @class membership from the folder, classdef methods from the file",
+        "Duplicates are marked ambiguous, never guessed",
+        "Shadowed built-ins and workspace inputs are reported per file"
+      ],
+      "right_title": "What stays unknown, and is said so",
+      "right": [
+        "eval / evalin / feval / str2func / cellfun targets: listed as dynamic",
+        "Path order and runtime dispatch",
+        "Which toolboxes are actually installed",
+        "Numeric behaviour: only vectors + bench_compare.py prove that"
+      ]
+    },
+    {
+      "type": "bullets",
+      "title": "Bounded packs instead of the whole repository",
+      "bullets": [
+        "One Markdown pack per backlog unit: source, direct dependencies, callers, open questions, boundaries",
+        "Budget per pack (default 8000 tokens est.); dependencies are trimmed before source, truncation is marked",
+        "Manifest records bytes and estimated tokens per pack so token use is visible before any agent runs",
+        "Each pack ends with a result contract: id, status, target, evidence files, blocked_on",
+        "Leaf-first order: dependencies migrate before their callers"
+      ]
+    },
+    {
+      "type": "stats",
+      "title": "Proof on the single-model lane",
+      "stats": [
+        {
+          "value": "26",
+          "label": "vectors replayed through the Python and C twins (model-to-code stage)"
+        },
+        {
+          "value": "3 / 3",
+          "label": "columns exact for Python and for C"
+        },
+        {
+          "value": "PASS / FAIL",
+          "label": "per column with tolerance, max error, first divergent row"
+        }
+      ],
+      "note": "/matlab-to-code does one function or model at a time; /repo-discovery tells it which one and in what order."
+    },
+    {
+      "type": "quote",
+      "text": "Map the repository once, migrate one function at a time, prove each on the owner's vectors, and let the tracker carry the status.",
+      "source": "use-cases/matlab-repository/README.md, WORKFLOWS.md sections 7 and 10"
+    }
+  ]
+}

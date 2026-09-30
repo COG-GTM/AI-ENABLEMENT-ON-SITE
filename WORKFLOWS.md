@@ -120,6 +120,62 @@ and a backlog whose status the tracker tools report.
 without lvkit. Classification is static evidence for ordering the work; a VI is ported only when
 `tools/bench_compare.py` says PASS against a recording of the original.
 
+## 10. MATLAB repository: discovery to the first proven function
+
+Inputs: a folder tree of `.m` files (functions, scripts, `+packages`, `@classes`, `private/`), read-only. No MATLAB
+licence is needed: the scanner is text-only. Output: what is in the repository, what calls what, which functions
+can move first, one bounded prompt pack per unit, and a backlog whose status the tracker tools report.
+
+| Stage | Paste | Leaves behind |
+| --- | --- | --- |
+| Discover | `/repo-discovery example-system/matlab-repo --lang matlab --name matlab-repo` (your tree instead of the fixture) | `outputs/matlab-repo-m-fleet-inventory.csv` (one row per file: kind, signature, calls by class, dynamic calls, callers, classification with reasons, complexity, priority, missing inputs), `-m-fleet-summary.json`, `-m-repo-map.md`, `-m-dependency-map.json` + `.dot`, `-m-migration-backlog.json` + `.csv` |
+| Read the map | `Read outputs/matlab-repo-m-repo-map.md and write the repo report: counts, entry points, toolbox boundaries, top ten candidates with reasons, open questions` | `outputs/<name>-repo-report.md` |
+| Pack | `python tools/prompt_pack.py --map outputs/matlab-repo-m-dependency-map.json --budget 8000` | `outputs/packs/matlab-repo-m/<ID>.md` one per backlog unit, `manifest.json` with bytes and tokens per pack |
+| Migrate one | `/matlab-to-code <path from the pack> --target python` (or `c`, `both`), in leaf-first order | `outputs/<model>-notes.md`, vectors, code + tests, `outputs/<model>-compare.md` (workflow 7) |
+| Status | `/track-and-report status of outputs/matlab-repo-m-migration-backlog.json` | `python tools/tracker_report.py --file ... --markdown` output |
+| Brief | `/exec-deck Migration readiness from outputs/matlab-repo-m-fleet-summary.json and the repo report` | `outputs/<name>.deck.json` + `.html` |
+
+`python tools/m_fleet_scan.py --check` proves the scanner on the fixture (`example-system/matlab-repo/`, 27 files built to
+exercise packages, classes, private folders, dynamic calls, toolbox use, shadowing, and a malformed file). The graph is
+static candidate evidence; a function is migrated only when `tools/bench_compare.py` says PASS on the owner's vectors.
+
+## 11. C/C++ repository: discovery to host tests and a proven twin
+
+Inputs: a C/C++ tree (sources, headers, Makefile/CMake, linker script), read-only; a host `gcc` is optional and adds an
+include-graph cross-check. Output: which files are host-testable, which are target-only, where the HAL seam is, and a
+backlog. There is no C-to-Python translator here: a Python implementation is a **behavioural twin** proven against the
+C on shared tests and vectors (`example-system/src` and `sim/` are the finished example).
+
+| Stage | Paste | Leaves behind |
+| --- | --- | --- |
+| Discover | `/repo-discovery example-system/firmware-repo --lang c --name firmware-repo` (add `--cflags "-DBOARD_REV_C"` when your headers need the target's flags) | `outputs/firmware-repo-c-fleet-inventory.csv` (per file: functions, includes, calls by class, ISR / volatile / register / asm / linker markers, callers, classification with reasons), `-c-fleet-summary.json`, `-c-repo-map.md` (entry points, seam candidates, target-only files, leaf-first order), `-c-dependency-map.json` + `.dot`, `-c-migration-backlog.json` + `.csv` |
+| Harness | `/bring-your-firmware example-system/firmware-repo` using the seam candidates in the repo map | `outputs/<tree>-firmware-map.md`, `host-tests/` beside the tree (from `templates/host-harness/`) |
+| Pack | `python tools/prompt_pack.py --map outputs/firmware-repo-c-dependency-map.json` | `outputs/packs/firmware-repo-c/<ID>.md`, `manifest.json` |
+| Port one | `/tdd Host-test <unit from the pack> against the harness, then write the Python twin, tests first, exact match on the vectors` in leaf-first order | tests + code, `make test` green, `outputs/<unit>-compare.md` |
+| Status, brief | `/track-and-report status of outputs/firmware-repo-c-migration-backlog.json`, then `/exec-deck Migration readiness from outputs/firmware-repo-c-fleet-summary.json` | tracker report, deck |
+
+`python tools/c_fleet_scan.py --check` proves the scanner on the fixture (`example-system/firmware-repo/`, 30 files: ISR,
+memory-mapped registers, linker script, `#if` board variants, C++ templates and overloads, vendor code, K&R legacy, a
+non-UTF-8 file). Host tests prove logic on a laptop, not timing, interrupts, or behaviour on the target.
+
+## 12. Reusable pipeline: scan, pack, run, compare, report - unattended
+
+Inputs: any tree the three scanners understand (`--lang c|matlab|labview`) and, optionally, a per-unit agent command.
+Output: a journaled, resumable run a team can own in its own repository or CI, that never sends the whole tree to an
+agent and never claims a unit is done without evidence.
+
+| Stage | Paste or run | Leaves behind |
+| --- | --- | --- |
+| Dry run | `python tools/pipeline_run.py --lang c --tree example-system/firmware-repo --name firmware-repo` | `outputs/pipeline/firmware-repo/`: `scan/` (scanner outputs), `packs/` (one per unit), `REPORT.md`, `state.json`, `journal.jsonl`, `firmware-repo-backlog-status.json`; agent stage recorded as **dry run**, every unit `skipped` |
+| Resume | same command with `--resume` (add `--from-stage pack` to force a stage) | unchanged stages skipped by input hash, journal says which |
+| With an agent | `--agent-cmd "<your command> {pack} {results} {id} {unit}"` (each unit reads one pack, writes `results/<id>/result.json`) and optionally `--compare-cmd "<your check> {id} {unit}"` | `results/<id>/`, `REPORT.md` with done / blocked / failed / proven per unit; backlog items with a passing comparison move to `in_review`, never to `closed` |
+| In CI | `.github/workflows/migration-scan.yml` (manual or weekly; scan -> pack -> report on a tree you name, artifacts uploaded) | the same folder as a build artifact |
+| Status | `python tools/tracker_report.py --file outputs/pipeline/firmware-repo/firmware-repo-backlog-status.json` | open / in review per component and severity |
+
+`tools/golden_path.py` runs the dry run and the resume on the firmware fixture. The comparison of approaches (structured
+intermediate files, a reference repository, skill files, a graph-style controlled flow) and the token-control rules are in
+`use-cases/reusable-pipeline/README.md`.
+
 ## Rules that hold across every workflow
 
 - Numbers come from tools (`what_if.py`, `tracker_report.py`, `make test`), never typed by hand.

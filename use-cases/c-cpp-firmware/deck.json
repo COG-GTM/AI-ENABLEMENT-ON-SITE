@@ -1,0 +1,137 @@
+{
+  "title": "C/C++ firmware repository: target boundaries, a host harness, a proven twin",
+  "subtitle": "Use case walkthrough. Numbers from tools/golden_path.py on example-system/firmware-repo/",
+  "footer": "Synthetic firmware tree. No customer data. No C-to-Python translator is offered.",
+  "slides": [
+    {
+      "type": "title"
+    },
+    {
+      "type": "bullets",
+      "title": "Three kinds of code in every firmware tree",
+      "bullets": [
+        "Portable logic: parsers, filters, checksums, state machines - testable on a laptop",
+        "Target-only: ISRs, memory-mapped registers, startup, linker sections, inline assembly",
+        "Vendor and HAL: code you did not write and should wrap, not port",
+        "Before modernising anything: which is which, where the HAL seam is, what depends on what",
+        "A Python model, where wanted, is a behavioural twin proven against the C - not a translation"
+      ]
+    },
+    {
+      "type": "table",
+      "title": "The lane, step by step",
+      "columns": [
+        "Step",
+        "Run",
+        "Leaves behind"
+      ],
+      "rows": [
+        [
+          "Discover",
+          "/repo-discovery <tree> --lang c --name <label>",
+          "inventory.csv, summary.json, repo-map.md, dependency-map, backlog"
+        ],
+        [
+          "Understand",
+          "read <label>-c-repo-map.md",
+          "entry points, target-only files and markers, seam candidates, order"
+        ],
+        [
+          "Harness",
+          "/bring-your-firmware <tree>",
+          "firmware-map.md, host-tests/ with stubs on the seam"
+        ],
+        [
+          "Pack",
+          "python tools/prompt_pack.py --map ...",
+          "one bounded pack per unit; manifest"
+        ],
+        [
+          "Port one",
+          "/tdd host-test the unit, then the Python twin",
+          "tests + code, make test green, compare.md"
+        ],
+        [
+          "Track, brief",
+          "/track-and-report, /exec-deck",
+          "backlog status, leadership deck"
+        ]
+      ]
+    },
+    {
+      "type": "stats",
+      "title": "Fixture: 30 files that look like real firmware",
+      "stats": [
+        {
+          "value": "30 / 30",
+          "label": "parsed: 16 sources, 14 headers, 5 C++; 47 functions"
+        },
+        {
+          "value": "32 + 11",
+          "label": "include edges + call edges; 1 unresolved, 4 indirect, 6 vendor calls"
+        },
+        {
+          "value": "21 / 4 / 5",
+          "label": "port / wrap / retain; 15 backlog items"
+        },
+        {
+          "value": "2",
+          "label": "seam candidates: hal_gpio_write, crc16_vendor"
+        }
+      ],
+      "note": "ISR, registers, volatile, linker script, #if board variants, function pointers, C++ templates and overloads, vendor code, K&R legacy, a non-UTF-8 file. python tools/c_fleet_scan.py --check compares with expected/."
+    },
+    {
+      "type": "two-column",
+      "title": "Classification and seams",
+      "left_title": "How a file is classified",
+      "left": [
+        "retain: ISR, inline asm, memory-mapped registers, linker symbols or sections, startup code",
+        "wrap: vendor / third-party, HAL-bound, includes a target-only header",
+        "port: host-testable logic",
+        "unreadable: could not be read or parsed - listed, not dropped"
+      ],
+      "right_title": "Seam candidate",
+      "right": [
+        "A function in a retain / wrap file that host-side code calls",
+        "That is where the stub goes in templates/host-harness",
+        "gcc -MM cross-checks includes when gcc exists; its errors are reported verbatim",
+        "Without board flags the fixture reports: error: #error \"unknown board\""
+      ]
+    },
+    {
+      "type": "stats",
+      "title": "The finished twin in example-system",
+      "stats": [
+        {
+          "value": "57",
+          "label": "tests pass on the C firmware (src/) and on the Python twin (sim/)"
+        },
+        {
+          "value": "26",
+          "label": "MATLAB vectors match both exactly"
+        },
+        {
+          "value": "58",
+          "label": "host-harness checks against the C through hal_stub.c"
+        }
+      ],
+      "note": "Same tests, both implementations. The Python is an executable specification and host oracle, not a port."
+    },
+    {
+      "type": "bullets",
+      "title": "What this does not prove",
+      "bullets": [
+        "Macros not expanded, #if not evaluated, function pointers not followed: edges are candidate evidence",
+        "C++ overloads, templates, virtual dispatch are matched by name only",
+        "Host tests prove logic on a laptop, not timing or interrupt behaviour on the target",
+        "No C-to-Python translator exists here; if translation is the requirement, say it is a gap"
+      ]
+    },
+    {
+      "type": "quote",
+      "text": "Find the seam, test on the host, keep a twin honest with the same vectors. Everything target-only stays where it is, and the map says why.",
+      "source": "use-cases/c-cpp-firmware/README.md, WORKFLOWS.md sections 8 and 11"
+    }
+  ]
+}

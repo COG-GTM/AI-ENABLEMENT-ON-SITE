@@ -12,6 +12,8 @@ Checks:
   4. No secrets-looking strings, forbidden words, or non-synthetic identifiers (see FORBIDDEN, SECRET_PATTERNS).
   5. JSON files parse; tracker validates; the example deck builds; what-if runs; research brief validates.
   6. example-system tests pass (Python always; C if a compiler is present); tool, REST client, and MCP server tests pass.
+  7. Every use-cases/<name>/ has README.md, deck.json, and a deck.html identical to a fresh build of deck.json;
+     every folder is listed in use-cases/README.md and README.md.
 
 Exit code 0 = clean. Standard library only.
 """
@@ -26,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / ".devin" / "skills"
 AGENTS = ROOT / "AGENTS.md"
+USE_CASES = ROOT / "use-cases"
 ROUTING_DOCS = ["README.md", "WORKFLOWS.md", "WALKTHROUGH.md"]
 # Frontmatter keys documented for Devin Local skills. Anything else is a typo or an unsupported field.
 FRONTMATTER_KEYS = {"name", "description", "argument-hint", "model", "allowed-tools", "permissions", "triggers"}
@@ -190,6 +193,34 @@ def check_content() -> None:
                 fail(f"{rel}:{line}: looks like a secret or identifier: {m.group(0)[:12]}...")
 
 
+def check_use_cases() -> None:
+    sys.path.insert(0, str(ROOT / "tools"))
+    import build_deck  # noqa: E402  (repo tool, standard library only)
+
+    index = (USE_CASES / "README.md").read_text(errors="replace") if (USE_CASES / "README.md").is_file() else ""
+    readme = (ROOT / "README.md").read_text(errors="replace")
+    if not index:
+        fail("use-cases/README.md missing")
+    for d in sorted(p for p in USE_CASES.iterdir() if p.is_dir()):
+        rel = Path("use-cases") / d.name
+        for name in ("README.md", "deck.json", "deck.html"):
+            if not (d / name).is_file():
+                fail(f"{rel}: missing {name}")
+        for text, where in ((index, "use-cases/README.md"), (readme, "README.md")):
+            if f"`{d.name}/`" not in text and f"`use-cases/{d.name}/`" not in text:
+                fail(f"{where} does not list use case {d.name}/")
+        if not (d / "deck.json").is_file() or not (d / "deck.html").is_file():
+            continue
+        try:
+            outline = json.loads((d / "deck.json").read_text(encoding="utf-8"))
+            fresh = build_deck.build(outline)
+        except (json.JSONDecodeError, SystemExit) as e:
+            fail(f"{rel}/deck.json does not build: {e}")
+            continue
+        if fresh != (d / "deck.html").read_text(encoding="utf-8"):
+            fail(f"{rel}/deck.html is stale: python tools/build_deck.py {rel}/deck.json {rel}/deck.html")
+
+
 def run(cmd: list[str], cwd: Path = ROOT, allowed_codes: frozenset[int] = frozenset({0})) -> bool:
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if r.returncode not in allowed_codes:
@@ -215,6 +246,10 @@ def check_tools() -> None:
     run([py, "tools/trace_matrix.py", "--out", "outputs/trace-matrix.md"])
     run([py, "tools/vi_fleet_scan.py", "example-system", "--name", "demo-fleet", "--opened", "2026-01-05"])
     run([py, "tools/tracker_report.py", "--file", "outputs/demo-fleet-migration-backlog.json"])
+    run([py, "tools/m_fleet_scan.py", "example-system/matlab-repo", "--name", "matlab-repo", "--opened", "2026-01-05"])
+    run([py, "tools/c_fleet_scan.py", "example-system/firmware-repo", "--name", "firmware-repo", "--opened", "2026-01-05"])
+    run([py, "tools/pipeline_run.py", "--lang", "c", "--tree", "example-system/firmware-repo", "--name", "firmware-repo",
+         "--out", "outputs/pipeline/firmware-repo", "--opened", "2026-01-05"])
     run([py, "tools/golden_path.py", "--skip-tests"])  # the test suites run below
     run([py, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=ROOT / "example-system")
     run([py, "-m", "unittest", "discover", "-s", "tools/tests", "-q"])  # includes test_integrations.py: fake server + importer on 127.0.0.1
@@ -233,6 +268,7 @@ def main() -> int:
     check_content()
     check_tools()  # generates outputs/ files first so check_links can see them on a clean checkout
     check_links()
+    check_use_cases()
     if problems:
         print(f"{len(problems)} problem(s):")
         for p in problems:

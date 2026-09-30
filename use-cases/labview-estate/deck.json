@@ -1,0 +1,154 @@
+{
+  "title": "LabVIEW estate: binaries to a dependency map, a plan, and one proven rig",
+  "subtitle": "Use case walkthrough. Every number here comes from tools/golden_path.py on the fixture in example-system/",
+  "footer": "Synthetic project and sequence over permissively licensed public VIs (example-system/real-vi/sources.json). No customer data.",
+  "slides": [
+    {
+      "type": "title"
+    },
+    {
+      "type": "bullets",
+      "title": "The problem is dependencies and built-ins, not syntax",
+      "bullets": [
+        "Thousands of binary .vi files, .lvproj projects with RT / FPGA targets, TestStand .seq callers",
+        "Translating one VI at a time loses what calls what and what belongs to which target",
+        "LabVIEW built-ins (vi.lib, DAQmx, FPGA primitives) have no one-line equivalent",
+        "Needed: extraction -> project-level dependency map and description -> migration plan -> proof",
+        "Target language stays selectable after decomposition (Python, C#, C++, keep in LabVIEW)"
+      ]
+    },
+    {
+      "type": "table",
+      "title": "The lane, step by step",
+      "columns": [
+        "Step",
+        "Run",
+        "Leaves behind"
+      ],
+      "rows": [
+        [
+          "Ready",
+          "python tools/doctor.py",
+          "Python OK, lvkit present or absent"
+        ],
+        [
+          "Discover",
+          "/vi-fleet-discovery <tree> --name <label>",
+          "inventory.csv, summary.json, project-map.md, dependency-map, backlog"
+        ],
+        [
+          "Understand",
+          "read <label>-project-map.md",
+          "targets, sequence callers, entry points, unresolved built-ins, order"
+        ],
+        [
+          "Pack",
+          "python tools/prompt_pack.py --map ... --all",
+          "one bounded context pack per VI"
+        ],
+        [
+          "Plan",
+          "top port candidates by priority; target per component",
+          "migration plan (ADR or deck section)"
+        ],
+        [
+          "Migrate one",
+          "/labview-to-python <rig.vi> <recording.csv>",
+          "notes, Python rig, compare.md PASS/FAIL per column"
+        ],
+        [
+          "Track, brief",
+          "/track-and-report, /exec-deck",
+          "backlog status, leadership deck"
+        ]
+      ]
+    },
+    {
+      "type": "stats",
+      "title": "Fixture run with lvkit 0.8.4",
+      "stats": [
+        {
+          "value": "4 / 4",
+          "label": "VIs read; 1 .lvproj (4 targets), 1 .seq"
+        },
+        {
+          "value": "2 + 6",
+          "label": "SubVI edges in tree + external SubVIs in 4 libraries"
+        },
+        {
+          "value": "4",
+          "label": "distinct unresolved built-ins named, not guessed"
+        },
+        {
+          "value": "0",
+          "label": "cycles"
+        }
+      ],
+      "note": "Without lvkit the same run reports 4 unreadable, 6 edges from project and sequence files, and says 'reader: lvkit absent'."
+    },
+    {
+      "type": "two-column",
+      "title": "Extraction: what the JSON holds",
+      "left_title": "lvkit describe / unresolved, per file",
+      "left": [
+        "Block-diagram nodes with uids, wires as nets, connector pane, library and class facts",
+        "Unresolved primitives and terminal mappings, by name",
+        "Per-file calls: one unreadable VI never stops the scan",
+        "lvkit index + query add callers and impact when a tree index succeeds"
+      ],
+      "right_title": "Why not PyLabVIEW",
+      "right": [
+        "PyLabVIEW dumps RSRC resource blocks to XML",
+        "No diagram semantics (nodes, wires, connector) come out of it",
+        "Fine as a second extractor; not sufficient alone",
+        "See integrations/lvkit.md for the offline wheel install"
+      ]
+    },
+    {
+      "type": "bullets",
+      "title": "Classification with reasons, priority from evidence",
+      "bullets": [
+        "retain: FPGA, Real-Time, DAQmx hardware timing, target-only I/O",
+        "wrap: proprietary drivers, instrument libraries, anything behind a vendor boundary",
+        "port: sequencing, math, parsing, file and report logic",
+        "unreadable: lvkit absent or the file failed to parse; the reason is recorded",
+        "Priority = impact (callers, sequence references) x readiness (recording present, no unresolved built-ins)",
+        "Rescans merge into the existing backlog: ids and hand-set statuses survive"
+      ]
+    },
+    {
+      "type": "stats",
+      "title": "Proof, not translation",
+      "stats": [
+        {
+          "value": "9 / 9",
+          "label": "columns match the VI recording, 3 soak steps replayed (labview-to-python stage)"
+        },
+        {
+          "value": "39",
+          "label": "cases replayed through 4 real VIs, 10 / 10 columns match (real-vi stage)"
+        },
+        {
+          "value": "PASS / FAIL",
+          "label": "per column, with tolerance, max error, first divergent row (bench_compare.py)"
+        }
+      ],
+      "note": "A VI is migrated when the comparison passes, not when the code compiles."
+    },
+    {
+      "type": "bullets",
+      "title": "What this does not prove",
+      "bullets": [
+        "The graph is static: dynamic calls (VI Server, Call By Reference) appear as unresolved",
+        "port / wrap / retain are classifications with reasons, not decisions",
+        "Hardware timing, FPGA, and RT determinism stay on the target; the map shows the boundary",
+        "The whole estate is never sent to an agent: one pack per VI, budget per pack"
+      ]
+    },
+    {
+      "type": "quote",
+      "text": "Extraction, then the map, then the plan, then one rig proven against its recording. The target is chosen after the decomposition, not before.",
+      "source": "use-cases/labview-estate/README.md, WORKFLOWS.md sections 6 and 9"
+    }
+  ]
+}

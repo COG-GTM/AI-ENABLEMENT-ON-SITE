@@ -1,0 +1,49 @@
+{
+  "title": "Other translations: Ada to C++, Fortran modernisation, MATLAB to/from C++ for embedded targets",
+  "subtitle": "Discussion only. No fixture, scanner, or skill exists for these three; this is how the same method would apply",
+  "footer": "Tool names are for discussion; verify status and licences with your administrator (integrations/tool-approval-status.md).",
+  "slides": [
+    {"type": "title"},
+    {"type": "bullets", "title": "Same method, four stages", "bullets": [
+      "Discover: inventory, candidate dependency graph, dynamic / vendor / target-only markers, port / wrap / retain / unreadable, repo map, backlog",
+      "Pack: one bounded context file per unit, leaf-first, with a result contract",
+      "Migrate one unit with a skill that ends in bench_compare.py on recorded vectors",
+      "Track and report; rescan as the estate changes",
+      "Adding a language = a scanner emitting the same dependency-map.json + a fixture + expected/ + a golden stage; prompt_pack and pipeline_run work unchanged"
+    ]},
+    {"type": "two-column", "title": "Ada to C++", "left_title": "What makes it hard", "left": [
+      "Ranges, subtypes, discriminated records; generics; representation clauses",
+      "Tasking and protected objects; interrupt handlers",
+      "SPARK contracts and certification evidence tied to the original"
+    ], "right_title": "Landscape and realistic first step", "right": [
+      "libadalang / GNAT parse Ada from Python; GNAT Pro CCG generates C as a product; no maintained OSS Ada-to-C++ translator",
+      "Scanner: with / use, spec vs body, tasks, protected types, generics, pragmas, Interfaces.C",
+      "Tasking, rep clauses, interrupt handlers -> retain / wrap first; proof per subprogram on vectors"
+    ]},
+    {"type": "two-column", "title": "Fortran modernisation", "left_title": "What makes it hard", "left": [
+      "Fixed-form F77: COMMON, EQUIVALENCE, computed GOTO, implicit typing",
+      "COMMON makes dependencies a data-flow problem, not a call graph",
+      "Numerics: precision, evaluation order, compiler flags define 'equivalent'"
+    ], "right_title": "Landscape and realistic first step", "right": [
+      "fparser, LFortran (AST / ASR), fable / cctbx (F77 to C++); f2py wraps instead of translating - often step one",
+      "Scanner: program units, CALL graph, COMMON and MODULE membership, INCLUDE, implicit typing, GOTO, I/O units",
+      "COMMON- and I/O-heavy units wrap first; numerical kernels port; tolerance per column in bench_compare.py"
+    ]},
+    {"type": "two-column", "title": "MATLAB to / from C++ for embedded algorithms", "left_title": "Exists here today", "left": [
+      "/matlab-to-code --target c, proven on vectors (26 vectors, Python and C exact)",
+      "/repo-discovery for the MATLAB tree; /bring-your-firmware + host harness for the C side",
+      "MATLAB to C on a host, end to end"
+    ], "right_title": "Does not exist here", "right": [
+      "C++ output; MATLAB Coder / Embedded Coder review as a fixture (licence); fixed-point conversion",
+      "Timing on a target",
+      "Reverse direction (C++ algorithm to MATLAB for simulation)"
+    ]},
+    {"type": "bullets", "title": "FedRAMP / CUI environment notes", "bullets": [
+      "Everything here runs offline from the working tree: standard-library Python, optional C compiler, optional lvkit",
+      "Viewing public repositories was confirmed; cloning was not - the README describes the Download-ZIP path",
+      "Any tool named on these slides goes through the administrator's approval first",
+      "No claim is made that any service is inside a FedRAMP boundary"
+    ]},
+    {"type": "quote", "text": "Related examples, not demonstrated lanes. The method carries over; the scanner, fixture, and proof for each would still have to be built.", "source": "use-cases/other-translations/README.md"}
+  ]
+}
