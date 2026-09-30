@@ -380,7 +380,7 @@
           "label": "rows where those real VIs differ from MQTT 3.1.1: a finding the comparison surfaced, documented, not hidden"
         }
       ],
-      "note": "Quoted from python tools/golden_path.py (stages fleet, labview-to-python, real-vi) and python tools/vi_fleet_scan.py example-system --name demo-fleet with lvkit 0.8.6. The real-VI port agrees with the diagram reading; nobody ran the original VIs, so that lane stops short of runtime proof.",
+      "note": "Quoted from python tools/golden_path.py (stages fleet, labview-to-python, real-vi) and python tools/vi_fleet_scan.py example-system --name demo-fleet with lvkit installed (the stage prints the version it used). The real-VI port agrees with the diagram reading; nobody ran the original VIs, so that lane stops short of runtime proof.",
       "notes": "Live if time: python tools/golden_path.py. Point at the three lines these numbers come from."
     },
     {

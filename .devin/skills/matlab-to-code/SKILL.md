@@ -24,6 +24,10 @@ Python is the twin used for replay and test. This skill moves an algorithm from 
 other two **with evidence**, and it works without a MATLAB licence on the laptop: `.m` is text, `.slx` is
 a zip of XML, and golden vectors are CSV.
 
+This skill works on **one** model or function at a time. For a whole repository of `.m` files (which
+functions call which, what is dynamic or toolbox-bound, where to start) run `/repo-discovery <tree> --lang matlab`
+first and come back here with one unit and the prompt pack that skill wrote for it.
+
 If the team already runs Embedded Coder / MATLAB Coder, do **not** re-port the algorithm. Review the
 generated C instead (step 5) and use the same vectors as a SIL-style check.
 

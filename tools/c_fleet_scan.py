@@ -4,7 +4,7 @@ mark what only a target build can compile, classify each file for host testing a
 dependency map, repo map, and tracker-shaped backlog. Standard library only; uses `gcc -MM` as a cross-check when a
 compiler is on PATH and says so when it is not. Deterministic (sorted traversal, stable ids).
 
-    python tools/c_fleet_scan.py <tree> [--name N] [--top 50] [--prefix FW] [--out-dir outputs] [--cflags "-DBOARD_REV_C"] [--json]
+    python tools/c_fleet_scan.py <tree> [--name N] [--top 50] [--prefix FW] [--out-dir outputs] [--cflags=-DBOARD_REV_C] [--json]
     python tools/c_fleet_scan.py --check
 
 What it reads, statically (a *lexical* scanner, not a compiler; it does not expand macros or evaluate #if):
@@ -959,7 +959,7 @@ def repo_map_md(name: str, result: dict) -> str:
     if ic["files_checked"]:
         L.append(f"- {ic['confirmed']} of {ic['files_checked']} sources: gcc's header list is inside the static include closure")
         for x in ic["failed"]:
-            L.append(f"- could not preprocess `{x['path']}`: {x['error']} (pass the target's -D/-I with --cflags, as the Makefile does)")
+            L.append(f"- could not preprocess `{x['path']}`: {x['error']} (pass the target's -D/-I with --cflags=\"-D... -I...\", as the Makefile does)")
         for p, hs in ic["extra_headers"].items():
             L.append(f"- `{p}`: gcc also saw " + ", ".join(hs))
     if m["unreadable"]:
@@ -1062,7 +1062,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prefix", default="FW", help="tracker id prefix, 2-6 upper-case letters")
     ap.add_argument("--opened", default=dt.date.today().isoformat(), help="date stamped on backlog items (YYYY-MM-DD)")
     ap.add_argument("--libc", type=Path, help="text file with extra library function names to treat as resolved, one per line")
-    ap.add_argument("--cflags", default="", help="extra flags for the gcc -MM cross-check, e.g. \"-DBOARD_REV_C -Iinclude\"")
+    ap.add_argument("--cflags", default="", help="extra flags for the gcc -MM cross-check; write it as --cflags=\"-DBOARD_REV_C -Iinclude\" (the leading dash needs the = form)")
     ap.add_argument("--no-gcc", action="store_true", help="skip the gcc -MM cross-check even if gcc is on PATH")
     ap.add_argument("--dot-top", type=int, default=60, help="max nodes drawn in the DOT file (JSON map is always complete)")
     ap.add_argument("--json", action="store_true", help="print the summary as JSON")

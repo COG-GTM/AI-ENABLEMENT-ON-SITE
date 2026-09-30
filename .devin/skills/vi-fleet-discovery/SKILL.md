@@ -27,7 +27,8 @@ one, and never generates Python. Its output is a spreadsheet and a backlog, both
 
 A classification here is **static evidence**: the SubVIs, primitives, project targets, and file names that
 matched a rule. It is a starting order for the work, not a proof that a VI can be ported. The proof still
-comes one VI at a time from `tools/bench_compare.py` against a recording.
+comes one VI at a time from `tools/bench_compare.py` against a recording. The same discovery pattern for
+text-based estates (MATLAB `.m` trees, C/C++ trees) is `/repo-discovery`; this skill is for LabVIEW files only.
 
 ## Step 0 - Preflight (one minute)
 

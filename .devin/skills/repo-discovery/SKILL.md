@@ -50,7 +50,7 @@ recording, or from the host harness tests.
 
 ```bash
 python tools/m_fleet_scan.py <tree> --name <label> [--top 50]                      # MATLAB
-python tools/c_fleet_scan.py <tree> --name <label> [--top 50] [--cflags "-DBOARD_REV_C"]   # C/C++
+python tools/c_fleet_scan.py <tree> --name <label> [--top 50] [--cflags=-DBOARD_REV_C]   # C/C++
 ```
 
 Ask before running (`exec` permission). Each run leaves seven files in `outputs/` (infix `-m-` for MATLAB,

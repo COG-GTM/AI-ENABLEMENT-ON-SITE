@@ -277,8 +277,10 @@ class ExecBriefingDeck(unittest.TestCase):
         joined = " ".join(f"{x['value']} {x['label']}" for x in stats["stats"]) + " " + stats["note"]
         for pattern in (r"3 soak steps replayed", r"9/9 columns match the VI recording", r"verdicts PASS/PASS/FAIL",
                         r"4 real VIs", r"39 cases replayed", r"10/10 columns match the diagram-derived table",
-                        r"12 rows differ from MQTT 3\.1\.1", r"4 VIs, 1 \.lvproj, 1 \.seq", r"unreadable 4"):
+                        r"12 rows differ from MQTT 3\.1\.1", r"4 VIs, 1 \.lvproj, 1 \.seq"):
             self.assertRegex(" ".join(detail.values()), pattern)
+        # the fleet stage reads the VIs when lvkit is installed and marks them unreadable when it is not; the deck states both
+        self.assertRegex(detail["fleet"], r"port 4, wrap 0, retain 0, unreadable 0" if shutil.which("lvkit") else r"unreadable 4")
         for fragment in ("4", "1 .lvproj, 1 .seq", "port 4", "unreadable 4", "9/9", "3 soak steps", "PASS/PASS/FAIL", "39", "10/10", "12"):
             self.assertIn(fragment, joined)
         self.assertIn("26 vectors replayed through the python and c twins; python 3/3 columns, c 3/3 columns match exactly",
