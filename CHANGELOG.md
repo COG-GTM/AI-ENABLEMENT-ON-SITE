@@ -3,6 +3,13 @@
 All notable changes to this repository are documented in this file. Entries are
 grouped by week and reference the pull request that merged each change.
 
+## Week of 2026-10-09 to 2026-10-16
+
+No pull requests were merged into `main` this week. The two previous weekly
+changelog entries ([#22](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/22)
+and [#23](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/23)) were still
+open at the time of writing.
+
 ## Week of 2026-10-02 to 2026-10-09
 
 No pull requests were merged into `main` this week. The previous week's changelog
