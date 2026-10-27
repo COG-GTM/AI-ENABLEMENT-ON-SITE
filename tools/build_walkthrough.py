@@ -24,20 +24,34 @@ PAIRS = [
     ("Context to injectable settings service", "SettingsContext.tsx", "settings.service.ts", "react-context", "angular-settings"),
     ("React routes to Angular Router", "App.tsx", "app.routes.ts", "react-router", "angular-router"),
 ]
-PROMPTS = [
-    "/react-to-angular example-system/web-app/react-prototype",
-    "/spec-driven Migrate the request form using the shared fixture contract",
-    "/plan-to-tracker specs/002-request-form-to-angular/tasks.md --project <KEY>",
-    "/tdd Port the next leaf-first unit to Angular",
-    "/ui-iterate Apply the v2 request form mockup and preserve behavior",
-]
-ARTIFACTS = [
-    "example-system/web-app/react-prototype/expected/",
-    "specs/002-request-form-to-angular/",
-    "outputs/request-form-to-angular-jira-payload.json (dry run)",
-    "example-system/web-app/angular-app/src/ and its unit tests",
-    "example-system/web-app/evidence/ (screenshots and run records)",
-]
+STAGE_GUIDANCE = {
+    "Ask and plan": (
+        (
+            "/react-to-angular example-system/web-app/react-prototype",
+            "/spec-driven Migrate the request form using the shared fixture contract",
+        ),
+        (
+            "example-system/web-app/react-prototype/expected/",
+            "specs/002-request-form-to-angular/",
+        ),
+    ),
+    "Track": (
+        ("/plan-to-tracker specs/002-request-form-to-angular/tasks.md --project <KEY>",),
+        ("outputs/request-form-to-angular-jira-payload.json (dry run)",),
+    ),
+    "Migrate leaf-first": (
+        ("/tdd Port the next leaf-first unit to Angular",),
+        ("example-system/web-app/angular-app/src/ and its unit tests",),
+    ),
+    "Iterate the UI": (
+        ("/ui-iterate Apply the v2 request form mockup and preserve behavior",),
+        ("example-system/web-app/evidence/",),
+    ),
+    "Review": (
+        ("/sonar-gate <project key> --branch <branch>",),
+        ("outputs/<sonar-report>.md and reviewed commit message",),
+    ),
+}
 SCREENSHOTS = [
     "evidence/react-form-before-ux.png",
     "evidence/react-form.png",
@@ -78,6 +92,17 @@ def markdown_steps() -> list[list[str]]:
     return rows
 
 
+def walkthrough_rows() -> list[tuple[str, str, str, str, str]]:
+    rows = []
+    for stage, desktop, cli in markdown_steps():
+        try:
+            prompts, artifacts = STAGE_GUIDANCE[stage]
+        except KeyError as exc:
+            raise ValueError(f"no walkthrough mapping for README stage {stage!r}") from exc
+        rows.append((stage, desktop, cli, " then ".join(prompts), " and ".join(artifacts)))
+    return rows
+
+
 def evidence_block() -> str:
     parity = json.loads((WEB / "evidence" / "parity.json").read_text(encoding="utf-8"))
     ux = json.loads((WEB / "evidence" / "ux-upgrade.json").read_text(encoding="utf-8"))
@@ -104,11 +129,8 @@ def evidence_block() -> str:
 def build() -> str:
     react = WEB / "react-prototype" / "src"
     angular = WEB / "angular-app" / "src"
-    steps = markdown_steps()
     rows = []
-    for index, (stage, desktop, cli) in enumerate(steps):
-        prompt = PROMPTS[min(index, len(PROMPTS) - 1)]
-        artifact = ARTIFACTS[min(index, len(ARTIFACTS) - 1)]
+    for stage, desktop, cli, prompt, artifact in walkthrough_rows():
         rows.append(f"<tr><th>{esc(stage)}</th><td>{esc(desktop)}</td><td><code>{esc(cli)}</code></td>"
                     f"<td><code>{esc(prompt)}</code></td><td><code>{esc(artifact)}</code></td></tr>")
     mapping = json.loads((WEB / "react-prototype" / "expected" / "request-app-react-dependency-map.json").read_text(encoding="utf-8"))

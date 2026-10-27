@@ -28,9 +28,9 @@ const trimmedMinLength = (minimum: number): ValidatorFn => (control: AbstractCon
             <div class="error-summary" role="alert" aria-labelledby="summary-title" data-testid="validation-summary">
               <strong id="summary-title">Review the highlighted fields</strong>
               <ul>
-                @if (showError("title")) { <li><a href="#request-title">Enter a request title.</a></li> }
-                @if (showError("serialNumber")) { <li><a href="#request-serial-number">Enter the equipment serial number.</a></li> }
-                @if (showError("justification")) { <li><a href="#request-justification">Urgent requests need a justification of at least 20 characters.</a></li> }
+                @if (showError("title")) { <li><a href="#request-title" (click)="focusField($event, 'request-title')">Enter a request title.</a></li> }
+                @if (showError("serialNumber")) { <li><a href="#request-serial-number" (click)="focusField($event, 'request-serial-number')">Enter the equipment serial number.</a></li> }
+                @if (showError("justification")) { <li><a href="#request-justification" (click)="focusField($event, 'request-justification')">Urgent requests need a justification of at least 20 characters.</a></li> }
               </ul>
             </div>
           }
@@ -129,7 +129,13 @@ export class RequestFormComponent {
     return messages;
   }
 
+  focusField(event: Event, id: string): void {
+    event.preventDefault();
+    document.getElementById(id)?.focus();
+  }
+
   submit(): void {
+    this.created.set(false);
     this.formSubmitted = true;
     this.updateConditionalValidation();
     if (this.form.invalid) return;

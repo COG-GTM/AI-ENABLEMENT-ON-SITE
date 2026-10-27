@@ -24,7 +24,7 @@ contract intact. It uses the Angular request form in the paired web fixture.
 ## What the fixture shows
 
 The pre- and post-iteration records in `example-system/web-app/evidence/ux-upgrade.json` show the
-Angular line coverage at **99.31%**, **10/10 Angular unit tests**, and **2/2 shared Playwright tests
+Angular line coverage at **99.37%**, **14/14 Angular unit tests**, and **3/3 shared Playwright tests
 on each app** after the change. Both axe runs recorded zero violations. The mockup and screenshot
 evidence are local files.
 

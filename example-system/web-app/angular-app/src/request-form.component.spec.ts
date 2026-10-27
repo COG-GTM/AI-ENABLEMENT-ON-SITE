@@ -55,4 +55,46 @@ describe("RequestFormComponent", () => {
     expect(add).toHaveBeenCalledOnce();
     expect(component.created()).toBe(true);
   });
+
+  it("focuses the selected summary field without changing the URL", async () => {
+    await TestBed.configureTestingModule({
+      imports: [RequestFormComponent],
+      providers: [{ provide: RequestService, useValue: { add: vi.fn(), requests: signal([]) } }]
+    }).compileComponents();
+    const fixture = TestBed.createComponent(RequestFormComponent);
+    const component = fixture.componentInstance;
+    component.form.controls.title.setValue("Repair pump");
+    component.form.controls.type.setValue("repair");
+    component.submit();
+    fixture.detectChanges();
+
+    const link = fixture.nativeElement.querySelector('a[href="#request-serial-number"]') as HTMLAnchorElement;
+    const serialField = fixture.nativeElement.querySelector("#request-serial-number") as HTMLInputElement;
+    const currentUrl = window.location.href;
+    link.click();
+
+    expect(window.location.href).toBe(currentUrl);
+    expect(document.activeElement).toBe(serialField);
+  });
+
+  it("clears the success state when a later submission is invalid", async () => {
+    const add = vi.fn();
+    await TestBed.configureTestingModule({
+      imports: [RequestFormComponent],
+      providers: [{ provide: RequestService, useValue: { add, requests: signal([]) } }]
+    }).compileComponents();
+    const fixture = TestBed.createComponent(RequestFormComponent);
+    const component = fixture.componentInstance;
+    component.form.controls.title.setValue("Repair pump");
+    component.form.controls.type.setValue("repair");
+    component.form.controls.serialNumber.setValue("EQ-555");
+    component.submit();
+    expect(component.created()).toBe(true);
+
+    component.submit();
+
+    expect(component.form.invalid).toBe(true);
+    expect(component.created()).toBe(false);
+    expect(add).toHaveBeenCalledOnce();
+  });
 });

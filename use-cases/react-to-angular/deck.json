@@ -18,10 +18,10 @@
       ["List keys", "@for track"]
     ]},
     {"type": "stats", "title": "Fixture proof recorded in evidence", "stats": [
-      {"value": "2 / 10", "label": "React / Angular unit tests"},
-      {"value": "89.04%", "label": "React line coverage"},
-      {"value": "99.31%", "label": "Angular line coverage after UX iteration"},
-      {"value": "2 / 2", "label": "shared Playwright tests per app, before and after"},
+      {"value": "2 / 10 / 14", "label": "React / Angular baseline / final unit tests"},
+      {"value": "89.04%", "label": "React line coverage at parity baseline"},
+      {"value": "99.18% → 99.37%", "label": "Angular line coverage before and after UX fixes"},
+      {"value": "2 / 2 → 3 / 3", "label": "shared Playwright tests per app, before and after"},
       {"value": "0", "label": "axe violations in both post-UX runs"}
     ], "note": "See example-system/web-app/evidence/parity.json and ux-upgrade.json."},
     {"type": "two-column", "title": "What the lane does and does not do", "left_title": "Does", "left": [

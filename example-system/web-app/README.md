@@ -46,7 +46,7 @@ npm test
 npm run test:coverage
 ```
 
-Angular line coverage is gated at 85% and emits `coverage/lcov.info`.
+Angular line coverage is gated at 85% and emits `coverage/equipment-request/lcov.info`.
 
 ## Shared regression test
 

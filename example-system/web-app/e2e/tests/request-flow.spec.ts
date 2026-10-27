@@ -27,6 +27,15 @@ test("create, filter, open details, and validate a service request", async ({ pa
   await expect(page.getByTestId("validation-summary")).toContainText("request title");
   await expect(page.getByTestId("validation-summary")).toContainText("serial number");
   await expect(page.getByTestId("validation-summary")).toContainText("at least 20 characters");
+  if (process.env.APP_TARGET === "angular") {
+    const formUrl = page.url();
+    await page.getByRole("link", { name: "Enter the equipment serial number." }).click();
+    await expect(page).toHaveURL(formUrl);
+    await expect(page.getByTestId("request-serial-number")).toBeFocused();
+  } else {
+    await expect(page).toHaveURL(/\/requests\/new$/);
+    await expect(page.getByTestId("request-title")).toBeFocused();
+  }
 
   await page.getByTestId("request-title").fill(" Replace lift motor ");
   await page.getByTestId("request-justification").fill(" Urgent work required before the next shift. ");
@@ -49,6 +58,21 @@ test("create, filter, open details, and validate a service request", async ({ pa
   await expect(page.getByTestId("request-detail")).toContainText("EQ-7788");
 
   await testInfo.attach("browser-console-errors", { body: consoleErrors.join("\n") || "none", contentType: "text/plain" });
+});
+
+test("submitting the blank reset form replaces success with validation", async ({ page }) => {
+  await page.goto("/requests/new");
+  await page.getByTestId("request-title").fill("Repair pump");
+  await page.getByTestId("request-type").selectOption("repair");
+  await page.getByTestId("request-serial-number").fill("EQ-7788");
+  await page.getByTestId("request-submit").click();
+  await expect(page.getByTestId("form-success")).toBeVisible();
+
+  await page.getByTestId("request-submit").click();
+
+  await expect(page.getByTestId("validation-summary")).toBeVisible();
+  await expect(page.getByTestId("validation-summary")).toContainText("request title");
+  await expect(page.getByTestId("form-success")).toHaveCount(0);
 });
 
 test("captures the static UX concept", async ({ page }) => {

@@ -28,7 +28,11 @@ export function RequestForm({ onCreate }: { onCreate: (request: Omit<ServiceRequ
     }
     dispatch({ type: "set", errors: next });
     setCreated(false);
-    if (Object.keys(next).length) return;
+    if (Object.keys(next).length) {
+      const firstInvalidField = next.title ? "request-title" : next.serialNumber ? "request-serial-number" : "request-justification";
+      document.getElementById(firstInvalidField)?.focus();
+      return;
+    }
     onCreate({ title: title.trim(), type: kind, priority, serialNumber: serialNumber.trim(), justification: justification.trim() });
     dispatch({ type: "clear" });
     setCreated(true);
