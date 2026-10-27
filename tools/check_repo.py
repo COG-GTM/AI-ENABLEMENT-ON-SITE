@@ -289,8 +289,8 @@ def check_web_fixture() -> None:
         run([npm, "test"], cwd=web / app)
         run([npm, "run", "test:coverage"], cwd=web / app)
     e2e = web / "e2e"
-    if os.environ.get("BROWSER_CHANNEL"):
-        print("note: BROWSER_CHANNEL is set; skipping bundled Chromium probe")
+    if os.environ.get("BROWSER_CHANNEL") == "chrome":
+        print("note: BROWSER_CHANNEL=chrome; skipping bundled Chromium probe")
     else:
         browser_check = subprocess.run(
             [

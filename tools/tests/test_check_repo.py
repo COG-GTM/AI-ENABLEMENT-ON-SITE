@@ -46,9 +46,38 @@ class CheckRepoWebGateTests(unittest.TestCase):
         self.assertFalse(any(command[:2] == ["/usr/bin/node", "-e"] for command in commands))
         self.assertIn(["/usr/bin/npm", "run", "e2e:react"], commands)
         self.assertIn(["/usr/bin/npm", "run", "e2e:angular"], commands)
-        self.assertIn("BROWSER_CHANNEL is set; skipping bundled Chromium probe", output.getvalue())
+        self.assertIn("BROWSER_CHANNEL=chrome; skipping bundled Chromium probe", output.getvalue())
         self.assertTrue(any("npm run e2e:react exited 1" in problem for problem in problems))
         self.assertTrue(any("npm run e2e:angular exited 1" in problem for problem in problems))
+
+    def test_non_chrome_browser_channel_keeps_bundled_chromium_probe(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            web = root / "example-system" / "web-app"
+            for project in ("react-prototype", "angular-app", "e2e"):
+                (web / project / "node_modules").mkdir(parents=True)
+            problems: list[str] = []
+            output = io.StringIO()
+
+            def fake_run(command, **kwargs):
+                probe_failed = command[:2] == ["/usr/bin/node", "-e"]
+                return subprocess.CompletedProcess(command, 3 if probe_failed else 0, stdout="", stderr="")
+
+            with (
+                mock.patch.object(check_repo, "ROOT", root),
+                mock.patch.object(check_repo.shutil, "which", side_effect=lambda name: f"/usr/bin/{name}"),
+                mock.patch.object(check_repo, "problems", problems),
+                mock.patch.object(check_repo.subprocess, "run", side_effect=fake_run) as run,
+                mock.patch.dict(os.environ, {"BROWSER_CHANNEL": "firefox"}),
+                contextlib.redirect_stdout(output),
+            ):
+                check_repo.check_web_fixture()
+
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertTrue(any(command[:2] == ["/usr/bin/node", "-e"] for command in commands))
+        self.assertFalse(any(command[-1] in ("e2e:react", "e2e:angular") for command in commands))
+        self.assertIn("Playwright Chromium browser is not installed; skipped", output.getvalue())
+        self.assertEqual(problems, [])
 
 
 if __name__ == "__main__":

@@ -245,7 +245,7 @@ def backlog_title(filename: str, declarations: list[str], action: str) -> str:
         remaining = len(declarations) - shown
         names = ", ".join(declarations[:shown])
         summary = f"{names}, +{remaining} more" if names else f"+{remaining} more"
-        fallback = f"Port {filename} ({summary}) to Angular"
+        fallback = f"{action} {filename} ({summary}) to Angular"
         if len(fallback) <= 120:
             return fallback
     return fallback[:120].rstrip()
