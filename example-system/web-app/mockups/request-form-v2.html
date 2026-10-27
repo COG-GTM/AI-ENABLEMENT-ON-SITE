@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Equipment service request — form concept</title>
+  <style>
+    :root{font:16px/1.5 system-ui,sans-serif;color:#1c2b32;background:#f1f6f5;--ink:#18383c;--accent:#176f74;--error:#8a2929}
+    *{box-sizing:border-box}body{margin:0}.page{max-width:1080px;margin:0 auto;padding:2rem 1.25rem}
+    header{display:flex;align-items:end;justify-content:space-between;gap:1rem;border-bottom:1px solid #c5d4d4;padding-bottom:1.25rem}
+    h1{font-size:clamp(1.6rem,3vw,2.4rem);line-height:1.15;margin:.2rem 0}.eyebrow{letter-spacing:.08em;text-transform:uppercase;color:#527478;font-size:.82rem}
+    .layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(230px,.8fr);gap:1.5rem;margin-top:1.5rem}
+    .card{background:white;border:1px solid #d0dddd;border-radius:.8rem;padding:1.5rem;box-shadow:0 5px 20px #18383c0b}
+    .summary{border:1px solid #e8b8b3;border-left:5px solid var(--error);border-radius:.4rem;background:#fff6f4;padding:1rem 1.2rem;margin-bottom:1.25rem}
+    .summary h2{font-size:1.05rem;margin:0 0 .4rem;color:var(--error)}.summary ul{margin:.25rem 0 0;padding-left:1.25rem}
+    .fields{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.field{display:grid;gap:.35rem}.wide{grid-column:1/-1}
+    label{font-weight:650;color:#263e42}input,select,textarea{width:100%;min-height:2.8rem;border:1px solid #82979a;border-radius:.4rem;padding:.65rem .75rem;color:inherit;background:#fff}
+    textarea{min-height:6rem;resize:vertical}.hint{font-size:.88rem;color:#53696c;margin:0}.invalid{border-color:var(--error)}
+    button{background:var(--accent);color:white;border:0;border-radius:.45rem;padding:.8rem 1.15rem;font-weight:700;cursor:pointer}
+    :focus-visible{outline:3px solid #df9e2f;outline-offset:3px}
+    .aside{color:#405a5e}.aside h2{font-size:1.1rem;color:var(--ink)}.aside li{margin:.6rem 0}
+    @media(max-width:700px){.page{padding:1rem}.layout{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.wide{grid-column:auto}header{align-items:start;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header><div><p class="eyebrow">Equipment services</p><h1>New service request</h1></div><p>Local design concept · form iteration 2</p></header>
+    <div class="layout">
+      <section class="card" aria-labelledby="form-title">
+        <h2 id="form-title">Request details</h2>
+        <div class="summary" role="alert" aria-labelledby="summary-title">
+          <h2 id="summary-title">There are two items to review</h2>
+          <ul><li><a href="#serial">Enter the equipment serial number.</a></li><li><a href="#reason">Add at least 20 characters explaining the urgent priority.</a></li></ul>
+        </div>
+        <form>
+          <div class="fields">
+            <div class="field wide"><label for="title">Request title</label><input id="title" name="title" value="Repair lift motor" aria-describedby="title-hint"><p class="hint" id="title-hint">Use a short description of the work.</p></div>
+            <div class="field"><label for="kind">Request type</label><select id="kind" name="type"><option>Repair</option><option>Inspection</option></select></div>
+            <div class="field"><label for="priority">Priority</label><select id="priority" name="priority"><option>Urgent</option><option>Standard</option></select></div>
+            <div class="field wide"><label for="serial">Equipment serial number <span aria-hidden="true">*</span></label><input class="invalid" id="serial" name="serial" aria-invalid="true" aria-describedby="serial-error"><p class="hint" id="serial-error">Enter the serial number shown on the equipment plate.</p></div>
+            <div class="field wide"><label for="reason">Why is this urgent? <span aria-hidden="true">*</span></label><textarea class="invalid" id="reason" name="reason" aria-invalid="true" aria-describedby="reason-hint"></textarea><p class="hint" id="reason-hint">At least 20 characters. This helps the service team prioritize.</p></div>
+            <div class="field wide"><button type="button">Create request</button></div>
+          </div>
+        </form>
+      </section>
+      <aside class="card aside"><h2>Before you submit</h2><ul><li>Repair requests need an equipment serial number.</li><li>Urgent requests need a clear reason of 20 or more characters.</li><li>Your draft stays in this local example.</li></ul></aside>
+    </div>
+  </main>
+</body>
+</html>

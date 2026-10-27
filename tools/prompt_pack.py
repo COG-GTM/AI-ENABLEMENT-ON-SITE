@@ -67,9 +67,17 @@ TASKS = {
         "it and prove both with the same vectors (`/tdd --lang both`) - the twin is a reference model, not a translation. "
         "Retain units are not migration work: document the interface and stop."
     ),
+    "react": (
+        "Follow `.devin/skills/react-to-angular/SKILL.md` for this one React unit only: use this pack's dependency graph and "
+        "concept map, work leaf-first on a feature branch, and write Angular unit tests before implementation (`/tdd`). Port "
+        "components to standalone components and service/context units to injectable services; do not mechanically translate "
+        "design choices. Proof requires the Angular unit tests and coverage gate plus the shared Playwright spec passing against "
+        "both the React prototype and Angular app. Do not mark done without those test results and evidence."
+    ),
 }
-SKILL_OF = {"labview": "/labview-to-python", "matlab": "/matlab-to-code", "c": "/bring-your-firmware then /tdd"}
-TEXT_EXT = {".m", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hh", ".hxx"}
+SKILL_OF = {"labview": "/labview-to-python", "matlab": "/matlab-to-code", "c": "/bring-your-firmware then /tdd",
+            "react": "/react-to-angular"}
+TEXT_EXT = {".m", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".hh", ".hxx", ".tsx", ".jsx", ".ts", ".js"}
 
 
 def detect_language(dep_map: dict) -> str:
@@ -79,7 +87,9 @@ def detect_language(dep_map: dict) -> str:
         return "matlab"
     if "include_check" in dep_map or "target_only" in dep_map:
         return "c"
-    raise SystemExit("cannot tell which scanner wrote this map (expected keys from vi_fleet_scan, m_fleet_scan, or c_fleet_scan)")
+    if dep_map.get("framework") == "react" or dep_map.get("language") == "react":
+        return "react"
+    raise SystemExit("cannot tell which scanner wrote this map (expected keys from the LabVIEW, MATLAB, C/C++, or React scanner)")
 
 
 def sibling(map_path: Path, suffix: str) -> Path:
@@ -134,6 +144,8 @@ def fence(text: str, lang: str) -> str:
 def code_lang(path: str, language: str) -> str:
     if language == "matlab":
         return "matlab"
+    if language == "react":
+        return {"tsx": "tsx", "jsx": "jsx", "ts": "typescript", "js": "javascript"}.get(Path(path).suffix.lower().lstrip("."), "typescript")
     return "cpp" if Path(path).suffix.lower() in (".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx") else "c"
 
 

@@ -1,0 +1,15 @@
+{
+  "name": "equipment-request-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "e2e:react": "node run-e2e.mjs react",
+    "e2e:angular": "node run-e2e.mjs angular",
+    "e2e:angular:ux": "node run-e2e.mjs angular-ux"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@playwright/test": "1.55.0"
+  }
+}

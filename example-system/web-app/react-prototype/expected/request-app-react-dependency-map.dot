@@ -1,0 +1,37 @@
+digraph react_migration {
+  rankdir=LR;
+  "package.json" [label="package.json\nbuild-config"];
+  "src/App.test.tsx" [label="src/App.test.tsx\nservice"];
+  "src/App.tsx" [label="App\ncomponent"];
+  "src/App.tsx" [label="Workspace\ncomponent"];
+  "src/SettingsContext.tsx" [label="SettingsContext\ncontext"];
+  "src/SettingsContext.tsx" [label="SettingsProvider\ncomponent"];
+  "src/SettingsContext.tsx" [label="useSettings\ncustom-hook"];
+  "src/components/RequestDetail.tsx" [label="src/components/RequestDetail.tsx\ncomponent"];
+  "src/components/RequestForm.tsx" [label="src/components/RequestForm.tsx\ncomponent"];
+  "src/components/RequestList.tsx" [label="src/components/RequestList.tsx\ncomponent"];
+  "src/components/StatusBadge.tsx" [label="src/components/StatusBadge.tsx\ncomponent"];
+  "src/main.tsx" [label="src/main.tsx\nservice"];
+  "src/requestService.ts" [label="src/requestService.ts\nservice"];
+  "src/test-setup.ts" [label="src/test-setup.ts\nservice"];
+  "src/types.ts" [label="src/types.ts\nservice"];
+  "src/useDebounce.ts" [label="src/useDebounce.ts\nservice"];
+  "src/useRequests.ts" [label="src/useRequests.ts\ncustom-hook"];
+  "vite.config.ts" [label="vite.config.ts\nbuild-config"];
+  "src/App.test.tsx" -> "src/App.tsx" [label="./App"];
+  "src/App.tsx" -> "src/SettingsContext.tsx" [label="./SettingsContext"];
+  "src/App.tsx" -> "src/components/RequestDetail.tsx" [label="./components/RequestDetail"];
+  "src/App.tsx" -> "src/components/RequestForm.tsx" [label="./components/RequestForm"];
+  "src/App.tsx" -> "src/components/RequestList.tsx" [label="./components/RequestList"];
+  "src/App.tsx" -> "src/useRequests.ts" [label="./useRequests"];
+  "src/components/RequestDetail.tsx" -> "src/components/StatusBadge.tsx" [label="./StatusBadge"];
+  "src/components/RequestDetail.tsx" -> "src/types.ts" [label="../types"];
+  "src/components/RequestForm.tsx" -> "src/types.ts" [label="../types"];
+  "src/components/RequestList.tsx" -> "src/components/StatusBadge.tsx" [label="./StatusBadge"];
+  "src/components/RequestList.tsx" -> "src/types.ts" [label="../types"];
+  "src/components/RequestList.tsx" -> "src/useDebounce.ts" [label="../useDebounce"];
+  "src/main.tsx" -> "src/App.tsx" [label="./App"];
+  "src/requestService.ts" -> "src/types.ts" [label="./types"];
+  "src/useRequests.ts" -> "src/requestService.ts" [label="./requestService"];
+  "src/useRequests.ts" -> "src/types.ts" [label="./types"];
+}

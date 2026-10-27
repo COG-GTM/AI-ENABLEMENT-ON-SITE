@@ -23,3 +23,31 @@ jobs:
         with:
           name: golden-path-py${{ matrix.python-version }}
           path: outputs/golden/
+
+  web-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci
+        working-directory: example-system/web-app/react-prototype
+      - run: npm ci
+        working-directory: example-system/web-app/angular-app
+      - run: npm ci
+        working-directory: example-system/web-app/e2e
+      - run: npm test
+        working-directory: example-system/web-app/react-prototype
+      - run: npm run test:coverage
+        working-directory: example-system/web-app/react-prototype
+      - run: npm test
+        working-directory: example-system/web-app/angular-app
+      - run: npm run test:coverage
+        working-directory: example-system/web-app/angular-app
+      - run: npx playwright install --with-deps chromium
+        working-directory: example-system/web-app/e2e
+      - run: npm run e2e:react
+        working-directory: example-system/web-app/e2e
+      - run: npm run e2e:angular
+        working-directory: example-system/web-app/e2e

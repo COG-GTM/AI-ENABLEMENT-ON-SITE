@@ -39,11 +39,20 @@ Reference this repo. What can you do here? Run the checks and show me.
 ```
 
 Two minutes later you have a readiness check, a go/no-go analysis with recomputed budgets, and a
-leadership deck open in the preview. Chained prompts like these are **workflows**; the twelve we ship
+leadership deck open in the preview. Chained prompts like these are **workflows**; the fifteen we ship
 are in `WORKFLOWS.md`. Showing this to a room? Follow `WALKTHROUGH.md`. Live in C, MATLAB, or
 LabVIEW all day? Jump to [Your tools](#your-tools-cc-matlabsimulink-labviewteststand). Here to
 migrate a whole estate (thousands of VIs, `.m` files, or C modules)? Start at
 [Migration at scale](#migration-at-scale-use-cases).
+
+### Web / Angular teams start here
+
+For your own team repository, begin with `/react-to-angular` and copy the adoption files from
+`templates/team-repo/`. Try these first three prompts in order:
+
+1. `/react-to-angular Scan example-system/web-app/react-prototype and explain the leaf-first plan.`
+2. `/spec-driven Migrate the request form behavior to Angular using the shared fixture contract.`
+3. `/ui-iterate Apply the v2 request form mockup without changing behavior; keep before/after evidence.`
 
 If you do not write code: the prompts in this file are all you need. Skip "Prove it works" and
 "Where things live"; Devin runs those commands for you.
@@ -74,6 +83,8 @@ plain English; `AGENTS.md` maps phrases like "make me a deck" to the right skill
 | `/test-backfill` | Adds characterization tests to legacy behavior from leaf seams upward, records suspected bugs as tracker items, and gates changed lines on coverage | existing code, test runner, coverage report | characterization tests and `outputs/<coverage-report>.md` |
 | `/sonar-gate` | Reads SonarQube gate status and new-code issues, with an offline practice server; scanner configuration stays read-only | approved SonarQube project, or `integrations/fake_server.py` | `outputs/<sonar-report>.md` |
 | `/plan-to-tracker` | Converts `/spec-driven` tasks to reviewable Jira issue payloads; applies only after explicit opt-in and confirmation | `specs/<nnn>-<slug>/tasks.md` | `outputs/<slug>-jira-payload.json` and optional CSV |
+| `/react-to-angular` | Scans React units and guides a leaf-first, test-first strangler migration to Angular; not a transpiler and does not choose a design system | React source tree, spec, shared fixture tests | `outputs/<tree>-react-*` inventory, graph, backlog, prompt packs |
+| `/ui-iterate` | Iterates a local mockup/component with Desktop preview or CLI Playwright, axe, and before/after evidence | local app and mockup | updated HTML/source and screenshot pair |
 
 Full prompt list, ready to paste:
 
@@ -136,6 +147,8 @@ so you can read, present, or hand it over. The decks are self-contained HTML; op
 | MATLAB repository: interconnections, repository map, migration without feeding the whole codebase to an agent | `use-cases/matlab-repository/` | workflows 10 and 7 | |
 | C/C++ repository: host-testable vs target-only, HAL seam, behavioural twin | `use-cases/c-cpp-firmware/` | workflows 11 and 8 | C-to-Python *translation* (not offered) |
 | Reusable, low-touch pipeline: bounded context, token control, unattended runs, approaches compared | `use-cases/reusable-pipeline/` | workflow 12 | agent execution inside CI |
+| React prototype to Angular app: scanner, concept map, tests, coverage, shared e2e | `use-cases/react-to-angular/` | workflow 14 | real-application design-system decisions |
+| UI/UX iteration: offline mockup, accessible behavior-neutral update, screenshots | `use-cases/ui-ux-iteration/` | workflow 15 | preview availability in your environment |
 | Other translations: Ada to C++, Fortran modernisation, MATLAB to/from C++ for embedded targets | `use-cases/other-translations/` | none: same method, no fixture | all of it |
 | Advanced topics: model choice and token cost, writing `AGENTS.md`, Windows, remote containers, tool approval status | `use-cases/advanced-topics/` | none | all of it |
 
