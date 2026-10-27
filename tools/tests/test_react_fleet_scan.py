@@ -20,6 +20,22 @@ class ReactFleetScanTests(unittest.TestCase):
     def test_check_matches_committed_expected_fixture(self):
         self.assertEqual(react_fleet_scan.check(), 0)
 
+    def test_leaf_first_places_callers_after_import_cycles(self):
+        with tempfile.TemporaryDirectory() as temp:
+            tree = Path(temp)
+            (tree / "zA.tsx").write_text(
+                'import { ZB } from "./zB";\nexport function ZA() { return <ZB />; }\n', encoding="utf-8"
+            )
+            (tree / "zB.tsx").write_text(
+                'import { ZA } from "./zA";\nexport function ZB() { return <ZA />; }\n', encoding="utf-8"
+            )
+            (tree / "aCaller.tsx").write_text(
+                'import { ZA } from "./zA";\nexport function Caller() { return <ZA />; }\n', encoding="utf-8"
+            )
+            result = react_fleet_scan.scan_tree(tree)
+
+        self.assertEqual(result["leaf_first_order"], ["zA.tsx", "zB.tsx", "aCaller.tsx"])
+
     def test_units_hooks_imports_routes_and_tests_are_found(self):
         with tempfile.TemporaryDirectory() as temp:
             tree = Path(temp)
@@ -136,6 +152,37 @@ class ReactFleetScanTests(unittest.TestCase):
             self.assertEqual(len(items), len(by_path))
             self.assertEqual(len({item["id"] for item in items}), len(items))
             self.assertNotIn(by_path["src/Aardvark.tsx"]["id"], {item["id"] for item in first_items})
+
+    def test_dependency_dot_groups_all_declarations_per_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            tree = Path(temp)
+            (tree / "SettingsContext.tsx").write_text(
+                "export const SettingsContext = createContext({ units: 'metric' });\n"
+                "export function SettingsProvider({ children }) { return <SettingsContext.Provider>{children}</SettingsContext.Provider>; }\n"
+                "export function useSettings() { return useContext(SettingsContext); }\n",
+                encoding="utf-8",
+            )
+            (tree / "App.tsx").write_text(
+                'import { SettingsProvider } from "./SettingsContext";\n'
+                "export function App() { return <SettingsProvider />; }\n",
+                encoding="utf-8",
+            )
+            (tree / "package.json").write_text('{"dependencies":{"react":"19.0.0"}}\n', encoding="utf-8")
+            paths = react_fleet_scan.artifacts(
+                react_fleet_scan.scan_tree(tree), Path(temp) / "scan", "fixture", fresh=True
+            )
+            dot_lines = paths["dot"].read_text(encoding="utf-8").splitlines()
+
+        settings_nodes = [
+            line for line in dot_lines if line.startswith('  "SettingsContext.tsx" [label=')
+        ]
+        self.assertEqual(len(settings_nodes), 1)
+        self.assertIn(
+            'label="SettingsContext, SettingsProvider, useSettings\\ncomponent, context, custom-hook"',
+            settings_nodes[0],
+        )
+        self.assertIn('  "App.tsx" -> "SettingsContext.tsx"', "\n".join(dot_lines))
+        self.assertIn('  "package.json" [label="package.json\\nbuild-config"];', dot_lines)
 
     def test_long_file_level_backlog_titles_are_bounded_and_keep_all_declarations_in_notes(self):
         with tempfile.TemporaryDirectory() as temp:

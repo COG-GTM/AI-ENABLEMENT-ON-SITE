@@ -276,19 +276,17 @@ def check_web_fixture() -> None:
         print("note: Node.js or npm unavailable; skipped web-app tests, coverage, and Playwright checks")
         return
     web = ROOT / "example-system" / "web-app"
-    projects = ("react-prototype", "angular-app", "e2e")
-    missing = [project for project in projects if not (web / project / "node_modules").is_dir()]
-    if missing:
-        print(
-            f"note: node_modules missing for {', '.join(missing)}; "
-            "skipped web-app tests, coverage, and Playwright checks"
-        )
-        return
-    print("note: web-app dependencies found; running unit tests and coverage")
     for app in ("react-prototype", "angular-app"):
+        if not (web / app / "node_modules").is_dir():
+            print(f"note: node_modules missing for {app}; skipped its unit tests and coverage")
+            continue
+        print(f"note: {app} dependencies found; running unit tests and coverage")
         run([npm, "test"], cwd=web / app)
         run([npm, "run", "test:coverage"], cwd=web / app)
     e2e = web / "e2e"
+    if not (e2e / "node_modules").is_dir():
+        print("note: node_modules missing for e2e; skipped Playwright checks")
+        return
     if os.environ.get("BROWSER_CHANNEL") == "chrome":
         print("note: BROWSER_CHANNEL=chrome; skipping bundled Chromium probe")
     else:

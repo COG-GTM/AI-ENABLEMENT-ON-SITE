@@ -2,11 +2,8 @@ digraph react_migration {
   rankdir=LR;
   "package.json" [label="package.json\nbuild-config"];
   "src/App.test.tsx" [label="src/App.test.tsx\nservice"];
-  "src/App.tsx" [label="App\ncomponent"];
-  "src/App.tsx" [label="Workspace\ncomponent"];
-  "src/SettingsContext.tsx" [label="SettingsContext\ncontext"];
-  "src/SettingsContext.tsx" [label="SettingsProvider\ncomponent"];
-  "src/SettingsContext.tsx" [label="useSettings\ncustom-hook"];
+  "src/App.tsx" [label="App, Workspace\ncomponent"];
+  "src/SettingsContext.tsx" [label="SettingsContext, SettingsProvider, useSettings\ncomponent, context, custom-hook"];
   "src/components/RequestDetail.tsx" [label="src/components/RequestDetail.tsx\ncomponent"];
   "src/components/RequestForm.tsx" [label="src/components/RequestForm.tsx\ncomponent"];
   "src/components/RequestList.tsx" [label="src/components/RequestList.tsx\ncomponent"];

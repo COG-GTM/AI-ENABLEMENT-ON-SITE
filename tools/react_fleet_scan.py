@@ -20,7 +20,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from fleet_common import (BACKLOG_COLUMNS, OUT_DIR, ROOT, backlog_csv_rows, check_prefix, component_slug, csv_text,
-                          finish_backlog, safe_name, severity_for)
+                          finish_backlog, leaf_first_order, safe_name, severity_for)
 
 TOOL = "tools/react_fleet_scan.py"
 FIXTURE = ROOT / "example-system" / "web-app" / "react-prototype"
@@ -156,15 +156,18 @@ def read_unit(path: Path, tree: Path, tests: list[tuple[str, str]]) -> tuple[lis
 
 
 def leaf_first(nodes: list[dict], edges: list[dict]) -> list[str]:
-    paths = {n["path"] for n in nodes}
-    deps: dict[str, set[str]] = {p: set() for p in paths}
-    callers: dict[str, set[str]] = {p: set() for p in paths}
+    paths = {node["path"] for node in nodes}
+    cycle_order, cycles = leaf_first_order(sorted(paths), edges)
+    if cycles:
+        return cycle_order
+    deps: dict[str, set[str]] = {path: set() for path in paths}
+    callers: dict[str, set[str]] = {path: set() for path in paths}
     for edge in edges:
         source, target = edge["from"], edge["to"]
         if source in paths and target in paths:
             deps[source].add(target)
             callers[target].add(source)
-    ready = sorted(p for p in paths if not deps[p])
+    ready = sorted(path for path in paths if not deps[path])
     order = []
     while ready:
         current = ready.pop(0)
@@ -274,8 +277,16 @@ def artifacts(result: dict, out_dir: Path, name: str, prefix: str = "REA", opene
     summary.write_text(json.dumps(summary_data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     dot = out_dir / f"{stem}-dependency-map.dot"
     lines = ["digraph react_migration {", "  rankdir=LR;"]
+    nodes_by_path: dict[str, list[dict]] = defaultdict(list)
     for node in result["nodes"]:
-        lines.append(f'  "{node["path"]}" [label="{node["name"]}\\n{node["kind"]}"];')
+        nodes_by_path[node["path"]].append(node)
+    for path, file_nodes in sorted(nodes_by_path.items()):
+        names = sorted({
+            node["unit"][len(path) + 1:] if node["unit"].startswith(path + "#") else node["name"]
+            for node in file_nodes
+        })
+        kinds = sorted({node["kind"] for node in file_nodes})
+        lines.append(f'  "{path}" [label="{", ".join(names)}\\n{", ".join(kinds)}"];')
     for edge in result["edges"]:
         lines.append(f'  "{edge["from"]}" -> "{edge["to"]}" [label="{edge["via"]}"];')
     lines.append("}")
