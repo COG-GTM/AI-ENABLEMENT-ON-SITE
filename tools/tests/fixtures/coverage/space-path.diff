@@ -1,0 +1,6 @@
+diff --git "a/src/My Component.ts" "b/src/My Component.ts"
+--- "a/src/My Component.ts"
++++ "b/src/My\040Component.ts"
+@@ -1 +1 @@
+-const oldValue = 1;
++const newValue = 1;

@@ -89,7 +89,14 @@ def issue_type(issue: dict) -> str:
     return "/".join(qualities) if qualities else "UNKNOWN"
 
 
-def summarize(status_body: dict, issues_body: dict, project: str, branch: str | None, pull_request: str | None) -> dict:
+def summarize(
+    status_body: dict,
+    issues_body: dict,
+    project: str,
+    branch: str | None,
+    pull_request: str | None,
+    fail_on_warn: bool = False,
+) -> dict:
     gate = status_body.get("projectStatus")
     if not isinstance(gate, dict):
         gate = {}
@@ -141,7 +148,7 @@ def summarize(status_body: dict, issues_body: dict, project: str, branch: str | 
         "issue_count": len(normalized),
         "issues_by_group": groups,
         "issues": normalized,
-        "pass": gate_status == "OK",
+        "pass": gate_status == "OK" or (gate_status == "WARN" and not fail_on_warn),
         "note": "Quality gate status is NONE; analysis has not produced a computed gate result." if gate_status == "NONE" else "",
     }
 
@@ -173,6 +180,9 @@ def check() -> None:
     assert summary["issue_count"] == 2 and summary["issues"][0]["severity"] == "CRITICAL"
     assert summary["issues"][0]["type"] == "VULNERABILITY"
     assert summary["issues"][1]["type"] == "CODE_SMELL"
+    warning = {"projectStatus": {"status": "WARN", "conditions": []}}
+    assert summarize(warning, {"issues": []}, "p", None, None)["pass"]
+    assert not summarize(warning, {"issues": []}, "p", None, None, fail_on_warn=True)["pass"]
 
 
 def main(argv=None) -> int:
@@ -212,7 +222,14 @@ def main(argv=None) -> int:
             if not args.url:
                 raise ValueError("--url or SONAR_URL is required for API mode")
             status_body, issues_body = get_live(args.url, token, args.project_key, args.branch, args.pull_request)
-        summary = summarize(status_body, issues_body, args.project_key or "saved-status", args.branch, args.pull_request)
+        summary = summarize(
+            status_body,
+            issues_body,
+            args.project_key or "saved-status",
+            args.branch,
+            args.pull_request,
+            fail_on_warn=args.fail_on_warn,
+        )
         output = Path(args.out)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(markdown(summary), encoding="utf-8")

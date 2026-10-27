@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Check coverage of added or modified lines against an LCOV or Cobertura report."""
+"""Check changed tracked and untracked lines against an LCOV or Cobertura report."""
 
 import argparse
 import json
+import math
 import re
 import subprocess
 import sys
@@ -13,22 +14,91 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "tests" / "fixtures" / "coverage"
 
 
+def decode_git_path(raw: str) -> str:
+    value = raw.strip()
+    if not value.startswith('"'):
+        return value.split("\t", 1)[0]
+    decoded = bytearray()
+    index = 1
+    escapes = {"a": 7, "b": 8, "t": 9, "n": 10, "v": 11, "f": 12, "r": 13, '"': 34, "\\": 92}
+    while index < len(value):
+        char = value[index]
+        if char == '"':
+            break
+        if char != "\\":
+            decoded.extend(char.encode("utf-8"))
+            index += 1
+            continue
+        index += 1
+        if index >= len(value):
+            break
+        char = value[index]
+        if char in "01234567":
+            end = index + 1
+            while end < min(index + 3, len(value)) and value[end] in "01234567":
+                end += 1
+            decoded.append(int(value[index:end], 8))
+            index = end
+        else:
+            decoded.append(escapes.get(char, ord(char)))
+            index += 1
+    return decoded.decode("utf-8", errors="surrogateescape")
+
+
+def quote_git_path(value: str) -> str:
+    if not re.search(r'[\s"\\\x00-\x1f\x7f]', value):
+        return value
+    escapes = {"\a": r"\a", "\b": r"\b", "\t": r"\t", "\n": r"\n",
+               "\v": r"\v", "\f": r"\f", "\r": r"\r", '"': r'\"', "\\": r"\\"}
+    quoted = []
+    for char in value:
+        if char in escapes:
+            quoted.append(escapes[char])
+        elif ord(char) < 32 or ord(char) == 127:
+            quoted.append(f"\\{ord(char):03o}")
+        else:
+            quoted.append(char)
+    return '"' + "".join(quoted) + '"'
+
+
 def parse_diff(text: str) -> dict[str, set[int]]:
     changed: dict[str, set[int]] = {}
     current = None
     deleted = False
     new_line = 0
     in_hunk = False
+    old_remaining = 0
+    new_remaining = 0
     for raw in text.splitlines():
         line = raw.rstrip("\r")
+        if in_hunk:
+            if line == r"\ No newline at end of file":
+                continue
+            if line.startswith("+") and new_remaining > 0:
+                if current and not deleted:
+                    changed.setdefault(current, set()).add(new_line)
+                new_line += 1
+                new_remaining -= 1
+            elif line.startswith("-") and old_remaining > 0:
+                old_remaining -= 1
+            elif line.startswith(" ") and old_remaining > 0 and new_remaining > 0:
+                old_remaining -= 1
+                new_remaining -= 1
+                new_line += 1
+            else:
+                in_hunk = False
+            if in_hunk and old_remaining == 0 and new_remaining == 0:
+                in_hunk = False
+            if in_hunk:
+                continue
         if line.startswith("diff --git "):
             current, deleted, in_hunk = None, False, False
         elif line.startswith("rename to "):
-            current = line[len("rename to "):]
+            current = decode_git_path(line[len("rename to "):])
         elif line.startswith("deleted file mode "):
             deleted = True
         elif line.startswith("+++ "):
-            path = line[4:].strip()
+            path = decode_git_path(line[4:])
             if path == "/dev/null":
                 deleted = True
             elif path.startswith("b/"):
@@ -37,19 +107,9 @@ def parse_diff(text: str) -> dict[str, set[int]]:
             match = re.match(r"@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
             if match:
                 new_line = int(match.group(2))
+                old_remaining = int(match.group(1) or 1)
+                new_remaining = int(match.group(3) or 1)
                 in_hunk = True
-            else:
-                in_hunk = False
-        elif in_hunk and current and not deleted:
-            if line.startswith("+") and not line.startswith("+++"):
-                changed.setdefault(current, set()).add(new_line)
-                new_line += 1
-            elif line.startswith("-") and not line.startswith("---"):
-                continue
-            elif line.startswith(" "):
-                new_line += 1
-            elif line == r"\ No newline at end of file":
-                continue
             else:
                 in_hunk = False
     return changed
@@ -118,6 +178,8 @@ def line_ranges(lines: list[int]) -> str:
 
 
 def summarize(changed: dict[str, set[int]], report: dict[str, dict[int, int]], threshold: float) -> dict:
+    if not math.isfinite(threshold) or not 0 <= threshold <= 100:
+        raise ValueError("threshold must be a finite number between 0 and 100")
     files = []
     for name in sorted(changed):
         measured = sorted(line for line in changed[name] if line in report.get(name, {}))
@@ -172,8 +234,16 @@ def load_inputs(args) -> tuple[dict[str, set[int]], dict[str, dict[int, int]]]:
     else:
         if not args.base:
             raise ValueError("--base is required when --diff-file is not supplied")
+        base = subprocess.run(
+            ["git", "merge-base", args.base, "HEAD"],
+            cwd=args.repo,
+            capture_output=True,
+            text=True,
+        )
+        if base.returncode:
+            raise ValueError(f"git merge-base failed: {base.stderr.strip()}")
         proc = subprocess.run(
-            ["git", "diff", "--unified=0", "--no-color", f"{args.base}...HEAD"],
+            ["git", "diff", "--unified=0", "--no-color", base.stdout.strip(), "--"],
             cwd=args.repo,
             capture_output=True,
             text=True,
@@ -181,6 +251,28 @@ def load_inputs(args) -> tuple[dict[str, set[int]], dict[str, dict[int, int]]]:
         if proc.returncode:
             raise ValueError(f"git diff failed: {proc.stderr.strip()}")
         diff = proc.stdout
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+            cwd=args.repo,
+            capture_output=True,
+        )
+        if untracked.returncode:
+            raise ValueError(f"git ls-files failed: {untracked.stderr.decode(errors='replace').strip()}")
+        for raw_path in untracked.stdout.split(b"\0"):
+            if not raw_path:
+                continue
+            relative = raw_path.decode("utf-8", errors="surrogateescape")
+            source = Path(args.repo) / relative
+            if not source.is_file() or source.is_symlink():
+                continue
+            lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
+            if lines:
+                diff += (
+                    f"diff --git a/{relative} b/{relative}\n"
+                    f"--- /dev/null\n+++ {quote_git_path('b/' + relative)}\n"
+                    f"@@ -0,0 +1,{len(lines)} @@\n"
+                    + "".join(f"+{line}\n" for line in lines)
+                )
     changed = parse_diff(diff)
     if args.lcov:
         report = read_lcov(Path(args.lcov), args.path_prefix)
@@ -198,6 +290,10 @@ def check() -> None:
     assert result["changed_instrumented"] == 5 and result["covered"] == 4 and result["percent"] == 80.0
     cobertura = read_cobertura(FIXTURES / "cobertura.xml", None)
     assert summarize(diff, cobertura, 80.0)["covered"] == 4
+    space_diff = parse_diff((FIXTURES / "space-path.diff").read_text(encoding="utf-8"))
+    assert space_diff == {"src/My Component.ts": {1}}
+    space_report = read_lcov(FIXTURES / "space-path.lcov", None)
+    assert summarize(space_diff, space_report, 100.0)["covered"] == 1
 
 
 def main(argv=None) -> int:
@@ -206,7 +302,11 @@ def main(argv=None) -> int:
     inputs.add_argument("--lcov")
     inputs.add_argument("--cobertura")
     source = ap.add_mutually_exclusive_group()
-    source.add_argument("--base")
+    source.add_argument(
+        "--base",
+        help="diff merge-base(BASE, HEAD) against the working tree; staged/unstaged tracked edits and "
+             "untracked non-ignored files are included (all untracked file lines count as added)",
+    )
     source.add_argument("--diff-file")
     ap.add_argument("--repo", default=".")
     ap.add_argument("--threshold", type=float, default=80.0)
@@ -223,8 +323,8 @@ def main(argv=None) -> int:
         except (AssertionError, OSError, ValueError) as exc:
             print(f"coverage_gate --check: {exc}", file=sys.stderr)
             return 2
-    if not 0 <= args.threshold <= 100:
-        ap.error("--threshold must be between 0 and 100")
+    if not math.isfinite(args.threshold) or not 0 <= args.threshold <= 100:
+        ap.error("--threshold must be a finite number between 0 and 100")
     if not (args.lcov or args.cobertura):
         ap.error("one of --lcov or --cobertura is required")
     try:

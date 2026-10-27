@@ -63,6 +63,11 @@ Then gate the added or modified instrumented lines against the intended target b
 python tools/coverage_gate.py --lcov coverage/lcov.info --base origin/<dev-branch> --threshold 80
 ```
 
+With `--base`, the gate compares the merge base of the target and `HEAD` to the working tree, so
+committed, staged, and unstaged tracked edits are included. Non-ignored untracked files are also
+included, with every source line treated as added. A line counts toward coverage only when the
+coverage report contains instrumentation data for it.
+
 The gate must exit successfully before committing. If the report uses different source paths, set
 `--path-prefix` to map the report paths to repository paths. A change with no measurable instrumented
 lines is reported explicitly and passes; it does not claim coverage for uninstrumented changes.

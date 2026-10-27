@@ -101,11 +101,54 @@ def safe_target(url: str) -> bool:
     return parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname == "127.0.0.1")
 
 
+def saved_state(document: dict, output: Path) -> dict:
+    if not output.exists():
+        return document
+    try:
+        existing = json.loads(output.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read existing payload state from {output}: {exc}") from exc
+    if not isinstance(existing, dict):
+        raise ValueError(f"existing payload state in {output} is not an object")
+
+    def identity(parent: dict, item: dict) -> tuple[str, str, str]:
+        fields = item.get("payload", {}).get("fields", {})
+        project = fields.get("project", {}).get("key", parent.get("project", ""))
+        return str(project), str(parent.get("spec", "")), str(item.get("task_id", ""))
+
+    previous = {
+        identity(existing, item): item
+        for item in existing.get("issues", [])
+        if isinstance(item, dict)
+    }
+    for item in document["issues"]:
+        old = previous.get(identity(document, item))
+        if old is None:
+            continue
+        if old.get("created_key"):
+            item["created_key"] = old["created_key"]
+        if old.get("posting"):
+            item["posting"] = True
+    return document
+
+
+def persist(document: dict, output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+
+
 def write_issues(document: dict, base: str, token: str, output: Path) -> None:
     if not safe_target(base):
         raise ValueError("refusing non-HTTPS Jira URL; plain HTTP is allowed only to 127.0.0.1")
+    if any(item.get("posting") and not item.get("created_key") for item in document["issues"]):
+        raise ValueError("a Jira task is still marked posting; reconcile in Jira before retrying")
     endpoint = base.rstrip("/") + "/rest/api/2/issue"
+    opener = urllib.request.build_opener(RefuseRedirects())
     for item in document["issues"]:
+        if item.get("created_key"):
+            continue
+        item["posting"] = True
+        persist(document, output)
         body = json.dumps(item["payload"]).encode("utf-8")
         request = urllib.request.Request(
             endpoint,
@@ -118,10 +161,12 @@ def write_issues(document: dict, base: str, token: str, output: Path) -> None:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
+            with opener.open(request, timeout=15) as response:
                 created = json.load(response)
         except urllib.error.HTTPError as exc:
             exc.close()
+            if 300 <= exc.code < 400:
+                raise ValueError(f"Jira write refused redirect (HTTP {exc.code})") from None
             raise ValueError(f"Jira returned HTTP {exc.code}; response body omitted") from None
         except urllib.error.URLError as exc:
             raise ValueError(f"Jira connection failed: {exc.reason}") from None
@@ -129,8 +174,13 @@ def write_issues(document: dict, base: str, token: str, output: Path) -> None:
         if not isinstance(key, str) or not key:
             raise ValueError("Jira response did not contain an issue key")
         item["created_key"] = key
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        item.pop("posting", None)
+        persist(document, output)
+
+
+class RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def check() -> None:
@@ -167,8 +217,7 @@ def main(argv=None) -> int:
         document = make_payloads(tasks_path, args.project, args.type)
         slug = SPEC_RE.match(tasks_path.parent.name).group("slug")
         output = Path(args.out) if args.out else Path("outputs") / f"{slug}-jira-payload.json"
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        document = saved_state(document, output)
         if args.csv is not None:
             csv_path = (Path("outputs") / f"{slug}-jira-payload.csv") if args.csv is True else Path(args.csv)
             csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -180,14 +229,19 @@ def main(argv=None) -> int:
                 raise ValueError("--apply requires JIRA_URL and JIRA_TOKEN")
             if not safe_target(base):
                 raise ValueError("refusing non-HTTPS Jira URL; plain HTTP is allowed only to 127.0.0.1")
-            print(f"Ready to create {len(document['issues'])} Jira issues.")
+            if any(item.get("posting") and not item.get("created_key") for item in document["issues"]):
+                raise ValueError("a Jira task is still marked posting; reconcile in Jira before retrying")
+            pending = sum(not item.get("created_key") for item in document["issues"])
+            print(f"Ready to create {pending} Jira issues.")
             if not args.yes:
                 if input("Type yes to continue: ") != "yes":
                     print("Cancelled; no Jira issues were created.")
                     return 0
+            persist(document, output)
             write_issues(document, base, token, output)
-            print(f"Created {len(document['issues'])} Jira issues; keys saved to {output}.")
+            print(f"Created {pending} Jira issues; keys saved to {output}.")
         else:
+            persist(document, output)
             print(f"Dry run: {len(document['issues'])} Jira issue payloads written to {output}.")
             if args.csv is not None:
                 print(f"CSV written to {csv_path}.")

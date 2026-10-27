@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -30,6 +31,13 @@ class CoverageGateTests(unittest.TestCase):
         self.assertTrue(coverage_gate.summarize(changed, report, 79.99)["pass"])
         self.assertTrue(coverage_gate.summarize(changed, report, 80.0)["pass"])
         self.assertFalse(coverage_gate.summarize(changed, report, 80.01)["pass"])
+        for threshold in (float("nan"), float("inf"), float("-inf")):
+            with self.assertRaises(ValueError):
+                coverage_gate.summarize(changed, report, threshold)
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                coverage_gate.main(["--lcov", str(COVERAGE_FIXTURES / "lcov.info"),
+                                    "--diff-file", str(COVERAGE_FIXTURES / "sample.diff"),
+                                    "--threshold", str(threshold)])
 
     def test_cobertura_and_path_prefix(self):
         diff = "diff --git a/src/sample.ts b/src/sample.ts\n--- a/src/sample.ts\n+++ b/src/sample.ts\n@@ -1 +1 @@\n-old\n+new\n"
@@ -62,6 +70,64 @@ class CoverageGateTests(unittest.TestCase):
         summary = coverage_gate.summarize(changes, report, 50)
         self.assertEqual(summary["files"][0]["uncovered_ranges"], "2")
 
+    def test_hunk_counts_added_plus_prefix_lines_and_quoted_paths(self):
+        diff = (COVERAGE_FIXTURES / "space-path.diff").read_text(encoding="utf-8")
+        self.assertEqual(coverage_gate.parse_diff(diff), {"src/My Component.ts": {1}})
+        plus_line = (
+            "diff --git a/counter.ts b/counter.ts\n--- a/counter.ts\n+++ b/counter.ts\n"
+            "@@ -1,0 +1,2 @@\n++counter;\n+next();\n"
+        )
+        self.assertEqual(coverage_gate.parse_diff(plus_line), {"counter.ts": {1, 2}})
+        renamed = (
+            'diff --git a/old.ts b/new.ts\nrename to "src/My\\040Component.ts"\n'
+            '--- a/old.ts\n+++ "b/src/My\\040Component.ts"\n@@ -1 +1 @@\n-old\n+new\n'
+        )
+        self.assertEqual(coverage_gate.decode_git_path('"b/src/My\\040Component.ts"'), "b/src/My Component.ts")
+        self.assertEqual(coverage_gate.parse_diff(renamed), {"src/My Component.ts": {1}})
+
+    def test_base_diff_includes_tracked_worktree_and_untracked_files(self):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as report_directory:
+            repo = Path(directory)
+            (repo / "src").mkdir()
+            tracked = repo / "src" / "app.ts"
+            tracked.write_text("const old = 1;\nconst keep = 2;\n", encoding="utf-8")
+            environment = os.environ.copy()
+            environment.update({
+                "GIT_AUTHOR_NAME": "Synthetic Test",
+                "GIT_AUTHOR_EMAIL": "synthetic@example.invalid",
+                "GIT_COMMITTER_NAME": "Synthetic Test",
+                "GIT_COMMITTER_EMAIL": "synthetic@example.invalid",
+            })
+
+            def git(*args):
+                return subprocess.run(["git", *args], cwd=repo, env=environment, check=True,
+                                      capture_output=True, text=True)
+
+            git("init", "-b", "main")
+            git("add", "src/app.ts")
+            git("commit", "-m", "fixture base")
+            tracked.write_text("const staged = 1;\nconst keep = 2;\n", encoding="utf-8")
+            git("add", "src/app.ts")
+            tracked.write_text("const staged = 1;\nconst unstaged = 2;\n", encoding="utf-8")
+            new_file = repo / "src" / "new file.ts"
+            new_file.write_text("const first = 1;\nconst second = 2;\n", encoding="utf-8")
+            lcov = Path(report_directory) / "lcov.info"
+            lcov.write_text(
+                "SF:src/app.ts\nDA:1,1\nDA:2,1\nend_of_record\n"
+                "SF:src/new file.ts\nDA:1,1\nDA:2,1\nend_of_record\n",
+                encoding="utf-8",
+            )
+            args = type("Args", (), {
+                "diff_file": None,
+                "base": "main",
+                "repo": directory,
+                "lcov": str(lcov),
+                "cobertura": None,
+                "path_prefix": None,
+            })()
+            changed, _ = coverage_gate.load_inputs(args)
+            self.assertEqual(changed, {"src/app.ts": {1, 2}, "src/new file.ts": {1, 2}})
+
 
 class SonarGateTests(unittest.TestCase):
     def test_gate_statuses_and_new_issue_shapes(self):
@@ -76,6 +142,11 @@ class SonarGateTests(unittest.TestCase):
         result = sonar_gate.summarize({"projectStatus": {"status": "OK", "conditions": []}}, issues, "p", None, None)
         self.assertEqual(result["issues"][1]["severity"], "HIGH")
         self.assertEqual(result["issues"][1]["type"], "SECURITY")
+        warning = {"projectStatus": {"status": "WARN", "conditions": []}}
+        self.assertTrue(sonar_gate.summarize(warning, {"issues": []}, "p", None, None)["pass"])
+        self.assertFalse(sonar_gate.summarize(
+            warning, {"issues": []}, "p", None, None, fail_on_warn=True
+        )["pass"])
 
     def test_gate_exit_codes(self):
         cases = {"OK": 0, "ERROR": 3, "WARN": 0, "NONE": 2}
@@ -94,6 +165,14 @@ class SonarGateTests(unittest.TestCase):
                 sonar_gate.main(["--status-file", str(status_path), "--issues-file", str(issues_path), "--fail-on-warn"]),
                 4,
             )
+            warning_output = io.StringIO()
+            with contextlib.redirect_stdout(warning_output):
+                warning_exit = sonar_gate.main([
+                    "--status-file", str(status_path), "--issues-file", str(issues_path),
+                    "--fail-on-warn", "--json",
+                ])
+            self.assertEqual(warning_exit, 4)
+            self.assertFalse(json.loads(warning_output.getvalue())["pass"])
 
     def test_api_pagination_and_fake_server_auth(self):
         token = FAKE_AUTH
@@ -173,10 +252,84 @@ class PlanToTrackerTests(unittest.TestCase):
                 output = Path(directory) / "payload.json"
                 self.assertEqual(plan_to_tracker.main(["--apply", "--yes", "--out", str(output)]), 0)
                 saved = json.loads(output.read_text(encoding="utf-8"))
+                self.assertEqual(plan_to_tracker.main(["--apply", "--yes", "--out", str(output)]), 0)
             self.assertEqual(len(requests), 15)
             self.assertTrue(all(path == "/rest/api/2/issue" for path, _, _ in requests))
             self.assertTrue(all(auth == f"Bearer {FAKE_AUTH}" for _, _, auth in requests))
             self.assertEqual(saved["issues"][-1]["created_key"], "SN-15")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
+    def test_redirect_is_refused_without_following_location(self):
+        requests = []
+
+        class RedirectStub(BaseHTTPRequestHandler):
+            def do_POST(self):
+                requests.append(self.path)
+                if self.path.endswith("/issue"):
+                    self.send_response(302)
+                    self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}/redirect-target")
+                    self.end_headers()
+
+            def log_message(self, fmt, *args):
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), RedirectStub)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+                os.environ, {"JIRA_URL": f"http://127.0.0.1:{server.server_port}", "JIRA_TOKEN": FAKE_AUTH}, clear=True
+            ), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as errors:
+                output = Path(directory) / "payload.json"
+                self.assertEqual(plan_to_tracker.main(["--apply", "--yes", "--out", str(output)]), 2)
+                self.assertIn("HTTP 302", errors.getvalue())
+                saved = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(requests, ["/rest/api/2/issue"])
+            self.assertTrue(saved["issues"][0]["posting"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
+    def test_partial_failure_rerun_requires_reconciliation_and_does_not_duplicate(self):
+        requests = []
+
+        class PartialStub(BaseHTTPRequestHandler):
+            def do_POST(self):
+                requests.append(self.path)
+                if len(requests) == 2:
+                    self.send_response(500)
+                    self.end_headers()
+                    return
+                body = json.dumps({"key": f"SN-{len(requests)}"}).encode()
+                self.send_response(201)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, fmt, *args):
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), PartialStub)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+                os.environ, {"JIRA_URL": f"http://127.0.0.1:{server.server_port}", "JIRA_TOKEN": FAKE_AUTH}, clear=True
+            ), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as errors:
+                output = Path(directory) / "payload.json"
+                argv = ["--apply", "--yes", "--out", str(output)]
+                self.assertEqual(plan_to_tracker.main(argv), 2)
+                saved = json.loads(output.read_text(encoding="utf-8"))
+                self.assertEqual(plan_to_tracker.main(argv), 2)
+                self.assertIn("reconcile in Jira", errors.getvalue())
+            self.assertEqual(len(requests), 2)
+            self.assertEqual(saved["issues"][0]["created_key"], "SN-1")
+            self.assertTrue(saved["issues"][1]["posting"])
         finally:
             server.shutdown()
             server.server_close()
