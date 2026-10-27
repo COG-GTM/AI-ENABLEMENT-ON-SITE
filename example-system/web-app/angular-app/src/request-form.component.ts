@@ -3,6 +3,7 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angula
 import { RequestService } from "./request.service";
 import type { Priority, RequestKind } from "./types";
 
+// walkthrough:angular-form:start
 @Component({
   selector: "app-request-form",
   standalone: true,
@@ -137,3 +138,4 @@ export class RequestFormComponent {
     this.created.set(true);
   }
 }
+// walkthrough:angular-form:end

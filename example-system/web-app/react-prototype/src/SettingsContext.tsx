@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 
+// walkthrough:react-context:start
 export interface Settings {
   units: "metric" | "imperial";
   dateFormat: "iso" | "local";
@@ -15,3 +16,4 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 export function useSettings(): Settings {
   return useContext(SettingsContext);
 }
+// walkthrough:react-context:end

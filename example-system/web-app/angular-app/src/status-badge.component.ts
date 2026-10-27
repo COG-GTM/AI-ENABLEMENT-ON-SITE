@@ -1,5 +1,6 @@
 import { Component, input } from "@angular/core";
 
+// walkthrough:angular-badge:start
 @Component({
   selector: "app-status-badge",
   standalone: true,
@@ -8,3 +9,4 @@ import { Component, input } from "@angular/core";
 export class StatusBadgeComponent {
   readonly status = input.required<string>();
 }
+// walkthrough:angular-badge:end

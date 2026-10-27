@@ -66,7 +66,7 @@ anything runs, and no unit is called done without a proof file.
 | --- | --- | --- | --- | --- |
 | Structured intermediate files | scanner output (CSV, JSON, DOT, Markdown) as the contract between steps | deterministic, diffable, tool-checkable, language-agnostic | only as good as the scanner; static | the base of everything: `tools/*_fleet_scan.py`, `prompt_pack.py` |
 | Reference repository | a finished pair (original + target) the agent imitates | shows the house style and the proof pattern | drifts; one example rarely covers the estate | `example-system/src` + `sim/`, `example-system/model/`, `bench/` |
-| Skill / playbook files | procedures in `.devin/skills/*/SKILL.md`, routed by `AGENTS.md` | repeatable, reviewable, the team owns and edits them | needs the agent runtime; text, not code | 16 skills; `/repo-discovery`, `/matlab-to-code`, `/bring-your-firmware`, `/labview-to-python` |
+| Skill / playbook files | procedures in `.devin/skills/*/SKILL.md`, routed by `AGENTS.md` | repeatable, reviewable, the team owns and edits them | needs the agent runtime; text, not code | 21 skills; `/repo-discovery`, `/matlab-to-code`, `/bring-your-firmware`, `/labview-to-python` |
 | Graph-style controlled flow (LangGraph-like) | explicit state machine: nodes, edges, checkpoints, retries | resumable, auditable, bounded per node | another framework and runtime to own; still needs a model behind each node | `tools/pipeline_run.py` is that state machine in 1 file of standard library: stages, hashes, journal, resume; nodes call any command |
 
 Use all four together: files as the contract, a reference pair for style, skills for the per-unit procedure, the

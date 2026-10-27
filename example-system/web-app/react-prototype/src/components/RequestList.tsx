@@ -4,6 +4,7 @@ import { useDebounce } from "../useDebounce";
 import type { ServiceRequest } from "../types";
 import { StatusBadge } from "./StatusBadge";
 
+// walkthrough:react-list:start
 export function RequestList({ requests }: { requests: ServiceRequest[] }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
@@ -35,3 +36,4 @@ export function RequestList({ requests }: { requests: ServiceRequest[] }) {
     </section>
   );
 }
+// walkthrough:react-list:end

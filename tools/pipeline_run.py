@@ -4,6 +4,7 @@
     python tools/pipeline_run.py --lang c      --tree example-system/firmware-repo --name firmware-repo
     python tools/pipeline_run.py --lang matlab --tree example-system/matlab-repo   --name matlab-repo
     python tools/pipeline_run.py --lang labview --tree example-system              --name fleet
+    python tools/pipeline_run.py --lang react  --tree example-system/web-app/react-prototype --name request-app
         [--out outputs/pipeline/<name>] [--budget 8000] [--limit N] [--resume] [--from-stage pack]
         [--agent-cmd 'cmd {pack} {results} {id} {unit} {tree}'] [--compare-cmd 'cmd {results} {id} {unit} {tree}'] [--json]
 
@@ -53,8 +54,9 @@ from fleet_common import ROOT, OUT_DIR, rel
 
 TOOL = "tools/pipeline_run.py"
 PY = sys.executable
-SCANNERS = {"c": "tools/c_fleet_scan.py", "matlab": "tools/m_fleet_scan.py", "labview": "tools/vi_fleet_scan.py"}
-SUFFIX = {"c": "-c", "matlab": "-m", "labview": ""}   # scanner output name infix: <name>-c-..., <name>-m-..., <name>-...
+SCANNERS = {"c": "tools/c_fleet_scan.py", "matlab": "tools/m_fleet_scan.py", "labview": "tools/vi_fleet_scan.py",
+            "react": "tools/react_fleet_scan.py"}
+SUFFIX = {"c": "-c", "matlab": "-m", "labview": "", "react": "-react"}
 STAGES = ["scan", "pack", "agent", "compare", "report"]
 
 

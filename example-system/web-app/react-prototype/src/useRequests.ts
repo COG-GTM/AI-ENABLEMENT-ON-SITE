@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { loadRequests, makeRequest } from "./requestService";
 import type { ServiceRequest } from "./types";
 
+// walkthrough:react-hook:start
 export function useRequests() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loadError, setLoadError] = useState("");
@@ -26,3 +27,4 @@ export function useRequests() {
 
   return { requests, addRequest, loadError };
 }
+// walkthrough:react-hook:end

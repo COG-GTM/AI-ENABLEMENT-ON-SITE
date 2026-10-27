@@ -8,6 +8,7 @@ function errorReducer(_state: Errors, action: ErrorAction): Errors {
   return action.type === "clear" ? {} : action.errors;
 }
 
+// walkthrough:react-form:start
 export function RequestForm({ onCreate }: { onCreate: (request: Omit<ServiceRequest, "id" | "status" | "createdAt">) => void }) {
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<RequestKind>("inspection");
@@ -83,3 +84,4 @@ export function RequestForm({ onCreate }: { onCreate: (request: Omit<ServiceRequ
     </section>
   );
 }
+// walkthrough:react-form:end

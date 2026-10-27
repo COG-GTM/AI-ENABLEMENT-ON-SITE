@@ -1,0 +1,1008 @@
+{
+  "concept_mappings": [
+    {
+      "angular": "input()",
+      "react": "props"
+    },
+    {
+      "angular": "output()",
+      "react": "callback props"
+    },
+    {
+      "angular": "signal",
+      "react": "useState"
+    },
+    {
+      "angular": "effect or lifecycle hook",
+      "react": "useEffect"
+    },
+    {
+      "angular": "computed",
+      "react": "useMemo"
+    },
+    {
+      "angular": "injectable settings service",
+      "react": "context"
+    },
+    {
+      "angular": "injectable service or function",
+      "react": "custom hook"
+    },
+    {
+      "angular": "Angular Router",
+      "react": "react-router"
+    },
+    {
+      "angular": "reactive form",
+      "react": "controlled form"
+    },
+    {
+      "angular": "@for track",
+      "react": "list keys"
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/App.test.tsx",
+      "kind": "relative-import",
+      "to": "src/App.tsx",
+      "via": "./App"
+    },
+    {
+      "from": "src/App.tsx",
+      "kind": "relative-import",
+      "to": "src/SettingsContext.tsx",
+      "via": "./SettingsContext"
+    },
+    {
+      "from": "src/App.tsx",
+      "kind": "relative-import",
+      "to": "src/components/RequestDetail.tsx",
+      "via": "./components/RequestDetail"
+    },
+    {
+      "from": "src/App.tsx",
+      "kind": "relative-import",
+      "to": "src/components/RequestForm.tsx",
+      "via": "./components/RequestForm"
+    },
+    {
+      "from": "src/App.tsx",
+      "kind": "relative-import",
+      "to": "src/components/RequestList.tsx",
+      "via": "./components/RequestList"
+    },
+    {
+      "from": "src/App.tsx",
+      "kind": "relative-import",
+      "to": "src/useRequests.ts",
+      "via": "./useRequests"
+    },
+    {
+      "from": "src/components/RequestDetail.tsx",
+      "kind": "relative-import",
+      "to": "src/components/StatusBadge.tsx",
+      "via": "./StatusBadge"
+    },
+    {
+      "from": "src/components/RequestDetail.tsx",
+      "kind": "relative-import",
+      "to": "src/types.ts",
+      "via": "../types"
+    },
+    {
+      "from": "src/components/RequestForm.tsx",
+      "kind": "relative-import",
+      "to": "src/types.ts",
+      "via": "../types"
+    },
+    {
+      "from": "src/components/RequestList.tsx",
+      "kind": "relative-import",
+      "to": "src/components/StatusBadge.tsx",
+      "via": "./StatusBadge"
+    },
+    {
+      "from": "src/components/RequestList.tsx",
+      "kind": "relative-import",
+      "to": "src/types.ts",
+      "via": "../types"
+    },
+    {
+      "from": "src/components/RequestList.tsx",
+      "kind": "relative-import",
+      "to": "src/useDebounce.ts",
+      "via": "../useDebounce"
+    },
+    {
+      "from": "src/main.tsx",
+      "kind": "relative-import",
+      "to": "src/App.tsx",
+      "via": "./App"
+    },
+    {
+      "from": "src/requestService.ts",
+      "kind": "relative-import",
+      "to": "src/types.ts",
+      "via": "./types"
+    },
+    {
+      "from": "src/useRequests.ts",
+      "kind": "relative-import",
+      "to": "src/requestService.ts",
+      "via": "./requestService"
+    },
+    {
+      "from": "src/useRequests.ts",
+      "kind": "relative-import",
+      "to": "src/types.ts",
+      "via": "./types"
+    }
+  ],
+  "external_dependencies": {
+    "@testing-library/jest-dom": "6.8.0",
+    "@testing-library/react": "16.3.0",
+    "@testing-library/user-event": "14.6.1",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "@vitejs/plugin-react": "5.0.2",
+    "@vitest/coverage-v8": "3.2.4",
+    "jsdom": "26.1.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-router-dom": "7.1.5",
+    "typescript": "5.9.3",
+    "vite": "7.1.4",
+    "vitest": "3.2.4"
+  },
+  "framework": "react",
+  "language": "react",
+  "leaf_first_order": [
+    "package.json",
+    "src/SettingsContext.tsx",
+    "src/components/StatusBadge.tsx",
+    "src/test-setup.ts",
+    "src/types.ts",
+    "src/components/RequestDetail.tsx",
+    "src/components/RequestForm.tsx",
+    "src/requestService.ts",
+    "src/useDebounce.ts",
+    "src/components/RequestList.tsx",
+    "src/useRequests.ts",
+    "src/App.tsx",
+    "src/App.test.tsx",
+    "src/main.tsx",
+    "vite.config.ts"
+  ],
+  "nodes": [
+    {
+      "angular_target": "retain build/package configuration",
+      "callers": [],
+      "classification": "retain",
+      "components": [],
+      "create_context": false,
+      "dependencies": [],
+      "external_packages": [
+        "@testing-library/jest-dom",
+        "@testing-library/react",
+        "@testing-library/user-event",
+        "@types/react",
+        "@types/react-dom",
+        "@vitejs/plugin-react",
+        "@vitest/coverage-v8",
+        "jsdom",
+        "react",
+        "react-dom",
+        "react-router-dom",
+        "typescript",
+        "vite",
+        "vitest"
+      ],
+      "hook_calls": [],
+      "hooks_defined": [],
+      "kind": "build-config",
+      "name": "package.json",
+      "package_specifiers": [
+        "@testing-library/jest-dom",
+        "@testing-library/react",
+        "@testing-library/user-event",
+        "@types/react",
+        "@types/react-dom",
+        "@vitejs/plugin-react",
+        "@vitest/coverage-v8",
+        "jsdom",
+        "react",
+        "react-dom",
+        "react-router-dom",
+        "typescript",
+        "vite",
+        "vitest"
+      ],
+      "path": "package.json",
+      "react_concepts": [],
+      "reasons": [
+        "retain package manifest and pin the Angular dependency graph"
+      ],
+      "relative_imports": [],
+      "role": "configuration",
+      "routes": [],
+      "test_references": [],
+      "unit": "package.json"
+    },
+    {
+      "angular_target": "injectable service or signal store",
+      "callers": [],
+      "classification": "port",
+      "components": [],
+      "create_context": false,
+      "dependencies": [
+        "src/App.tsx"
+      ],
+      "external_packages": [
+        "@testing-library/react",
+        "@testing-library/user-event",
+        "react-router-dom",
+        "vitest"
+      ],
+      "hook_calls": [],
+      "hooks_defined": [],
+      "kind": "service",
+      "name": "src/App.test.tsx",
+      "package_specifiers": [
+        "./App",
+        "@testing-library/react",
+        "@testing-library/user-event",
+        "react-router-dom",
+        "vitest"
+      ],
+      "path": "src/App.test.tsx",
+      "react_concepts": [],
+      "reasons": [
+        "service identified lexically",
+        "Angular target: injectable service or signal store",
+        "service maps to shared port class for prompt-pack compatibility",
+        "external imports: @testing-library/react, @testing-library/user-event, react-router-dom, vitest"
+      ],
+      "relative_imports": [
+        "src/App.tsx"
+      ],
+      "role": "test",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/App.test.tsx#src/App.test.tsx"
+    },
+    {
+      "angular_target": "standalone component",
+      "callers": [
+        "src/App.test.tsx",
+        "src/main.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "App",
+        "Workspace"
+      ],
+      "create_context": false,
+      "dependencies": [
+        "src/SettingsContext.tsx",
+        "src/components/RequestDetail.tsx",
+        "src/components/RequestForm.tsx",
+        "src/components/RequestList.tsx",
+        "src/useRequests.ts"
+      ],
+      "external_packages": [
+        "react-router-dom"
+      ],
+      "hook_calls": [
+        "useRequests",
+        "useSettings"
+      ],
+      "hooks_defined": [],
+      "kind": "component",
+      "name": "App",
+      "package_specifiers": [
+        "./SettingsContext",
+        "./components/RequestDetail",
+        "./components/RequestForm",
+        "./components/RequestList",
+        "./useRequests",
+        "react-router-dom"
+      ],
+      "path": "src/App.tsx",
+      "react_concepts": [
+        "callback props",
+        "controlled form",
+        "list keys",
+        "props",
+        "react-router"
+      ],
+      "reasons": [
+        "component identified lexically",
+        "Angular target: standalone component",
+        "referenced by test file(s)",
+        "external imports: react-router-dom"
+      ],
+      "relative_imports": [
+        "src/SettingsContext.tsx",
+        "src/components/RequestDetail.tsx",
+        "src/components/RequestForm.tsx",
+        "src/components/RequestList.tsx",
+        "src/useRequests.ts"
+      ],
+      "role": "implementation",
+      "routes": [
+        "/",
+        "/requests/:id",
+        "/requests/new"
+      ],
+      "source_classification": "port",
+      "test_references": [
+        "src/App.test.tsx"
+      ],
+      "unit": "src/App.tsx#App"
+    },
+    {
+      "angular_target": "standalone component",
+      "callers": [
+        "src/App.test.tsx",
+        "src/main.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "App",
+        "Workspace"
+      ],
+      "create_context": false,
+      "dependencies": [
+        "src/SettingsContext.tsx",
+        "src/components/RequestDetail.tsx",
+        "src/components/RequestForm.tsx",
+        "src/components/RequestList.tsx",
+        "src/useRequests.ts"
+      ],
+      "external_packages": [
+        "react-router-dom"
+      ],
+      "hook_calls": [
+        "useRequests",
+        "useSettings"
+      ],
+      "hooks_defined": [],
+      "kind": "component",
+      "name": "Workspace",
+      "package_specifiers": [
+        "./SettingsContext",
+        "./components/RequestDetail",
+        "./components/RequestForm",
+        "./components/RequestList",
+        "./useRequests",
+        "react-router-dom"
+      ],
+      "path": "src/App.tsx",
+      "react_concepts": [
+        "callback props",
+        "controlled form",
+        "list keys",
+        "props",
+        "react-router"
+      ],
+      "reasons": [
+        "component identified lexically",
+        "Angular target: standalone component",
+        "external imports: react-router-dom"
+      ],
+      "relative_imports": [
+        "src/SettingsContext.tsx",
+        "src/components/RequestDetail.tsx",
+        "src/components/RequestForm.tsx",
+        "src/components/RequestList.tsx",
+        "src/useRequests.ts"
+      ],
+      "role": "implementation",
+      "routes": [
+        "/",
+        "/requests/:id",
+        "/requests/new"
+      ],
+      "source_classification": "port",
+      "test_references": [],
+      "unit": "src/App.tsx#Workspace"
+    },
+    {
+      "angular_target": "injectable settings service",
+      "callers": [
+        "src/App.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "SettingsProvider"
+      ],
+      "create_context": true,
+      "dependencies": [],
+      "external_packages": [
+        "react"
+      ],
+      "hook_calls": [
+        "useContext",
+        "useSettings"
+      ],
+      "hooks_defined": [
+        "useSettings"
+      ],
+      "kind": "context",
+      "name": "SettingsContext",
+      "package_specifiers": [
+        "react"
+      ],
+      "path": "src/SettingsContext.tsx",
+      "react_concepts": [
+        "context"
+      ],
+      "reasons": [
+        "context identified lexically",
+        "Angular target: injectable settings service",
+        "service maps to shared port class for prompt-pack compatibility",
+        "external imports: react"
+      ],
+      "relative_imports": [],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/SettingsContext.tsx#SettingsContext"
+    },
+    {
+      "angular_target": "standalone component",
+      "callers": [
+        "src/App.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "SettingsProvider"
+      ],
+      "create_context": true,
+      "dependencies": [],
+      "external_packages": [
+        "react"
+      ],
+      "hook_calls": [
+        "useContext",
+        "useSettings"
+      ],
+      "hooks_defined": [
+        "useSettings"
+      ],
+      "kind": "component",
+      "name": "SettingsProvider",
+      "package_specifiers": [
+        "react"
+      ],
+      "path": "src/SettingsContext.tsx",
+      "react_concepts": [
+        "callback props",
+        "controlled form",
+        "list keys",
+        "props"
+      ],
+      "reasons": [
+        "component identified lexically",
+        "Angular target: standalone component",
+        "external imports: react"
+      ],
+      "relative_imports": [],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "port",
+      "test_references": [],
+      "unit": "src/SettingsContext.tsx#SettingsProvider"
+    },
+    {
+      "angular_target": "injectable service or function",
+      "callers": [
+        "src/App.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "SettingsProvider"
+      ],
+      "create_context": true,
+      "dependencies": [],
+      "external_packages": [
+        "react"
+      ],
+      "hook_calls": [
+        "useContext",
+        "useSettings"
+      ],
+      "hooks_defined": [
+        "useSettings"
+      ],
+      "kind": "custom-hook",
+      "name": "useSettings",
+      "package_specifiers": [
+        "react"
+      ],
+      "path": "src/SettingsContext.tsx",
+      "react_concepts": [
+        "custom hook"
+      ],
+      "reasons": [
+        "custom-hook identified lexically",
+        "Angular target: injectable service or function",
+        "service maps to shared port class for prompt-pack compatibility",
+        "external imports: react"
+      ],
+      "relative_imports": [],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/SettingsContext.tsx#useSettings"
+    },
+    {
+      "angular_target": "standalone component",
+      "callers": [
+        "src/App.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "RequestDetail"
+      ],
+      "create_context": false,
+      "dependencies": [
+        "src/components/StatusBadge.tsx",
+        "src/types.ts"
+      ],
+      "external_packages": [
+        "react-router-dom"
+      ],
+      "hook_calls": [
+        "useParams"
+      ],
+      "hooks_defined": [],
+      "kind": "component",
+      "name": "src/components/RequestDetail.tsx",
+      "package_specifiers": [
+        "../types",
+        "./StatusBadge",
+        "react-router-dom"
+      ],
+      "path": "src/components/RequestDetail.tsx",
+      "react_concepts": [
+        "callback props",
+        "controlled form",
+        "list keys",
+        "props"
+      ],
+      "reasons": [
+        "component identified lexically",
+        "Angular target: standalone component",
+        "external imports: react-router-dom"
+      ],
+      "relative_imports": [
+        "src/components/StatusBadge.tsx",
+        "src/types.ts"
+      ],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "port",
+      "test_references": [],
+      "unit": "src/components/RequestDetail.tsx#src/components/RequestDetail.tsx"
+    },
+    {
+      "angular_target": "standalone component",
+      "callers": [
+        "src/App.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "RequestForm"
+      ],
+      "create_context": false,
+      "dependencies": [
+        "src/types.ts"
+      ],
+      "external_packages": [
+        "react"
+      ],
+      "hook_calls": [
+        "useReducer",
+        "useState"
+      ],
+      "hooks_defined": [],
+      "kind": "component",
+      "name": "src/components/RequestForm.tsx",
+      "package_specifiers": [
+        "../types",
+        "react"
+      ],
+      "path": "src/components/RequestForm.tsx",
+      "react_concepts": [
+        "callback props",
+        "controlled form",
+        "list keys",
+        "props",
+        "useState"
+      ],
+      "reasons": [
+        "component identified lexically",
+        "Angular target: standalone component",
+        "external imports: react"
+      ],
+      "relative_imports": [
+        "src/types.ts"
+      ],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "port",
+      "test_references": [],
+      "unit": "src/components/RequestForm.tsx#src/components/RequestForm.tsx"
+    },
+    {
+      "angular_target": "standalone component",
+      "callers": [
+        "src/App.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "RequestList"
+      ],
+      "create_context": false,
+      "dependencies": [
+        "src/components/StatusBadge.tsx",
+        "src/types.ts",
+        "src/useDebounce.ts"
+      ],
+      "external_packages": [
+        "react",
+        "react-router-dom"
+      ],
+      "hook_calls": [
+        "useDebounce",
+        "useMemo",
+        "useState"
+      ],
+      "hooks_defined": [],
+      "kind": "component",
+      "name": "src/components/RequestList.tsx",
+      "package_specifiers": [
+        "../types",
+        "../useDebounce",
+        "./StatusBadge",
+        "react",
+        "react-router-dom"
+      ],
+      "path": "src/components/RequestList.tsx",
+      "react_concepts": [
+        "callback props",
+        "controlled form",
+        "list keys",
+        "props",
+        "useMemo",
+        "useState"
+      ],
+      "reasons": [
+        "component identified lexically",
+        "Angular target: standalone component",
+        "external imports: react, react-router-dom"
+      ],
+      "relative_imports": [
+        "src/components/StatusBadge.tsx",
+        "src/types.ts",
+        "src/useDebounce.ts"
+      ],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "port",
+      "test_references": [],
+      "unit": "src/components/RequestList.tsx#src/components/RequestList.tsx"
+    },
+    {
+      "angular_target": "standalone component",
+      "callers": [
+        "src/components/RequestDetail.tsx",
+        "src/components/RequestList.tsx"
+      ],
+      "classification": "port",
+      "components": [
+        "StatusBadge"
+      ],
+      "create_context": false,
+      "dependencies": [],
+      "external_packages": [],
+      "hook_calls": [],
+      "hooks_defined": [],
+      "kind": "component",
+      "name": "src/components/StatusBadge.tsx",
+      "package_specifiers": [],
+      "path": "src/components/StatusBadge.tsx",
+      "react_concepts": [
+        "callback props",
+        "controlled form",
+        "list keys",
+        "props"
+      ],
+      "reasons": [
+        "component identified lexically",
+        "Angular target: standalone component"
+      ],
+      "relative_imports": [],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "port",
+      "test_references": [],
+      "unit": "src/components/StatusBadge.tsx#src/components/StatusBadge.tsx"
+    },
+    {
+      "angular_target": "injectable service or signal store",
+      "callers": [],
+      "classification": "port",
+      "components": [],
+      "create_context": false,
+      "dependencies": [
+        "src/App.tsx"
+      ],
+      "external_packages": [
+        "react",
+        "react-dom",
+        "react-router-dom"
+      ],
+      "hook_calls": [],
+      "hooks_defined": [],
+      "kind": "service",
+      "name": "src/main.tsx",
+      "package_specifiers": [
+        "./App",
+        "./styles.css",
+        "react",
+        "react-dom/client",
+        "react-router-dom"
+      ],
+      "path": "src/main.tsx",
+      "react_concepts": [],
+      "reasons": [
+        "service identified lexically",
+        "Angular target: injectable service or signal store",
+        "service maps to shared port class for prompt-pack compatibility",
+        "external imports: react, react-dom, react-router-dom"
+      ],
+      "relative_imports": [
+        "src/App.tsx",
+        "src/styles.css"
+      ],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/main.tsx#src/main.tsx"
+    },
+    {
+      "angular_target": "injectable service or signal store",
+      "callers": [
+        "src/useRequests.ts"
+      ],
+      "classification": "port",
+      "components": [],
+      "create_context": false,
+      "dependencies": [
+        "src/types.ts"
+      ],
+      "external_packages": [],
+      "hook_calls": [],
+      "hooks_defined": [],
+      "kind": "service",
+      "name": "src/requestService.ts",
+      "package_specifiers": [
+        "./types"
+      ],
+      "path": "src/requestService.ts",
+      "react_concepts": [],
+      "reasons": [
+        "service identified lexically",
+        "Angular target: injectable service or signal store",
+        "service maps to shared port class for prompt-pack compatibility"
+      ],
+      "relative_imports": [
+        "src/types.ts"
+      ],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/requestService.ts#src/requestService.ts"
+    },
+    {
+      "angular_target": "injectable service or signal store",
+      "callers": [],
+      "classification": "port",
+      "components": [],
+      "create_context": false,
+      "dependencies": [],
+      "external_packages": [
+        "@testing-library/jest-dom"
+      ],
+      "hook_calls": [],
+      "hooks_defined": [],
+      "kind": "service",
+      "name": "src/test-setup.ts",
+      "package_specifiers": [
+        "@testing-library/jest-dom/vitest"
+      ],
+      "path": "src/test-setup.ts",
+      "react_concepts": [],
+      "reasons": [
+        "service identified lexically",
+        "Angular target: injectable service or signal store",
+        "service maps to shared port class for prompt-pack compatibility",
+        "external imports: @testing-library/jest-dom"
+      ],
+      "relative_imports": [],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/test-setup.ts#src/test-setup.ts"
+    },
+    {
+      "angular_target": "injectable service or signal store",
+      "callers": [
+        "src/components/RequestDetail.tsx",
+        "src/components/RequestForm.tsx",
+        "src/components/RequestList.tsx",
+        "src/requestService.ts",
+        "src/useRequests.ts"
+      ],
+      "classification": "port",
+      "components": [],
+      "create_context": false,
+      "dependencies": [],
+      "external_packages": [],
+      "hook_calls": [],
+      "hooks_defined": [],
+      "kind": "service",
+      "name": "src/types.ts",
+      "package_specifiers": [],
+      "path": "src/types.ts",
+      "react_concepts": [],
+      "reasons": [
+        "service identified lexically",
+        "Angular target: injectable service or signal store",
+        "service maps to shared port class for prompt-pack compatibility"
+      ],
+      "relative_imports": [],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/types.ts#src/types.ts"
+    },
+    {
+      "angular_target": "injectable service or signal store",
+      "callers": [
+        "src/components/RequestList.tsx"
+      ],
+      "classification": "port",
+      "components": [],
+      "create_context": false,
+      "dependencies": [],
+      "external_packages": [
+        "react"
+      ],
+      "hook_calls": [
+        "useEffect",
+        "useState"
+      ],
+      "hooks_defined": [],
+      "kind": "service",
+      "name": "src/useDebounce.ts",
+      "package_specifiers": [
+        "react"
+      ],
+      "path": "src/useDebounce.ts",
+      "react_concepts": [
+        "useEffect",
+        "useState"
+      ],
+      "reasons": [
+        "service identified lexically",
+        "Angular target: injectable service or signal store",
+        "service maps to shared port class for prompt-pack compatibility",
+        "external imports: react"
+      ],
+      "relative_imports": [],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/useDebounce.ts#src/useDebounce.ts"
+    },
+    {
+      "angular_target": "injectable service or function",
+      "callers": [
+        "src/App.tsx"
+      ],
+      "classification": "port",
+      "components": [],
+      "create_context": false,
+      "dependencies": [
+        "src/requestService.ts",
+        "src/types.ts"
+      ],
+      "external_packages": [
+        "react"
+      ],
+      "hook_calls": [
+        "useEffect",
+        "useRequests",
+        "useState"
+      ],
+      "hooks_defined": [
+        "useRequests"
+      ],
+      "kind": "custom-hook",
+      "name": "src/useRequests.ts",
+      "package_specifiers": [
+        "./requestService",
+        "./types",
+        "react"
+      ],
+      "path": "src/useRequests.ts",
+      "react_concepts": [
+        "custom hook",
+        "useEffect",
+        "useState"
+      ],
+      "reasons": [
+        "custom-hook identified lexically",
+        "Angular target: injectable service or function",
+        "service maps to shared port class for prompt-pack compatibility",
+        "external imports: react"
+      ],
+      "relative_imports": [
+        "src/requestService.ts",
+        "src/types.ts"
+      ],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "service",
+      "test_references": [],
+      "unit": "src/useRequests.ts#src/useRequests.ts"
+    },
+    {
+      "angular_target": "retain build configuration",
+      "callers": [],
+      "classification": "retain",
+      "components": [],
+      "create_context": false,
+      "dependencies": [],
+      "external_packages": [
+        "@vitejs/plugin-react",
+        "vitest"
+      ],
+      "hook_calls": [],
+      "hooks_defined": [],
+      "kind": "build-config",
+      "name": "vite.config.ts",
+      "package_specifiers": [
+        "@vitejs/plugin-react",
+        "vitest/config"
+      ],
+      "path": "vite.config.ts",
+      "react_concepts": [],
+      "reasons": [
+        "build-config identified lexically",
+        "Angular target: retain build configuration",
+        "external imports: @vitejs/plugin-react, vitest"
+      ],
+      "relative_imports": [],
+      "role": "implementation",
+      "routes": [],
+      "source_classification": "retain",
+      "test_references": [],
+      "unit": "vite.config.ts#vite.config.ts"
+    }
+  ],
+  "scanner": "tools/react_fleet_scan.py",
+  "tree": "fixture"
+}

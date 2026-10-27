@@ -5,6 +5,7 @@ import { RequestList } from "./components/RequestList";
 import { RequestDetail } from "./components/RequestDetail";
 import { useRequests } from "./useRequests";
 
+// walkthrough:react-router:start
 function Workspace() {
   const { requests, addRequest, loadError } = useRequests();
   const settings = useSettings();
@@ -31,3 +32,4 @@ function Workspace() {
 export function App() {
   return <SettingsProvider><Workspace /></SettingsProvider>;
 }
+// walkthrough:react-router:end

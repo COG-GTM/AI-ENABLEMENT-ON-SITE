@@ -7,6 +7,7 @@ import { RequestService } from "./request.service";
 import type { ServiceRequest } from "./types";
 import { StatusBadgeComponent } from "./status-badge.component";
 
+// walkthrough:angular-list:start
 @Component({
   selector: "app-request-list",
   standalone: true,
@@ -51,3 +52,4 @@ export class RequestListComponent {
         : left.createdAt.localeCompare(right.createdAt));
   });
 }
+// walkthrough:angular-list:end

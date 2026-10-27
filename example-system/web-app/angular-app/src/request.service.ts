@@ -2,6 +2,7 @@ import { HttpClient } from "@angular/common/http";
 import { Injectable, inject, signal } from "@angular/core";
 import type { ServiceRequest } from "./types";
 
+// walkthrough:angular-request-service:start
 @Injectable({ providedIn: "root" })
 export class RequestService {
   private readonly http = inject(HttpClient);
@@ -20,3 +21,4 @@ export class RequestService {
     }, ...items]);
   }
 }
+// walkthrough:angular-request-service:end

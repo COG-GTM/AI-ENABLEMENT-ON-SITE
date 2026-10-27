@@ -1,0 +1,37 @@
+{
+  "title": "React prototype to Angular application",
+  "subtitle": "A synthetic migration lane with a shared behavior contract",
+  "footer": "Fixture results are recorded in example-system/web-app/evidence; scanner outputs are committed under expected/.",
+  "slides": [
+    {"type": "title"},
+    {"type": "flow", "title": "A bounded strangler-fig migration", "caption": "Inventory, plan, port leaf-first, then prove both implementations.", "columns": [
+      {"label": "Inputs", "nodes": [{"id": "react", "label": "React prototype", "sub": "synthetic app", "kind": "input"}]},
+      {"label": "Map", "nodes": [{"id": "scan", "label": "React fleet scan", "sub": "inventory + concepts"}]},
+      {"label": "Plan and build", "nodes": [{"id": "spec", "label": "Spec and tasks", "sub": "leaf-first"}, {"id": "angular", "label": "Angular unit", "sub": "tests first"}]},
+      {"label": "Proof", "nodes": [{"id": "tests", "label": "Unit + shared e2e", "sub": "both apps", "kind": "gate"}, {"id": "evidence", "label": "Coverage and screenshots", "sub": "reviewable files", "kind": "output"}]}
+    ], "edges": [{"from": "react", "to": "scan"}, {"from": "scan", "to": "spec"}, {"from": "spec", "to": "angular"}, {"from": "angular", "to": "tests"}, {"from": "tests", "to": "evidence"}]},
+    {"type": "table", "title": "Concepts have explicit Angular targets", "columns": ["React", "Angular target"], "rows": [
+      ["Props and callback props", "input() and output()"],
+      ["useState / useMemo", "signal / computed"],
+      ["Context and custom hooks", "injectable service or function"],
+      ["Routes and controlled forms", "Angular Router and reactive forms"],
+      ["List keys", "@for track"]
+    ]},
+    {"type": "stats", "title": "Fixture proof recorded in evidence", "stats": [
+      {"value": "2 / 10", "label": "React / Angular unit tests"},
+      {"value": "89.04%", "label": "React line coverage"},
+      {"value": "99.31%", "label": "Angular line coverage after UX iteration"},
+      {"value": "2 / 2", "label": "shared Playwright tests per app, before and after"},
+      {"value": "0", "label": "axe violations in both post-UX runs"}
+    ], "note": "See example-system/web-app/evidence/parity.json and ux-upgrade.json."},
+    {"type": "two-column", "title": "What the lane does and does not do", "left_title": "Does", "left": [
+      "Inventory a React tree and explain the candidate dependency order",
+      "Keep the same Playwright spec and synthetic request data on both apps",
+      "Apply a behavior-neutral UX iteration with before/after evidence"
+    ], "right_title": "Does not", "right": [
+      "Transpile React into Angular",
+      "Choose a design system for a real team",
+      "Prove untested behavior or environment-specific preview availability"
+    ]}
+  ]
+}
