@@ -137,6 +137,32 @@ class ReactFleetScanTests(unittest.TestCase):
             self.assertEqual(len({item["id"] for item in items}), len(items))
             self.assertNotIn(by_path["src/Aardvark.tsx"]["id"], {item["id"] for item in first_items})
 
+    def test_long_file_level_backlog_titles_are_bounded_and_keep_all_declarations_in_notes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            tree = root / "src"
+            tree.mkdir()
+            names = [
+                "EquipmentRequestNotificationPanelComponent",
+                "EquipmentRequestManagementCardComponent",
+                "EquipmentRequestHistoryTimelineComponent",
+                "EquipmentRequestPrioritySelectorComponent",
+                "EquipmentRequestSubmissionSummaryComponent",
+                "EquipmentRequestValidationMessageComponent",
+            ]
+            source = "\n".join(f"export function {name}() {{ return <section />; }}" for name in names)
+            (tree / "LongComponents.tsx").write_text(source + "\n", encoding="utf-8")
+            paths = react_fleet_scan.artifacts(
+                react_fleet_scan.scan_tree(root), root / "scan", "fixture", fresh=True
+            )
+            items = json.loads(paths["backlog"].read_text(encoding="utf-8"))["items"]
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertLessEqual(len(item["title"]), 120)
+        self.assertRegex(item["title"], r"^Port LongComponents\.tsx \(.*\+\d+ more\) to Angular$")
+        for name in names:
+            self.assertIn(name, item["notes"])
+
 
 if __name__ == "__main__":
     unittest.main()

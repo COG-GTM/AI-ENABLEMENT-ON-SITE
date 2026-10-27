@@ -19,6 +19,7 @@ Exit code 0 = clean. Standard library only.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -288,27 +289,31 @@ def check_web_fixture() -> None:
         run([npm, "test"], cwd=web / app)
         run([npm, "run", "test:coverage"], cwd=web / app)
     e2e = web / "e2e"
-    browser_check = subprocess.run(
-        [
-            node,
-            "-e",
-            "const fs=require('node:fs'); const {chromium}=require('@playwright/test'); "
-            "process.exit(fs.existsSync(chromium.executablePath()) ? 0 : 3);",
-        ],
-        cwd=e2e,
-        capture_output=True,
-        text=True,
-    )
-    if browser_check.returncode == 3:
-        print("note: Playwright Chromium browser is not installed; skipped Playwright checks")
-        return
-    if browser_check.returncode:
-        fail(
-            "Playwright browser check failed:\n"
-            f"{browser_check.stdout[-800:]}{browser_check.stderr[-800:]}"
+    if os.environ.get("BROWSER_CHANNEL"):
+        print("note: BROWSER_CHANNEL is set; skipping bundled Chromium probe")
+    else:
+        browser_check = subprocess.run(
+            [
+                node,
+                "-e",
+                "const fs=require('node:fs'); const {chromium}=require('@playwright/test'); "
+                "process.exit(fs.existsSync(chromium.executablePath()) ? 0 : 3);",
+            ],
+            cwd=e2e,
+            capture_output=True,
+            text=True,
         )
-        return
-    print("note: Playwright Chromium browser found; running shared E2E checks")
+        if browser_check.returncode == 3:
+            print("note: Playwright Chromium browser is not installed; skipped Playwright checks")
+            return
+        if browser_check.returncode:
+            fail(
+                "Playwright browser check failed:\n"
+                f"{browser_check.stdout[-800:]}{browser_check.stderr[-800:]}"
+            )
+            return
+        print("note: Playwright Chromium browser found")
+    print("note: running shared Playwright E2E checks")
     run([npm, "run", "e2e:react"], cwd=e2e)
     run([npm, "run", "e2e:angular"], cwd=e2e)
 

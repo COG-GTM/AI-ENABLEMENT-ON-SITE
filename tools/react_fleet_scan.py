@@ -236,6 +236,21 @@ def scan_tree(tree: Path) -> dict:
             "counts": counts, "classification": classes, "external_dependencies": dependencies}
 
 
+def backlog_title(filename: str, declarations: list[str], action: str) -> str:
+    title = f"{action} {filename} ({', '.join(declarations)}) to Angular"
+    if len(title) <= 120:
+        return title
+    fallback = ""
+    for shown in range(len(declarations) - 1, -1, -1):
+        remaining = len(declarations) - shown
+        names = ", ".join(declarations[:shown])
+        summary = f"{names}, +{remaining} more" if names else f"+{remaining} more"
+        fallback = f"Port {filename} ({summary}) to Angular"
+        if len(fallback) <= 120:
+            return fallback
+    return fallback[:120].rstrip()
+
+
 def artifacts(result: dict, out_dir: Path, name: str, prefix: str = "REA", opened: str = "2026-10-27",
               fresh: bool = False) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -294,11 +309,12 @@ def artifacts(result: dict, out_dir: Path, name: str, prefix: str = "REA", opene
         if not names:
             names.add(Path(path).stem)
         all_reasons = sorted({reason for node in declarations for reason in node["reasons"]})
+        all_names = sorted(names)
         classification = "wrap" if any(node["classification"] == "wrap" for node in declarations) else "port"
         backlog_items.append({
             "id": f"{prefix}-CAP-{len(backlog_items) + 1:03d}",
             "type": "capability",
-            "title": f"{'Wrap' if classification == 'wrap' else 'Port'} {Path(path).name} ({', '.join(sorted(names))}) to Angular",
+            "title": backlog_title(Path(path).name, all_names, "Wrap" if classification == "wrap" else "Port"),
             "severity": severity_for(50),
             "status": "proposed",
             "component": component_slug(path),
@@ -307,7 +323,7 @@ def artifacts(result: dict, out_dir: Path, name: str, prefix: str = "REA", opene
             "opened": opened,
             "closed": None,
             "owner": None,
-            "notes": f"{'; '.join(all_reasons)}; path: {path}"
+            "notes": f"{'; '.join(all_reasons)}; declarations: {', '.join(all_names)}; path: {path}"
         })
     backlog_notes: list[str] = []
     backlog_items = finish_backlog(backlog_items, backlog, prefix, backlog_notes, fresh)
