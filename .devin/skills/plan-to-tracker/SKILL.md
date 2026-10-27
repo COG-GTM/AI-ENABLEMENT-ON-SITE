@@ -2,6 +2,14 @@
 name: plan-to-tracker
 description: Convert spec-driven task rows into Jira issue payloads with dry-run review first.
 argument-hint: "[specs/<nnn>-<slug>/tasks.md] [--project KEY]"
+allowed-tools:
+  - read
+  - grep
+  - glob
+permissions:
+  ask:
+    - exec
+    - Write(**)
 triggers:
   - user
   - model

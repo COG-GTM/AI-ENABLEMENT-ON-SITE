@@ -2,6 +2,14 @@
 name: test-backfill
 description: Add characterization tests to legacy code safely, then gate changed lines on coverage.
 argument-hint: "[code area or behavior] [--threshold 80]"
+allowed-tools:
+  - read
+  - grep
+  - glob
+permissions:
+  ask:
+    - exec
+    - Write(**)
 triggers:
   - user
   - model

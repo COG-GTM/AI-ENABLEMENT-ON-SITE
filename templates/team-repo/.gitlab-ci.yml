@@ -2,6 +2,7 @@
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
     - when: never
 
 stages:
@@ -14,10 +15,14 @@ variables:
 
 unit-and-coverage:
   stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  # This image also needs python3 for tools/coverage_gate.py.
   image: "<your approved registry>/node:<version>"
   script:
     - npm ci
     - npm test -- --coverage
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - python tools/coverage_gate.py --lcov coverage/lcov.info --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --threshold 80 --out artifacts/coverage-gate.md
   artifacts:
     when: always
@@ -37,4 +42,4 @@ build-container-placeholder:
   script:
     - echo "Replace with the team's approved image builder and registry command."
   rules:
-    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'

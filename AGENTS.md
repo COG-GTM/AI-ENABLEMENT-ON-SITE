@@ -25,7 +25,7 @@ When the user's request matches a row, invoke that skill (or tell them the slash
 | whole MATLAB repository, hundreds of .m files, our C/C++ repo, what depends on what, repo map, migration backlog, prompt packs, pipeline | `/repo-discovery` |
 | MATLAB, Simulink, .m, .slx, model, algorithm to C, Embedded Coder output, equivalence | `/matlab-to-code` |
 | my firmware, our C/C++ tree, HAL, host build, GoogleTest, Unity, Ceedling, MISRA, run this on our code | `/bring-your-firmware` |
-| backfill tests, characterize legacy behavior, changed-line coverage | `/test-backfill` |
+| 80% coverage, net-new coverage, coverage gate, legacy Angular/Node tests, unit / API / smoke / e2e tests, backfill tests, characterize legacy behavior | `/test-backfill` |
 | SonarQube quality gate, new-code issues, scan before commit | `/sonar-gate` |
 | create Jira issues from spec tasks, plan to tracker | `/plan-to-tracker` |
 

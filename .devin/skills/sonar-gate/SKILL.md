@@ -2,6 +2,14 @@
 name: sonar-gate
 description: Run a read-only SonarQube scan and gate the quality status and new-code issues.
 argument-hint: "[project key] [--branch branch-name|--pull-request number]"
+allowed-tools:
+  - read
+  - grep
+  - glob
+permissions:
+  ask:
+    - exec
+    - Write(**)
 triggers:
   - user
   - model
