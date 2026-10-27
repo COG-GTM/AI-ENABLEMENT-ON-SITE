@@ -17,13 +17,14 @@ import { RequestService } from "./request.service";
         <a routerLink="/">Requests</a>
         <a routerLink="/requests/new">New request</a>
       </nav>
+      @if (requests.loadError()) { <p role="alert">{{ requests.loadError() }}</p> }
       <router-outlet />
     </main>
   `
 })
 export class AppComponent implements OnInit {
   readonly settings = inject(SettingsService);
-  private readonly requests = inject(RequestService);
+  readonly requests = inject(RequestService);
 
   ngOnInit(): void {
     this.requests.load();

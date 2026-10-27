@@ -1,5 +1,8 @@
 """Tests for the deterministic React inventory scanner."""
 
+import contextlib
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import react_fleet_scan  # noqa: E402
+import prompt_pack  # noqa: E402
 
 
 class ReactFleetScanTests(unittest.TestCase):
@@ -68,6 +72,18 @@ class ReactFleetScanTests(unittest.TestCase):
         self.assertIn("useMemo", {row["react"] for row in result["concept_mappings"]})
         self.assertLess(result["leaf_first_order"].index("src/StatusBadge.tsx"),
                         result["leaf_first_order"].index("src/RequestForm.tsx"))
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "scan"
+            paths = react_fleet_scan.artifacts(result, output, "fixture", fresh=True)
+            items = json.loads(paths["backlog"].read_text(encoding="utf-8"))["items"]
+            self.assertTrue(any("RequestForm.tsx (RequestForm)" in item["title"] for item in items))
+            self.assertTrue(any("Wrap RequestForm.tsx (RequestForm) to Angular" == item["title"] for item in items))
+            packs_dir = Path(temp) / "packs"
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(prompt_pack.main(["--map", str(paths["dependency_map"]), "--out-dir", str(packs_dir), "--json"]), 0)
+            packs = json.loads((packs_dir / "manifest.json").read_text(encoding="utf-8"))["packs"]
+            self.assertEqual({item["id"] for item in items}, {pack["id"] for pack in packs})
+            self.assertIn("wrap", {pack["classification"] for pack in packs})
 
     def test_scanner_skips_dependency_and_build_directories(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -80,6 +96,46 @@ class ReactFleetScanTests(unittest.TestCase):
             result = react_fleet_scan.scan_tree(tree)
         self.assertEqual(result["counts"]["files"], 1)
         self.assertEqual([node["path"] for node in result["nodes"] if node["kind"] == "component"], ["src/main.tsx"])
+
+    def test_file_backlog_groups_declarations_and_preserves_state_on_rescan(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            tree = root / "src"
+            tree.mkdir()
+            (tree / "SettingsContext.tsx").write_text(
+                "export const SettingsContext = createContext({ units: 'metric' });\n"
+                "export function SettingsProvider({ children }) { return <SettingsContext.Provider>{children}</SettingsContext.Provider>; }\n"
+                "export function useSettings() { return useContext(SettingsContext); }\n",
+                encoding="utf-8",
+            )
+            (tree / "Zebra.tsx").write_text("export function Zebra() { return <section />; }\n", encoding="utf-8")
+            output = root / "scan"
+            first = react_fleet_scan.artifacts(
+                react_fleet_scan.scan_tree(root), output, "fixture", prefix="REA", opened="2026-01-02", fresh=True
+            )
+            first_items = json.loads(first["backlog"].read_text(encoding="utf-8"))["items"]
+            settings_item = next(item for item in first_items if item["notes"].endswith("path: src/SettingsContext.tsx"))
+            self.assertEqual(
+                settings_item["title"],
+                "Port SettingsContext.tsx (SettingsContext, SettingsProvider, useSettings) to Angular",
+            )
+            old_id = settings_item["id"]
+            settings_item.update(status="in_review", owner="fixture-owner", opened="2025-01-01")
+            first["backlog"].write_text(json.dumps({"items": first_items}), encoding="utf-8")
+            (tree / "Aardvark.tsx").write_text("export function Aardvark() { return <aside />; }\n", encoding="utf-8")
+            second = react_fleet_scan.artifacts(
+                react_fleet_scan.scan_tree(root), output, "fixture", prefix="REA", opened="2026-10-27"
+            )
+            items = json.loads(second["backlog"].read_text(encoding="utf-8"))["items"]
+            by_path = {item["notes"].rsplit("path: ", 1)[1]: item for item in items}
+            preserved = by_path["src/SettingsContext.tsx"]
+            self.assertEqual(preserved["id"], old_id)
+            self.assertEqual(preserved["status"], "in_review")
+            self.assertEqual(preserved["owner"], "fixture-owner")
+            self.assertEqual(preserved["opened"], "2025-01-01")
+            self.assertEqual(len(items), len(by_path))
+            self.assertEqual(len({item["id"] for item in items}), len(items))
+            self.assertNotIn(by_path["src/Aardvark.tsx"]["id"], {item["id"] for item in first_items})
 
 
 if __name__ == "__main__":

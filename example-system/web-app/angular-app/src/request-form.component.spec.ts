@@ -5,6 +5,26 @@ import { RequestFormComponent } from "./request-form.component";
 import { RequestService } from "./request.service";
 
 describe("RequestFormComponent", () => {
+  it("rejects whitespace-only fields and checks justification length after trimming", async () => {
+    const add = vi.fn();
+    await TestBed.configureTestingModule({
+      imports: [RequestFormComponent],
+      providers: [{ provide: RequestService, useValue: { add, requests: signal([]) } }]
+    }).compileComponents();
+    const fixture = TestBed.createComponent(RequestFormComponent);
+    const component = fixture.componentInstance;
+    component.form.controls.title.setValue(" \t ");
+    component.form.controls.type.setValue("repair");
+    component.form.controls.priority.setValue("urgent");
+    component.form.controls.serialNumber.setValue("  ");
+    component.form.controls.justification.setValue(" 123456789012345678 ");
+    component.submit();
+    expect(component.form.controls.title.invalid).toBe(true);
+    expect(component.form.controls.serialNumber.invalid).toBe(true);
+    expect(component.form.controls.justification.invalid).toBe(true);
+    expect(add).not.toHaveBeenCalled();
+  });
+
   it("enforces conditional fields and accepts a valid request", async () => {
     const add = vi.fn();
     await TestBed.configureTestingModule({

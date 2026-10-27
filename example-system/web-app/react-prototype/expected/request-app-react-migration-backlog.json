@@ -4,7 +4,7 @@
     {
       "id": "REA-CAP-001",
       "type": "capability",
-      "title": "Port SettingsContext to Angular",
+      "title": "Port SettingsContext.tsx (SettingsContext, SettingsProvider, useSettings) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-settingscontext-tsx",
@@ -13,40 +13,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "context identified lexically; Angular target: injectable settings service; service maps to shared port class for prompt-pack compatibility; external imports: react; path: src/SettingsContext.tsx"
+      "notes": "Angular target: injectable service or function; Angular target: injectable settings service; Angular target: standalone component; component identified lexically; context identified lexically; custom-hook identified lexically; external imports: react; service maps to shared port class for prompt-pack compatibility; path: src/SettingsContext.tsx"
     },
     {
       "id": "REA-CAP-002",
       "type": "capability",
-      "title": "Port SettingsProvider to Angular",
-      "severity": "medium",
-      "status": "proposed",
-      "component": "src-settingscontext-tsx",
-      "requirements": [],
-      "hazards": [],
-      "opened": "2026-10-27",
-      "closed": null,
-      "owner": null,
-      "notes": "component identified lexically; Angular target: standalone component; external imports: react; path: src/SettingsContext.tsx"
-    },
-    {
-      "id": "REA-CAP-003",
-      "type": "capability",
-      "title": "Port useSettings to Angular",
-      "severity": "medium",
-      "status": "proposed",
-      "component": "src-settingscontext-tsx",
-      "requirements": [],
-      "hazards": [],
-      "opened": "2026-10-27",
-      "closed": null,
-      "owner": null,
-      "notes": "custom-hook identified lexically; Angular target: injectable service or function; service maps to shared port class for prompt-pack compatibility; external imports: react; path: src/SettingsContext.tsx"
-    },
-    {
-      "id": "REA-CAP-004",
-      "type": "capability",
-      "title": "Port src/components/StatusBadge.tsx to Angular",
+      "title": "Port StatusBadge.tsx (StatusBadge) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-components-statusbadge-tsx",
@@ -55,12 +27,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "component identified lexically; Angular target: standalone component; path: src/components/StatusBadge.tsx"
+      "notes": "Angular target: standalone component; component identified lexically; path: src/components/StatusBadge.tsx"
     },
     {
-      "id": "REA-CAP-005",
+      "id": "REA-CAP-003",
       "type": "capability",
-      "title": "Port src/test-setup.ts to Angular",
+      "title": "Port test-setup.ts (test-setup) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-test-setup-ts",
@@ -69,12 +41,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "service identified lexically; Angular target: injectable service or signal store; service maps to shared port class for prompt-pack compatibility; external imports: @testing-library/jest-dom; path: src/test-setup.ts"
+      "notes": "Angular target: injectable service or signal store; external imports: @testing-library/jest-dom; service identified lexically; service maps to shared port class for prompt-pack compatibility; path: src/test-setup.ts"
     },
     {
-      "id": "REA-CAP-006",
+      "id": "REA-CAP-004",
       "type": "capability",
-      "title": "Port src/types.ts to Angular",
+      "title": "Port types.ts (types) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-types-ts",
@@ -83,12 +55,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "service identified lexically; Angular target: injectable service or signal store; service maps to shared port class for prompt-pack compatibility; path: src/types.ts"
+      "notes": "Angular target: injectable service or signal store; service identified lexically; service maps to shared port class for prompt-pack compatibility; path: src/types.ts"
     },
     {
-      "id": "REA-CAP-007",
+      "id": "REA-CAP-005",
       "type": "capability",
-      "title": "Port src/components/RequestDetail.tsx to Angular",
+      "title": "Port RequestDetail.tsx (RequestDetail) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-components-requestdetail-tsx",
@@ -97,12 +69,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "component identified lexically; Angular target: standalone component; external imports: react-router-dom; path: src/components/RequestDetail.tsx"
+      "notes": "Angular target: standalone component; component identified lexically; external imports: react-router-dom; path: src/components/RequestDetail.tsx"
     },
     {
-      "id": "REA-CAP-008",
+      "id": "REA-CAP-006",
       "type": "capability",
-      "title": "Port src/components/RequestForm.tsx to Angular",
+      "title": "Port RequestForm.tsx (RequestForm) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-components-requestform-tsx",
@@ -111,12 +83,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "component identified lexically; Angular target: standalone component; external imports: react; path: src/components/RequestForm.tsx"
+      "notes": "Angular target: standalone component; component identified lexically; external imports: react; path: src/components/RequestForm.tsx"
     },
     {
-      "id": "REA-CAP-009",
+      "id": "REA-CAP-007",
       "type": "capability",
-      "title": "Port src/requestService.ts to Angular",
+      "title": "Port requestService.ts (requestService) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-requestservice-ts",
@@ -125,12 +97,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "service identified lexically; Angular target: injectable service or signal store; service maps to shared port class for prompt-pack compatibility; path: src/requestService.ts"
+      "notes": "Angular target: injectable service or signal store; service identified lexically; service maps to shared port class for prompt-pack compatibility; path: src/requestService.ts"
     },
     {
-      "id": "REA-CAP-010",
+      "id": "REA-CAP-008",
       "type": "capability",
-      "title": "Port src/useDebounce.ts to Angular",
+      "title": "Port useDebounce.ts (useDebounce) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-usedebounce-ts",
@@ -139,12 +111,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "service identified lexically; Angular target: injectable service or signal store; service maps to shared port class for prompt-pack compatibility; external imports: react; path: src/useDebounce.ts"
+      "notes": "Angular target: injectable service or signal store; external imports: react; service identified lexically; service maps to shared port class for prompt-pack compatibility; path: src/useDebounce.ts"
     },
     {
-      "id": "REA-CAP-011",
+      "id": "REA-CAP-009",
       "type": "capability",
-      "title": "Port src/components/RequestList.tsx to Angular",
+      "title": "Port RequestList.tsx (RequestList) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-components-requestlist-tsx",
@@ -153,12 +125,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "component identified lexically; Angular target: standalone component; external imports: react, react-router-dom; path: src/components/RequestList.tsx"
+      "notes": "Angular target: standalone component; component identified lexically; external imports: react, react-router-dom; path: src/components/RequestList.tsx"
     },
     {
-      "id": "REA-CAP-012",
+      "id": "REA-CAP-010",
       "type": "capability",
-      "title": "Port src/useRequests.ts to Angular",
+      "title": "Port useRequests.ts (useRequests) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-userequests-ts",
@@ -167,12 +139,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "custom-hook identified lexically; Angular target: injectable service or function; service maps to shared port class for prompt-pack compatibility; external imports: react; path: src/useRequests.ts"
+      "notes": "Angular target: injectable service or function; custom-hook identified lexically; external imports: react; service maps to shared port class for prompt-pack compatibility; path: src/useRequests.ts"
     },
     {
-      "id": "REA-CAP-013",
+      "id": "REA-CAP-011",
       "type": "capability",
-      "title": "Port App to Angular",
+      "title": "Port App.tsx (App, Workspace) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-app-tsx",
@@ -181,26 +153,12 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "component identified lexically; Angular target: standalone component; referenced by test file(s); external imports: react-router-dom; path: src/App.tsx"
+      "notes": "Angular target: standalone component; component identified lexically; external imports: react-router-dom; referenced by test file(s); path: src/App.tsx"
     },
     {
-      "id": "REA-CAP-014",
+      "id": "REA-CAP-012",
       "type": "capability",
-      "title": "Port Workspace to Angular",
-      "severity": "medium",
-      "status": "proposed",
-      "component": "src-app-tsx",
-      "requirements": [],
-      "hazards": [],
-      "opened": "2026-10-27",
-      "closed": null,
-      "owner": null,
-      "notes": "component identified lexically; Angular target: standalone component; external imports: react-router-dom; path: src/App.tsx"
-    },
-    {
-      "id": "REA-CAP-015",
-      "type": "capability",
-      "title": "Port src/main.tsx to Angular",
+      "title": "Port main.tsx (main) to Angular",
       "severity": "medium",
       "status": "proposed",
       "component": "src-main-tsx",
@@ -209,7 +167,7 @@
       "opened": "2026-10-27",
       "closed": null,
       "owner": null,
-      "notes": "service identified lexically; Angular target: injectable service or signal store; service maps to shared port class for prompt-pack compatibility; external imports: react, react-dom, react-router-dom; path: src/main.tsx"
+      "notes": "Angular target: injectable service or signal store; external imports: react, react-dom, react-router-dom; service identified lexically; service maps to shared port class for prompt-pack compatibility; path: src/main.tsx"
     }
   ]
 }

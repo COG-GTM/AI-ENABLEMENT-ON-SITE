@@ -7,9 +7,16 @@ import type { ServiceRequest } from "./types";
 export class RequestService {
   private readonly http = inject(HttpClient);
   readonly requests = signal<ServiceRequest[]>([]);
+  readonly loadError = signal("");
 
   load(): void {
-    this.http.get<ServiceRequest[]>("/requests.json").subscribe((items) => this.requests.set(items));
+    this.http.get<ServiceRequest[]>("/requests.json").subscribe({
+      next: (items) => {
+        this.requests.set(items);
+        this.loadError.set("");
+      },
+      error: () => this.loadError.set("Request list could not be loaded.")
+    });
   }
 
   add(input: Omit<ServiceRequest, "id" | "status" | "createdAt">): void {

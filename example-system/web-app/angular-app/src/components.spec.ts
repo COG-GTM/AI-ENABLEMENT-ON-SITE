@@ -108,6 +108,7 @@ describe("RequestService", () => {
     service.load();
     http.expectOne("/requests.json").flush([request]);
     expect(service.requests()).toEqual([request]);
+    expect(service.loadError()).toBe("");
     service.add({
       title: "Inspect valve",
       type: "inspection",
@@ -118,6 +119,19 @@ describe("RequestService", () => {
     expect(service.requests()).toHaveLength(2);
     expect(service.requests()[0].title).toBe("Inspect valve");
     expect(service.requests()[0].status).toBe("open");
+    http.verify();
+  });
+
+  it("reports a load error separately from an empty request list", async () => {
+    await TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()]
+    }).compileComponents();
+    const service = TestBed.inject(RequestService);
+    const http = TestBed.inject(HttpTestingController);
+    service.load();
+    http.expectOne("/requests.json").flush("unavailable", { status: 500, statusText: "Server Error" });
+    expect(service.requests()).toEqual([]);
+    expect(service.loadError()).toBe("Request list could not be loaded.");
     http.verify();
   });
 });

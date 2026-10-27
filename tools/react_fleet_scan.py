@@ -19,7 +19,8 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-from fleet_common import BACKLOG_COLUMNS, OUT_DIR, ROOT, backlog_csv_rows, check_prefix, component_slug, csv_text, safe_name, severity_for
+from fleet_common import (BACKLOG_COLUMNS, OUT_DIR, ROOT, backlog_csv_rows, check_prefix, component_slug, csv_text,
+                          finish_backlog, safe_name, severity_for)
 
 TOOL = "tools/react_fleet_scan.py"
 FIXTURE = ROOT / "example-system" / "web-app" / "react-prototype"
@@ -235,7 +236,8 @@ def scan_tree(tree: Path) -> dict:
             "counts": counts, "classification": classes, "external_dependencies": dependencies}
 
 
-def artifacts(result: dict, out_dir: Path, name: str, prefix: str = "REA", opened: str = "2026-10-27") -> dict[str, Path]:
+def artifacts(result: dict, out_dir: Path, name: str, prefix: str = "REA", opened: str = "2026-10-27",
+              fresh: bool = False) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{name}-react"
     rows = []
@@ -272,15 +274,47 @@ def artifacts(result: dict, out_dir: Path, name: str, prefix: str = "REA", opene
     concept.write_text("# React to Angular concept map\n\n| React | Angular |\n| --- | --- |\n"
                        + "\n".join(f"| {m['react']} | {m['angular']} |" for m in result["concept_mappings"]) + "\n",
                        encoding="utf-8")
-    candidates = [n for n in result["nodes"] if n["classification"] == "port" and n["role"] != "test"]
-    backlog_items = []
-    for i, node in enumerate((n for p in result["leaf_first_order"] for n in candidates if n["path"] == p), 1):
-        backlog_items.append({"id": f"{prefix}-CAP-{i:03d}", "type": "capability", "title": f"Port {node['name']} to Angular",
-                              "severity": severity_for(50), "status": "proposed", "component": component_slug(node["path"]),
-                              "requirements": [], "hazards": [], "opened": opened, "closed": None, "owner": None,
-                              "notes": f"{'; '.join(node['reasons'])}; path: {node['path']}"})
     backlog = out_dir / f"{stem}-migration-backlog.json"
-    backlog.write_text(json.dumps({"_about": f"Deterministic synthetic backlog from {TOOL}.", "items": backlog_items}, indent=2) + "\n", encoding="utf-8")
+    candidates: dict[str, list[dict]] = defaultdict(list)
+    for node in result["nodes"]:
+        if node["classification"] in ("port", "wrap") and node["role"] != "test":
+            candidates[node["path"]].append(node)
+    backlog_items = []
+    for path in result["leaf_first_order"]:
+        declarations = candidates.get(path)
+        if not declarations:
+            continue
+        names = {
+            name
+            for node in declarations
+            for name in (*node.get("components", []), *node.get("hooks_defined", []))
+        }
+        if any(node.get("create_context") for node in declarations):
+            names.add(Path(path).stem)
+        if not names:
+            names.add(Path(path).stem)
+        all_reasons = sorted({reason for node in declarations for reason in node["reasons"]})
+        classification = "wrap" if any(node["classification"] == "wrap" for node in declarations) else "port"
+        backlog_items.append({
+            "id": f"{prefix}-CAP-{len(backlog_items) + 1:03d}",
+            "type": "capability",
+            "title": f"{'Wrap' if classification == 'wrap' else 'Port'} {Path(path).name} ({', '.join(sorted(names))}) to Angular",
+            "severity": severity_for(50),
+            "status": "proposed",
+            "component": component_slug(path),
+            "requirements": [],
+            "hazards": [],
+            "opened": opened,
+            "closed": None,
+            "owner": None,
+            "notes": f"{'; '.join(all_reasons)}; path: {path}"
+        })
+    backlog_notes: list[str] = []
+    backlog_items = finish_backlog(backlog_items, backlog, prefix, backlog_notes, fresh)
+    about = f"Deterministic synthetic backlog from {TOOL}."
+    if backlog_notes:
+        about += " " + " ".join(backlog_notes)
+    backlog.write_text(json.dumps({"_about": about, "items": backlog_items}, indent=2) + "\n", encoding="utf-8")
     backlog_csv = out_dir / f"{stem}-migration-backlog.csv"
     backlog_csv.write_text(csv_text(backlog_csv_rows(backlog_items), BACKLOG_COLUMNS), encoding="utf-8")
     return {"inventory": inventory, "summary": summary, "dependency_map": dep, "dot": dot, "repo_map": repo_map,
@@ -291,7 +325,7 @@ def check(write: bool = False) -> int:
     result = scan_tree(FIXTURE)
     result["tree"] = "fixture"
     with tempfile.TemporaryDirectory() as temp:
-        paths = artifacts(result, Path(temp), "request-app")
+        paths = artifacts(result, Path(temp), "request-app", fresh=True)
         compare = {key: (paths[key].name, paths[key].read_text(encoding="utf-8"))
                    for key in ("inventory", "summary", "dependency_map", "dot", "repo_map", "concept_map", "backlog", "backlog_csv")}
     if write:
@@ -317,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", type=Path, default=OUT_DIR)
     parser.add_argument("--prefix", default="REA")
     parser.add_argument("--opened", default=dt.date.today().isoformat())
+    parser.add_argument("--fresh", action="store_true", help="discard any existing backlog state and start new ids")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--write-expected", action="store_true")
@@ -328,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("tree is required unless --check")
     result = scan_tree(args.tree)
     name = args.name or safe_name(args.tree)
-    paths = artifacts(result, args.out_dir, name, args.prefix, args.opened)
+    paths = artifacts(result, args.out_dir, name, args.prefix, args.opened, args.fresh)
     summary = json.loads(paths["summary"].read_text(encoding="utf-8"))
     print(json.dumps(summary, indent=2) if args.json else
           f"React fleet: {result['counts']['files']} files, {result['counts']['components']} components; outputs in {args.out_dir}")

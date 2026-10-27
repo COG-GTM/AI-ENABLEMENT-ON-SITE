@@ -275,10 +275,40 @@ def check_web_fixture() -> None:
         print("note: Node.js or npm unavailable; skipped web-app tests, coverage, and Playwright checks")
         return
     web = ROOT / "example-system" / "web-app"
+    projects = ("react-prototype", "angular-app", "e2e")
+    missing = [project for project in projects if not (web / project / "node_modules").is_dir()]
+    if missing:
+        print(
+            f"note: node_modules missing for {', '.join(missing)}; "
+            "skipped web-app tests, coverage, and Playwright checks"
+        )
+        return
+    print("note: web-app dependencies found; running unit tests and coverage")
     for app in ("react-prototype", "angular-app"):
         run([npm, "test"], cwd=web / app)
         run([npm, "run", "test:coverage"], cwd=web / app)
     e2e = web / "e2e"
+    browser_check = subprocess.run(
+        [
+            node,
+            "-e",
+            "const fs=require('node:fs'); const {chromium}=require('@playwright/test'); "
+            "process.exit(fs.existsSync(chromium.executablePath()) ? 0 : 3);",
+        ],
+        cwd=e2e,
+        capture_output=True,
+        text=True,
+    )
+    if browser_check.returncode == 3:
+        print("note: Playwright Chromium browser is not installed; skipped Playwright checks")
+        return
+    if browser_check.returncode:
+        fail(
+            "Playwright browser check failed:\n"
+            f"{browser_check.stdout[-800:]}{browser_check.stderr[-800:]}"
+        )
+        return
+    print("note: Playwright Chromium browser found; running shared E2E checks")
     run([npm, "run", "e2e:react"], cwd=e2e)
     run([npm, "run", "e2e:angular"], cwd=e2e)
 

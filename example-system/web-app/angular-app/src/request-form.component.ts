@@ -1,7 +1,15 @@
 import { Component, inject, signal } from "@angular/core";
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from "@angular/forms";
+import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidatorFn } from "@angular/forms";
 import { RequestService } from "./request.service";
 import type { Priority, RequestKind } from "./types";
+
+const trimmedRequired: ValidatorFn = (control: AbstractControl) =>
+  typeof control.value === "string" && control.value.trim().length > 0 ? null : { required: true };
+
+const trimmedMinLength = (minimum: number): ValidatorFn => (control: AbstractControl) => {
+  const actualLength = typeof control.value === "string" ? control.value.trim().length : 0;
+  return actualLength >= minimum ? null : { minlength: { requiredLength: minimum, actualLength } };
+};
 
 // walkthrough:angular-form:start
 @Component({
@@ -85,7 +93,7 @@ export class RequestFormComponent {
   private readonly requests = inject(RequestService);
   readonly created = signal(false);
   readonly form = new FormGroup({
-    title: new FormControl("", { nonNullable: true, validators: [Validators.required] }),
+    title: new FormControl("", { nonNullable: true, validators: [trimmedRequired] }),
     type: new FormControl<RequestKind>("inspection", { nonNullable: true }),
     priority: new FormControl<Priority>("standard", { nonNullable: true }),
     serialNumber: new FormControl("", { nonNullable: true }),
@@ -95,9 +103,9 @@ export class RequestFormComponent {
   updateConditionalValidation(): void {
     const serial = this.form.controls.serialNumber;
     const reason = this.form.controls.justification;
-    if (this.form.controls.type.value === "repair") serial.setValidators(Validators.required);
+    if (this.form.controls.type.value === "repair") serial.setValidators(trimmedRequired);
     else serial.clearValidators();
-    if (this.form.controls.priority.value === "urgent") reason.setValidators([Validators.required, Validators.minLength(20)]);
+    if (this.form.controls.priority.value === "urgent") reason.setValidators([trimmedRequired, trimmedMinLength(20)]);
     else reason.clearValidators();
     serial.updateValueAndValidity();
     reason.updateValueAndValidity();
