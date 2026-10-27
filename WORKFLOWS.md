@@ -184,3 +184,16 @@ intermediate files, a reference repository, skill files, a graph-style controlle
 - Finish any workflow with `python tools/check_repo.py`. `python tools/golden_path.py` runs every
   deterministic stage above end to end and leaves the evidence in `outputs/golden/REPORT.md`.
 - To run a workflow on your own project: `Mimic workflow 1 on ../my-firmware; its docs are in ../my-firmware/docs`.
+
+## 13. Team guardrails: plan to tracker, tests, coverage and Sonar gates
+
+Inputs: a `/spec-driven` task list and a team's application repository. Outputs: reviewable Jira
+payloads, characterization tests, a changed-line coverage report, and a read-only SonarQube gate
+summary. Jira writes remain opt-in; practice is offline by default.
+
+| Stage | Paste or run | Leaves behind |
+| --- | --- | --- |
+| Plan to tracker | `/plan-to-tracker specs/001-diagnostics-packet/tasks.md --project SN`; inspect the dry-run payload before any write | `outputs/<slug>-jira-payload.json`; optionally a CSV export |
+| Backfill tests | `/test-backfill <code area or behavior>`; characterize existing behavior from stable leaf seams upward without production-code edits | New characterization tests; suspected defects become tracker hand-offs |
+| Coverage gate | Run the project's coverage command, then `python tools/coverage_gate.py --lcov coverage/lcov.info --base origin/<dev-branch> --threshold 80` | `outputs/<coverage-report>.md` with changed instrumented lines and uncovered ranges |
+| Sonar gate | `/sonar-gate <project key> --branch <branch>` after an approved scan; use the fake server for offline practice | `outputs/<sonar-report>.md` with gate status, failed conditions, and new-code issues |

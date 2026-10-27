@@ -13,6 +13,8 @@ export GITHUB_BASE="https://api.github.com"              # GHES: https://<host>/
 export GITHUB_TOKEN="<paste at runtime>"
 export ADO_ORG="https://dev.azure.com/<org>"
 export ADO_TOKEN="<paste at runtime>"
+export SONAR_URL="https://sonar.example.internal"
+export SONAR_TOKEN="<paste at runtime>"
 export CONF_BASE="https://confluence.example.internal"   # Cloud: https://<site>.atlassian.net/wiki
 ```
 
@@ -71,6 +73,20 @@ curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/<project>/_apis/wit/wiql/<query-id>?api-vers
 curl -sS -u ":$ADO_TOKEN" "$ADO_ORG/<project>/_apis/wit/workitems?ids=101,102,103&api-version=7.1"
 ```
 Ad-hoc WIQL text needs a `POST`, so it is not used here; save the query in Azure DevOps and read it by id.
+
+## SonarQube Server
+
+These calls are GET-only. The quality-gate endpoint accepts `projectKey` and an optional `branch` or
+`pullRequest`; the issue endpoint accepts `componentKeys`, `inNewCodePeriod`, and page parameters
+`ps`/`p`. For offline practice, point `SONAR_URL` at `fake_server.py` as shown in `integrations/README.md`.
+
+```bash
+curl -sS -H "Authorization: Bearer $SONAR_TOKEN" "$SONAR_URL/api/system/status"
+curl -sS -H "Authorization: Bearer $SONAR_TOKEN" \
+  "$SONAR_URL/api/qualitygates/project_status?projectKey=synthetic-project&branch=main"
+curl -sS -H "Authorization: Bearer $SONAR_TOKEN" \
+  "$SONAR_URL/api/issues/search?componentKeys=synthetic-project&inNewCodePeriod=true&ps=100&p=1&branch=main"
+```
 
 ## Pagination and rate limits
 

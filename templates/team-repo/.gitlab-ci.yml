@@ -1,0 +1,45 @@
+# template; not executed in this repository
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - when: never
+
+stages:
+  - test
+  - sonar
+  - build-image
+
+variables:
+  GIT_DEPTH: "0"
+
+unit-and-coverage:
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  # This image also needs python3 for tools/coverage_gate.py.
+  image: "<your approved registry>/node:<version>"
+  script:
+    - npm ci
+    - npm test -- --coverage
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - python tools/coverage_gate.py --lcov coverage/lcov.info --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --threshold 80 --out artifacts/coverage-gate.md
+  artifacts:
+    when: always
+    paths:
+      - artifacts/coverage-gate.md
+
+sonar-quality-gate:
+  stage: sonar
+  image: "<your approved registry>/sonar-scanner:<version>"
+  script:
+    - sonar-scanner -Dsonar.qualitygate.wait=true
+  rules:
+    - if: '$SONAR_URL && $SONAR_TOKEN'
+
+build-container-placeholder:
+  stage: build-image
+  script:
+    - echo "Replace with the team's approved image builder and registry command."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
