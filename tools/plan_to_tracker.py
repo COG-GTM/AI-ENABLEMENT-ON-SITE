@@ -150,12 +150,15 @@ def normalize_jira_url(url: str) -> str:
         port = parsed.port
     except ValueError as exc:
         raise ValueError("JIRA_URL has an invalid port") from exc
+    scheme = parsed.scheme.lower()
+    if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
+        port = None
     host = parsed.hostname.lower()
     if ":" in host:
         host = f"[{host}]"
     netloc = host + (f":{port}" if port is not None else "")
     path = parsed.path.rstrip("/")
-    return urllib.parse.urlunsplit((parsed.scheme.lower(), netloc, path, "", ""))
+    return urllib.parse.urlunsplit((scheme, netloc, path, "", ""))
 
 
 def saved_state(document: dict, output: Path) -> dict:

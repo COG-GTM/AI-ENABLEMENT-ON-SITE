@@ -315,6 +315,14 @@ class PlanToTrackerTests(unittest.TestCase):
                     plan_to_tracker.normalize_jira_url("HTTPS://JIRA.Example.invalid/context/"),
                     "https://jira.example.invalid/context",
                 )
+                self.assertEqual(
+                    plan_to_tracker.normalize_jira_url("https://jira.example.invalid:443/context"),
+                    plan_to_tracker.normalize_jira_url("https://jira.example.invalid/context"),
+                )
+                self.assertEqual(
+                    plan_to_tracker.normalize_jira_url("http://jira.example.invalid:80/context/"),
+                    plan_to_tracker.normalize_jira_url("http://jira.example.invalid/context"),
+                )
         finally:
             server.shutdown()
             server.server_close()
