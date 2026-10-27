@@ -71,6 +71,9 @@ plain English; `AGENTS.md` maps phrases like "make me a deck" to the right skill
 | `/repo-discovery` | Inventories a whole MATLAB repository (`tools/m_fleet_scan.py`) or C/C++ tree (`tools/c_fleet_scan.py`): every file, the candidate call/include graph, dynamic and unresolved names, toolbox / vendor / target-only boundaries, a port / wrap / retain / unreadable call with reasons, a repository map, a backlog, and one bounded prompt pack per unit (`tools/prompt_pack.py`). Discovery only | folder tree; optional `gcc` for the C include cross-check | `outputs/<tree>-m-…` or `-c-…`: `fleet-inventory.csv`, `fleet-summary.json`, `repo-map.md`, `dependency-map.json/.dot`, `migration-backlog.json/.csv`; `outputs/packs/<tree>/` |
 | `/matlab-to-code` | Reads a `.m` or `.slx`, writes down the numeric semantics (indexing, rounding, saturation, fixed point), exports golden vectors, implements in C and/or Python, proves equivalence; reviews Embedded Coder output instead of re-porting it | `example-system/model/` or your model | `outputs/<model>-notes.md`, vectors CSV, code + tests, compare report |
 | `/bring-your-firmware` | Maps your C/C++ tree (build, toolchain, RTOS, HAL seam), stands up a host-side harness with stubbed hardware from `templates/host-harness/`, gets three tests running on a laptop, then hands over to `/tdd`, `/design-artifacts`, `/track-and-report`, `/exec-deck` | your firmware tree (read-only first) | `outputs/<tree>-firmware-map.md`, `host-tests/` in your tree |
+| `/test-backfill` | Adds characterization tests to legacy behavior from leaf seams upward, records suspected bugs as tracker items, and gates changed lines on coverage | existing code, test runner, coverage report | characterization tests and `outputs/<coverage-report>.md` |
+| `/sonar-gate` | Reads SonarQube gate status and new-code issues, with an offline practice server; scanner configuration stays read-only | approved SonarQube project, or `integrations/fake_server.py` | `outputs/<sonar-report>.md` |
+| `/plan-to-tracker` | Converts `/spec-driven` tasks to reviewable Jira issue payloads; applies only after explicit opt-in and confirmation | `specs/<nnn>-<slug>/tasks.md` | `outputs/<slug>-jira-payload.json` and optional CSV |
 
 Full prompt list, ready to paste:
 
@@ -116,6 +119,7 @@ input. Full tables with every prompt are in `WORKFLOWS.md`; here is what each on
 | 10 | MATLAB repository: discovery to the first proven function | `/repo-discovery`, `tools/prompt_pack.py`, `/matlab-to-code`, `/track-and-report`, `/exec-deck` | "Hundreds of `.m` files: what calls what, where are the toolbox boundaries, which function moves first?" |
 | 11 | C/C++ repository: discovery to host tests and a proven twin | `/repo-discovery`, `/bring-your-firmware`, `tools/prompt_pack.py`, `/tdd`, `/track-and-report` | "Which of our modules can be tested and ported on a laptop, where is the HAL seam, and what must stay on the target?" |
 | 12 | Reusable pipeline, unattended | `tools/pipeline_run.py` (scan, pack, agent, compare, report), `.github/workflows/migration-scan.yml` | "How do we run this across many programs in a job we own, without feeding the whole repo to an agent every step?" |
+| 13 | Team guardrails: plan to tracker, tests, coverage and Sonar gates | `/plan-to-tracker`, `/test-backfill`, `/sonar-gate` | "How do we turn a spec into owned work and gate application changes?" |
 
 Ask for the end result and Devin runs the whole row: `Swap the IMU for imu-c and brief leadership`.
 One-hour executive briefing of workflows 6 to 9 as flow diagrams: `templates/deck-exec-briefing.json` (rebuild it with `tools/build_deck.py`; speaker notes and timing in `TALK-TRACK.md`).
@@ -298,11 +302,11 @@ No TestStand or TDMS file ships here.
 ## Where things live
 
 ```
-AGENTS.md            Devin reads this first: rules + which skill to use for what (under 40 lines)
-WORKFLOWS.md         the 12 pipelines above, with every prompt and what each stage leaves behind
+AGENTS.md            Devin reads this first: rules + which skill to use for what (under 80 lines)
+WORKFLOWS.md         the 13 pipelines above, with every prompt and what each stage leaves behind
 WALKTHROUGH.md       25-minute speaker path for showing the repo live, with a recovery move per beat
 SECURITY.md          data-handling and least-privilege rules
-.devin/skills/       one folder per skill, one SKILL.md each (cap: 16); open one to see the procedure
+.devin/skills/       one folder per skill, one SKILL.md each (19 here; cap: 22); open one to see the procedure
 .devin/mcp_config.json  registers the offline reference MCP server
 example-system/      the synthetic battery sensor node everything practises on
   docs/              SRS.md (requirements), ICD.md (interfaces), HAZARDS.md (FMEA), ADR-*.md (decisions),

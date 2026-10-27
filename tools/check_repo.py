@@ -32,7 +32,7 @@ USE_CASES = ROOT / "use-cases"
 ROUTING_DOCS = ["README.md", "WORKFLOWS.md", "WALKTHROUGH.md"]
 # Frontmatter keys documented for Devin Local skills. Anything else is a typo or an unsupported field.
 FRONTMATTER_KEYS = {"name", "description", "argument-hint", "model", "allowed-tools", "permissions", "triggers"}
-MAX_SKILLS = 16
+MAX_SKILLS = 22
 
 # Words that must never appear (case-insensitive). Add customer/program names here before publishing.
 FORBIDDEN = [
@@ -243,6 +243,9 @@ def check_tools() -> None:
     run([py, "tools/build_deck.py", "templates/deck-outline-example.json", "outputs/example-deck.html"])
     run([py, "tools/export_pptx.py", "templates/deck-outline-example.json", "outputs/example-deck.pptx"])
     run([py, "tools/research_brief.py", "--check"])
+    run([py, "tools/coverage_gate.py", "--check"])
+    run([py, "tools/sonar_gate.py", "--check"])
+    run([py, "tools/plan_to_tracker.py", "--check"])
     run([py, "tools/trace_matrix.py", "--out", "outputs/trace-matrix.md"])
     run([py, "tools/vi_fleet_scan.py", "example-system", "--name", "demo-fleet", "--opened", "2026-01-05"])
     run([py, "tools/tracker_report.py", "--file", "outputs/demo-fleet-migration-backlog.json"])

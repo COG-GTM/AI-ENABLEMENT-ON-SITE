@@ -1,0 +1,5 @@
+{
+  "name": "Angular team application",
+  "image": "<your approved registry>/node:<version>",
+  "postCreateCommand": "npm ci"
+}

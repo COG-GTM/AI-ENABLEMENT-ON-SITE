@@ -178,7 +178,15 @@ def load_fixtures(folder: Path) -> dict:
         _expect(UUID_RE.match(qid) is not None and qid == qid.lower(), f"ado query {qid!r}: id must be a lowercase uuid")
         _check_shape(f"ado query {qid}", q, {"name", "ids"}, {"name", "ids"})
         _expect(isinstance(q["ids"], list) and set(q["ids"]) <= ids, f"ado query {qid}: ids must exist in value[]")
-    return {"jira": jira["issues"], "gitlab": gitlab, "ado": ado["value"], "ado_queries": ado["queries"]}
+    sonar_status = _read_json(folder / "sonar_status.json")
+    sonar_issues = _read_json(folder / "sonar_issues.json")
+    _expect(isinstance(sonar_status.get("projectStatus"), dict), "sonar_status.json must contain projectStatus")
+    _expect(isinstance(sonar_issues.get("issues"), list), "sonar_issues.json must contain issues[]")
+    _expect(isinstance(sonar_issues.get("paging"), dict), "sonar_issues.json must contain paging")
+    return {
+        "jira": jira["issues"], "gitlab": gitlab, "ado": ado["value"], "ado_queries": ado["queries"],
+        "sonar_status": sonar_status, "sonar_issues": sonar_issues["issues"],
+    }
 
 
 # ---- query helpers -----------------------------------------------------------------------------
@@ -358,6 +366,32 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(404, "unknown path")
         q = parse_query(split.query)
         fx = self.server.fixtures
+        if segs == ["api", "system", "status"]:
+            self.require_token("sonar")
+            allow_keys(q, set())
+            return 200, {"status": "UP"}, {}
+        if segs == ["api", "qualitygates", "project_status"]:
+            self.require_token("sonar")
+            allow_keys(q, {"projectKey", "branch", "pullRequest"})
+            self._sonar_context(q)
+            if q.get("projectKey") != "synthetic-project":
+                raise ApiError(404, "project not found")
+            return 200, fx["sonar_status"], {}
+        if segs == ["api", "issues", "search"]:
+            self.require_token("sonar")
+            allow_keys(q, {"componentKeys", "inNewCodePeriod", "ps", "p", "branch", "pullRequest"})
+            self._sonar_context(q)
+            if q.get("componentKeys") != "synthetic-project" or q.get("inNewCodePeriod") != "true":
+                raise ApiError(400, "componentKeys=synthetic-project and inNewCodePeriod=true are required")
+            page_size = int_param(q, "ps", 100, 1, 100)
+            page = int_param(q, "p", 1, 1, 100)
+            total = len(fx["sonar_issues"])
+            start = (page - 1) * page_size
+            body = {
+                "paging": {"pageIndex": page, "pageSize": page_size, "total": total},
+                "issues": fx["sonar_issues"][start:start + page_size],
+            }
+            return 200, body, {}
         if segs[:3] == ["rest", "api", "2"]:
             self.style = "jira"
             self.require_token("jira")
@@ -375,6 +409,15 @@ class Handler(BaseHTTPRequestHandler):
             self.require_token("ado")
             return self.ado(segs, q, fx["ado"], fx["ado_queries"])
         raise ApiError(404, "unknown path")
+
+    @staticmethod
+    def _sonar_context(q):
+        if "branch" in q and "pullRequest" in q:
+            raise ApiError(400, "choose either branch or pullRequest")
+        if "branch" in q and not q["branch"]:
+            raise ApiError(400, "branch must not be empty")
+        if "pullRequest" in q and not q["pullRequest"].isdigit():
+            raise ApiError(400, "pullRequest must be a numeric identifier")
 
     def jira(self, segs, q, issues):
         base = self.server.base_url
