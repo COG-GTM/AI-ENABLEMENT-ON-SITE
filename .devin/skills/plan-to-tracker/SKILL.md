@@ -37,3 +37,8 @@ opt-in and require an explicit `--apply`, `JIRA_URL`, `JIRA_TOKEN`, and typed co
    developer-reviewed conventional commit message.
 6. Use `/connect-tools` for credential and Jira access setup. Never put token values in a file or
    chat. Start with `--check` to exercise the deterministic local example without network access.
+7. Applied state is tied to a normalized Jira base URL. Use a new `--out` or reconcile before applying
+   that state to a different Jira instance; dry runs preserve the stored URL.
+8. Each created issue keeps a hash of its posted payload. If its task changes later, the tool marks it
+   stale and reports the task and Jira key in stdout, Markdown, and CSV notes. It never re-posts or
+   updates keyed issues; update stale issues in Jira by hand.

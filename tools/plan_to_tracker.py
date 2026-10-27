@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import hashlib
 import io
 import json
 import os
@@ -83,22 +84,78 @@ def make_payloads(path: Path, project: str, issue_type: str) -> dict:
     }
 
 
+def canonical_payload(item: dict) -> bytes:
+    return json.dumps(
+        item["payload"], sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+
+
+def payload_sha256(item: dict) -> str:
+    return hashlib.sha256(canonical_payload(item)).hexdigest()
+
+
+def stale_note(item: dict) -> str:
+    return f"{item['task_id']} ({item['created_key']}) changed since posting; update the issue in Jira by hand"
+
+
+def stale_notes(document: dict) -> list[str]:
+    return [stale_note(item) for item in document["issues"] if item.get("stale") and item.get("created_key")]
+
+
 def csv_content(document: dict) -> str:
     stream = io.StringIO(newline="")
     writer = csv.writer(stream)
-    writer.writerow(["Project key", "Issue Type", "Summary", "Description", "Labels", "Assignee"])
+    writer.writerow(["Project key", "Issue Type", "Summary", "Description", "Labels", "Assignee", "Note"])
     for item in document["issues"]:
         fields = item["payload"]["fields"]
         writer.writerow([
             fields["project"]["key"], fields["issuetype"]["name"], fields["summary"],
-            fields["description"], ",".join(fields["labels"]), "",
+            fields["description"], ",".join(fields["labels"]), "", stale_note(item) if item.get("stale") else "",
         ])
     return stream.getvalue()
+
+
+def markdown_content(document: dict) -> str:
+    notes = stale_notes(document)
+    lines = [
+        "# Jira payload review",
+        "",
+        f"- Spec: `{document['spec']}`",
+        f"- Project: `{document['project']}`",
+        "",
+        "## Tasks changed since posting",
+        "",
+    ]
+    if notes:
+        lines.extend(f"- {note}" for note in notes)
+    else:
+        lines.append("No posted task payloads changed since posting.")
+    return "\n".join(lines) + "\n"
 
 
 def safe_target(url: str) -> bool:
     parsed = urllib.parse.urlsplit(url)
     return parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname == "127.0.0.1")
+
+
+def normalize_jira_url(url: str) -> str:
+    parsed = urllib.parse.urlsplit(url)
+    if not parsed.scheme or not parsed.hostname:
+        raise ValueError("JIRA_URL must include a scheme and host")
+    if parsed.username or parsed.password:
+        raise ValueError("JIRA_URL must not include credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError("JIRA_URL must not include a query or fragment")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("JIRA_URL has an invalid port") from exc
+    host = parsed.hostname.lower()
+    if ":" in host:
+        host = f"[{host}]"
+    netloc = host + (f":{port}" if port is not None else "")
+    path = parsed.path.rstrip("/")
+    return urllib.parse.urlunsplit((parsed.scheme.lower(), netloc, path, "", ""))
 
 
 def saved_state(document: dict, output: Path) -> dict:
@@ -110,6 +167,8 @@ def saved_state(document: dict, output: Path) -> dict:
         raise ValueError(f"cannot read existing payload state from {output}: {exc}") from exc
     if not isinstance(existing, dict):
         raise ValueError(f"existing payload state in {output} is not an object")
+    if "jira_url" in existing:
+        document["jira_url"] = existing["jira_url"]
 
     def identity(parent: dict, item: dict) -> tuple[str, str, str]:
         fields = item.get("payload", {}).get("fields", {})
@@ -127,6 +186,12 @@ def saved_state(document: dict, output: Path) -> dict:
             continue
         if old.get("created_key"):
             item["created_key"] = old["created_key"]
+            posted_hash = old.get("posted_payload_sha256") or old.get("posted_sha256")
+            if posted_hash:
+                item["posted_payload_sha256"] = posted_hash
+                item["posted_sha256"] = old.get("posted_sha256", posted_hash)
+                if payload_sha256(item) != posted_hash:
+                    item["stale"] = True
         if old.get("posting"):
             item["posting"] = True
     return document
@@ -135,6 +200,12 @@ def saved_state(document: dict, output: Path) -> dict:
 def persist(document: dict, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    output.with_suffix(".md").write_text(markdown_content(document), encoding="utf-8")
+
+
+def write_csv(document: dict, csv_path: Path) -> None:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    csv_path.write_text(csv_content(document), encoding="utf-8", newline="")
 
 
 def write_issues(document: dict, base: str, token: str, output: Path) -> None:
@@ -149,7 +220,7 @@ def write_issues(document: dict, base: str, token: str, output: Path) -> None:
             continue
         item["posting"] = True
         persist(document, output)
-        body = json.dumps(item["payload"]).encode("utf-8")
+        body = canonical_payload(item)
         request = urllib.request.Request(
             endpoint,
             data=body,
@@ -174,6 +245,8 @@ def write_issues(document: dict, base: str, token: str, output: Path) -> None:
         if not isinstance(key, str) or not key:
             raise ValueError("Jira response did not contain an issue key")
         item["created_key"] = key
+        item["posted_payload_sha256"] = hashlib.sha256(body).hexdigest()
+        item["posted_sha256"] = item["posted_payload_sha256"]
         item.pop("posting", None)
         persist(document, output)
 
@@ -218,10 +291,9 @@ def main(argv=None) -> int:
         slug = SPEC_RE.match(tasks_path.parent.name).group("slug")
         output = Path(args.out) if args.out else Path("outputs") / f"{slug}-jira-payload.json"
         document = saved_state(document, output)
+        csv_path = None
         if args.csv is not None:
             csv_path = (Path("outputs") / f"{slug}-jira-payload.csv") if args.csv is True else Path(args.csv)
-            csv_path.parent.mkdir(parents=True, exist_ok=True)
-            csv_path.write_text(csv_content(document), encoding="utf-8", newline="")
         if args.apply:
             base = os.environ.get("JIRA_URL")
             token = os.environ.get("JIRA_TOKEN")
@@ -229,6 +301,10 @@ def main(argv=None) -> int:
                 raise ValueError("--apply requires JIRA_URL and JIRA_TOKEN")
             if not safe_target(base):
                 raise ValueError("refusing non-HTTPS Jira URL; plain HTTP is allowed only to 127.0.0.1")
+            current_url = normalize_jira_url(base)
+            stored_url = document.get("jira_url")
+            if stored_url and normalize_jira_url(stored_url) != current_url:
+                raise ValueError(f"state file belongs to {stored_url}; use a new --out or reconcile")
             if any(item.get("posting") and not item.get("created_key") for item in document["issues"]):
                 raise ValueError("a Jira task is still marked posting; reconcile in Jira before retrying")
             pending = sum(not item.get("created_key") for item in document["issues"])
@@ -237,13 +313,22 @@ def main(argv=None) -> int:
                 if input("Type yes to continue: ") != "yes":
                     print("Cancelled; no Jira issues were created.")
                     return 0
+            document["jira_url"] = current_url
             persist(document, output)
+            if csv_path is not None:
+                write_csv(document, csv_path)
             write_issues(document, base, token, output)
             print(f"Created {pending} Jira issues; keys saved to {output}.")
+            for note in stale_notes(document):
+                print(note)
         else:
             persist(document, output)
+            if csv_path is not None:
+                write_csv(document, csv_path)
             print(f"Dry run: {len(document['issues'])} Jira issue payloads written to {output}.")
-            if args.csv is not None:
+            for note in stale_notes(document):
+                print(note)
+            if csv_path is not None:
                 print(f"CSV written to {csv_path}.")
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         print(f"plan_to_tracker: {exc}", file=sys.stderr)

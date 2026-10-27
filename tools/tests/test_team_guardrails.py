@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -252,11 +253,129 @@ class PlanToTrackerTests(unittest.TestCase):
                 output = Path(directory) / "payload.json"
                 self.assertEqual(plan_to_tracker.main(["--apply", "--yes", "--out", str(output)]), 0)
                 saved = json.loads(output.read_text(encoding="utf-8"))
+                self.assertEqual(saved["jira_url"], plan_to_tracker.normalize_jira_url(
+                    os.environ["JIRA_URL"]
+                ))
+                posted = saved["issues"][0]
+                self.assertEqual(posted["posted_payload_sha256"], posted["posted_sha256"])
+                self.assertEqual(
+                    posted["posted_payload_sha256"],
+                    plan_to_tracker.hashlib.sha256(
+                        plan_to_tracker.canonical_payload(posted)
+                    ).hexdigest(),
+                )
                 self.assertEqual(plan_to_tracker.main(["--apply", "--yes", "--out", str(output)]), 0)
             self.assertEqual(len(requests), 15)
             self.assertTrue(all(path == "/rest/api/2/issue" for path, _, _ in requests))
             self.assertTrue(all(auth == f"Bearer {FAKE_AUTH}" for _, _, auth in requests))
             self.assertEqual(saved["issues"][-1]["created_key"], "SN-15")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
+    def test_jira_state_is_instance_bound_and_dry_run_preserves_url(self):
+        requests = []
+
+        class NoPostStub(BaseHTTPRequestHandler):
+            def do_POST(self):
+                requests.append(self.path)
+                self.send_response(201)
+                self.end_headers()
+
+            def log_message(self, fmt, *args):
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), NoPostStub)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "payload.json"
+                existing = plan_to_tracker.make_payloads(plan_to_tracker.DEFAULT_SPEC, "SN", "Task")
+                existing["jira_url"] = "https://old.example.invalid/context"
+                plan_to_tracker.persist(existing, output)
+                current_url = f"http://127.0.0.1:{server.server_port}/JIRA/"
+                with mock.patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(plan_to_tracker.main(["--out", str(output)]), 0)
+                dry_run_state = json.loads(output.read_text(encoding="utf-8"))
+                self.assertEqual(dry_run_state["jira_url"], existing["jira_url"])
+
+                errors = io.StringIO()
+                with mock.patch.dict(
+                    os.environ, {"JIRA_URL": current_url, "JIRA_TOKEN": FAKE_AUTH}, clear=True
+                ), contextlib.redirect_stderr(errors):
+                    self.assertEqual(plan_to_tracker.main(["--apply", "--yes", "--out", str(output)]), 2)
+                self.assertIn(
+                    "state file belongs to https://old.example.invalid/context; use a new --out or reconcile",
+                    errors.getvalue(),
+                )
+                self.assertEqual(requests, [])
+                self.assertEqual(
+                    plan_to_tracker.normalize_jira_url("HTTPS://JIRA.Example.invalid/context/"),
+                    "https://jira.example.invalid/context",
+                )
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+
+    def test_changed_posted_task_is_marked_stale_without_repost(self):
+        requests = []
+
+        class CaptureStub(BaseHTTPRequestHandler):
+            def do_POST(self):
+                requests.append(self.rfile.read(int(self.headers["Content-Length"])))
+                body = json.dumps({"key": "SN-42"}).encode()
+                self.send_response(201)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, fmt, *args):
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), CaptureStub)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                spec_dir = Path(directory) / "001-request-form"
+                spec_dir.mkdir()
+                tasks = spec_dir / "tasks.md"
+                tasks.write_text("- [ ] T1.1 Create the first request `python -m unittest`\n", encoding="utf-8")
+                output = Path(directory) / "payload.json"
+                csv_path = Path(directory) / "payload.csv"
+                base = f"http://127.0.0.1:{server.server_port}/jira/"
+                args = [
+                    str(tasks), "--out", str(output), "--csv", str(csv_path), "--apply", "--yes"
+                ]
+                first_stdout = io.StringIO()
+                with mock.patch.dict(
+                    os.environ, {"JIRA_URL": base, "JIRA_TOKEN": FAKE_AUTH}, clear=True
+                ), contextlib.redirect_stdout(first_stdout):
+                    self.assertEqual(plan_to_tracker.main(args), 0)
+                first_state = json.loads(output.read_text(encoding="utf-8"))
+                original_hash = first_state["issues"][0]["posted_payload_sha256"]
+                self.assertEqual(hashlib.sha256(requests[0]).hexdigest(), original_hash)
+
+                tasks.write_text("- [ ] T1.1 Create the revised request `python -m unittest`\n", encoding="utf-8")
+                second_stdout = io.StringIO()
+                with mock.patch.dict(
+                    os.environ, {"JIRA_URL": base, "JIRA_TOKEN": FAKE_AUTH}, clear=True
+                ), contextlib.redirect_stdout(second_stdout):
+                    self.assertEqual(plan_to_tracker.main(args), 0)
+                state = json.loads(output.read_text(encoding="utf-8"))
+                note = "T1.1 (SN-42) changed since posting; update the issue in Jira by hand"
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(state["issues"][0]["created_key"], "SN-42")
+                self.assertTrue(state["issues"][0]["stale"])
+                self.assertEqual(state["issues"][0]["posted_payload_sha256"], original_hash)
+                self.assertEqual(state["issues"][0]["posted_sha256"], original_hash)
+                self.assertIn(note, second_stdout.getvalue())
+                self.assertIn(note, output.with_suffix(".md").read_text(encoding="utf-8"))
+                self.assertIn(note, csv_path.read_text(encoding="utf-8"))
         finally:
             server.shutdown()
             server.server_close()
