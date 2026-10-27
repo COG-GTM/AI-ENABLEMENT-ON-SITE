@@ -52,6 +52,33 @@ class CoverageGateTests(unittest.TestCase):
         finally:
             absolute.unlink()
 
+    def test_path_prefix_aligns_repository_diff_paths_with_app_relative_lcov(self):
+        diff = (
+            "diff --git a/example-system/web-app/angular-app/src/request-form.component.ts "
+            "b/example-system/web-app/angular-app/src/request-form.component.ts\n"
+            "--- a/example-system/web-app/angular-app/src/request-form.component.ts\n"
+            "+++ b/example-system/web-app/angular-app/src/request-form.component.ts\n"
+            "@@ -1 +1 @@\n-old\n+new\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            diff_path = Path(directory) / "changes.diff"
+            lcov_path = Path(directory) / "lcov.info"
+            diff_path.write_text(diff, encoding="utf-8")
+            lcov_path.write_text("SF:src/request-form.component.ts\nDA:1,1\nend_of_record\n", encoding="utf-8")
+            args = type("Args", (), {
+                "diff_file": str(diff_path),
+                "base": None,
+                "repo": directory,
+                "lcov": str(lcov_path),
+                "cobertura": None,
+                "path_prefix": "example-system/web-app/angular-app",
+            })()
+            changed, report = coverage_gate.load_inputs(args)
+        summary = coverage_gate.summarize(changed, report, 80)
+        self.assertEqual(changed, {"src/request-form.component.ts": {1}})
+        self.assertEqual(summary["changed_instrumented"], 1)
+        self.assertTrue(summary["pass"])
+
     def test_no_changed_lines_passes_with_note(self):
         summary = coverage_gate.summarize({}, {}, 80)
         self.assertTrue(summary["pass"])

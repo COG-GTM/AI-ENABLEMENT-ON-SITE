@@ -430,6 +430,24 @@ def stage_team_gates() -> None:
            else "one or more offline gate checks failed")
 
 
+def stage_react_fleet() -> None:
+    check = run([PY, "tools/react_fleet_scan.py", "--check"])
+    if check.returncode:
+        record("react-fleet", False, (check.stdout + check.stderr)[-300:])
+        return
+    scan = run([PY, "tools/react_fleet_scan.py", "example-system/web-app/react-prototype", "--name", "request-app",
+                "--out-dir", str(OUT / "react-fleet"), "--opened", "2026-10-27", "--json"])
+    try:
+        summary = json.loads(scan.stdout)
+    except json.JSONDecodeError:
+        record("react-fleet", False, (scan.stdout + scan.stderr)[-300:])
+        return
+    counts = summary.get("counts", {})
+    record("react-fleet", scan.returncode == 0,
+           f"{counts.get('files', 0)} files, {counts.get('components', 0)} components, "
+           f"{summary.get('classification', {}).get('retain', 0)} retained config units")
+
+
 # --- report -----------------------------------------------------------------------------------
 
 
@@ -452,7 +470,7 @@ def main(argv=None) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
               stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_c_fleet, stage_pipeline, stage_host_harness,
-              stage_team_gates]
+              stage_team_gates, stage_react_fleet]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:

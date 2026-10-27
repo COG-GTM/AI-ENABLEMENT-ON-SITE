@@ -19,6 +19,7 @@ Exit code 0 = clean. Standard library only.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -52,7 +53,7 @@ SECRET_PATTERNS = [
     r"(?i)(api[_-]?key|token|password|secret)\s*[:=]\s*['\"][A-Za-z0-9/+=_-]{16,}['\"]",
     r"\b[0-9]{3}-[0-9]{2}-[0-9]{4}\b",  # SSN-shaped
 ]
-SKIP_DIRS = {".git", "build", "__pycache__", "outputs"}
+SKIP_DIRS = {".git", "build", "__pycache__", "outputs", "node_modules", "dist", "coverage"}
 TEXT_EXT = {".md", ".json", ".py", ".c", ".h", ".txt", ".sh", ".yaml", ".yml", ".toml", ".cfg", ".html", ".mk", ""}
 
 LINK_RE = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
@@ -246,6 +247,7 @@ def check_tools() -> None:
     run([py, "tools/coverage_gate.py", "--check"])
     run([py, "tools/sonar_gate.py", "--check"])
     run([py, "tools/plan_to_tracker.py", "--check"])
+    run([py, "tools/react_fleet_scan.py", "--check"])
     run([py, "tools/trace_matrix.py", "--out", "outputs/trace-matrix.md"])
     run([py, "tools/vi_fleet_scan.py", "example-system", "--name", "demo-fleet", "--opened", "2026-01-05"])
     run([py, "tools/tracker_report.py", "--file", "outputs/demo-fleet-migration-backlog.json"])
@@ -254,6 +256,8 @@ def check_tools() -> None:
     run([py, "tools/pipeline_run.py", "--lang", "c", "--tree", "example-system/firmware-repo", "--name", "firmware-repo",
          "--out", "outputs/pipeline/firmware-repo", "--opened", "2026-01-05"])
     run([py, "tools/golden_path.py", "--skip-tests"])  # the test suites run below
+    check_web_fixture()
+    run([py, "tools/build_walkthrough.py", "--check"])
     run([py, "-m", "unittest", "discover", "-s", "tests", "-q"], cwd=ROOT / "example-system")
     run([py, "-m", "unittest", "discover", "-s", "tools/tests", "-q"])  # includes test_integrations.py: fake server + importer on 127.0.0.1
     run([py, "-m", "unittest", "integrations/reference-mcp/test_server.py", "-q"])
@@ -263,6 +267,53 @@ def check_tools() -> None:
         run(["make", "-s", "test-c"], cwd=ROOT / "example-system")
     else:
         print("note: no C compiler/make found; skipped C tests")
+
+
+def check_web_fixture() -> None:
+    npm = shutil.which("npm")
+    node = shutil.which("node")
+    if not npm or not node:
+        print("note: Node.js or npm unavailable; skipped web-app tests, coverage, and Playwright checks")
+        return
+    web = ROOT / "example-system" / "web-app"
+    for app in ("react-prototype", "angular-app"):
+        if not (web / app / "node_modules").is_dir():
+            print(f"note: node_modules missing for {app}; skipped its unit tests and coverage")
+            continue
+        print(f"note: {app} dependencies found; running unit tests and coverage")
+        run([npm, "test"], cwd=web / app)
+        run([npm, "run", "test:coverage"], cwd=web / app)
+    e2e = web / "e2e"
+    if not (e2e / "node_modules").is_dir():
+        print("note: node_modules missing for e2e; skipped Playwright checks")
+        return
+    if os.environ.get("BROWSER_CHANNEL") == "chrome":
+        print("note: BROWSER_CHANNEL=chrome; skipping bundled Chromium probe")
+    else:
+        browser_check = subprocess.run(
+            [
+                node,
+                "-e",
+                "const fs=require('node:fs'); const {chromium}=require('@playwright/test'); "
+                "process.exit(fs.existsSync(chromium.executablePath()) ? 0 : 3);",
+            ],
+            cwd=e2e,
+            capture_output=True,
+            text=True,
+        )
+        if browser_check.returncode == 3:
+            print("note: Playwright Chromium browser is not installed; skipped Playwright checks")
+            return
+        if browser_check.returncode:
+            fail(
+                "Playwright browser check failed:\n"
+                f"{browser_check.stdout[-800:]}{browser_check.stderr[-800:]}"
+            )
+            return
+        print("note: Playwright Chromium browser found")
+    print("note: running shared Playwright E2E checks")
+    run([npm, "run", "e2e:react"], cwd=e2e)
+    run([npm, "run", "e2e:angular"], cwd=e2e)
 
 
 def main() -> int:

@@ -197,3 +197,36 @@ summary. Jira writes remain opt-in; practice is offline by default.
 | Backfill tests | `/test-backfill <code area or behavior>`; characterize existing behavior from stable leaf seams upward without production-code edits | New characterization tests; suspected defects become tracker hand-offs |
 | Coverage gate | Run the project's coverage command, then `python tools/coverage_gate.py --lcov coverage/lcov.info --base origin/<dev-branch> --threshold 80` | `outputs/<coverage-report>.md` with changed instrumented lines and uncovered ranges |
 | Sonar gate | `/sonar-gate <project key> --branch <branch>` after an approved scan; use the fake server for offline practice | `outputs/<sonar-report>.md` with gate status, failed conditions, and new-code issues |
+
+## 14. React to Angular: strangler migration, leaf-first
+
+Inputs: one React repository, a target Angular application, and a testable behavior contract. The
+scanner is lexical and the example is not a transpiler.
+
+| Stage | Paste or run | Leaves behind |
+| --- | --- | --- |
+| Ask | `/react-to-angular <React tree>`; agree the strangler boundary, dependency graph, concept map, and regression loop | reviewed migration boundary and questions |
+| Scan | `python tools/react_fleet_scan.py <React tree> --name <name>` | inventory, graph, concept map, repo map, backlog |
+| Plan | `/spec-driven` in Plan mode; keep the plan artifact under `~/.devin/plans/`; use `megaplan` when deeper planning helps | `specs/<nnn>-<slug>/{spec,plan,tasks}.md` |
+| Track | `/plan-to-tracker specs/<nnn>-<slug>/tasks.md --project <KEY>` and inspect the dry run | `outputs/<slug>-jira-payload.json` |
+| Migrate | On a feature branch, `/tdd` per leaf-first unit, Angular unit tests first, then coverage gate and shared e2e on both apps | Angular source and tests, coverage report, Playwright evidence |
+| Review | `/sonar-gate`; developer reviews the Devin-drafted commit message | reviewed code and evidence; never commit to main |
+
+This is a method, not a compiler; the application owner chooses design-system and product-specific
+behavior. Plan paths, `megaplan`, and Desktop/CLI modes should be confirmed against the deployed build.
+
+## 15. UI/UX iteration: local preview to shareable evidence
+
+Inputs: a static mockup or local component and the behavior tests that must stay unchanged. Never
+share a live URL.
+
+| Stage | Paste or run | Leaves behind |
+| --- | --- | --- |
+| Edit | `/ui-iterate <mockup or component>`; start the local app | updated local HTML/component |
+| Inspect | Preview locally, select the target element, send errors to the agent; confirm preview availability on your build | captured observations and console errors |
+| Prove | Run axe and the shared Playwright spec; keep a before/after pair | screenshots and test evidence under the fixture |
+| Share | Share downloaded HTML or screenshots through an approved channel | portable review artifacts, not a live URL |
+| CLI equivalent | Run the local server and Playwright screenshot/spec commands | local screenshots and console output; stop the servers |
+
+Desktop Preview documentation describes local preview, element selection, and sending errors; offline
+or FedRAMP availability and screenshot controls are confirm on your build.

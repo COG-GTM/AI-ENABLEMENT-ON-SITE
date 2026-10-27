@@ -60,7 +60,8 @@ and Linux-based remote hosts, and the standard Microsoft Remote-SSH extensions m
 (https://docs.devin.ai/desktop/advanced#ssh-support). Worktree sessions are described at
 https://docs.devin.ai/desktop/devin-local#worktree-sessions.
 
-This repository does not ship a `devcontainer.json`; one that installs Python 3.10+, `gcc`, `make`, and the `lvkit`
+This repository does not ship a root-level `devcontainer.json`. A copy-ready template is at
+`templates/team-repo/.devcontainer/devcontainer.json`; one that installs Python 3.10+, `gcc`, `make`, and the `lvkit`
 wheel would let the whole golden path run inside the container. To scope: where the container image is built and
 approved, and whether the source tree lives in the container or on a mounted volume.
 

@@ -1,0 +1,29 @@
+{
+  "classification": {
+    "port": 16,
+    "retain": 2,
+    "service": 0,
+    "unreadable": 0,
+    "wrap": 0
+  },
+  "counts": {
+    "components": 7,
+    "custom_hooks": 2,
+    "files": 14,
+    "relative_edges": 16,
+    "test_references": 1,
+    "units": 18
+  },
+  "language": "react",
+  "outputs": {
+    "backlog": "request-app-react-migration-backlog.json",
+    "backlog_csv": "request-app-react-migration-backlog.csv",
+    "concept_map": "request-app-react-concept-map.md",
+    "dependency_map": "request-app-react-dependency-map.json",
+    "dot": "request-app-react-dependency-map.dot",
+    "inventory": "request-app-react-fleet-inventory.csv",
+    "repo_map": "request-app-react-repo-map.md",
+    "summary": "request-app-react-fleet-summary.json"
+  },
+  "tree": "fixture"
+}

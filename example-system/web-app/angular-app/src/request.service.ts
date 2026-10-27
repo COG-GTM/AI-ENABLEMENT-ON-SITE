@@ -1,0 +1,31 @@
+import { HttpClient } from "@angular/common/http";
+import { Injectable, inject, signal } from "@angular/core";
+import type { ServiceRequest } from "./types";
+
+// walkthrough:angular-request-service:start
+@Injectable({ providedIn: "root" })
+export class RequestService {
+  private readonly http = inject(HttpClient);
+  readonly requests = signal<ServiceRequest[]>([]);
+  readonly loadError = signal("");
+
+  load(): void {
+    this.http.get<ServiceRequest[]>("/requests.json").subscribe({
+      next: (items) => {
+        this.requests.set(items);
+        this.loadError.set("");
+      },
+      error: () => this.loadError.set("Request list could not be loaded.")
+    });
+  }
+
+  add(input: Omit<ServiceRequest, "id" | "status" | "createdAt">): void {
+    this.requests.update((items) => [{
+      ...input,
+      id: `REQ-${Date.now()}`,
+      status: "open",
+      createdAt: new Date().toISOString()
+    }, ...items]);
+  }
+}
+// walkthrough:angular-request-service:end

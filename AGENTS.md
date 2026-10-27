@@ -25,6 +25,8 @@ When the user's request matches a row, invoke that skill (or tell them the slash
 | whole MATLAB repository, hundreds of .m files, our C/C++ repo, what depends on what, repo map, migration backlog, prompt packs, pipeline | `/repo-discovery` |
 | MATLAB, Simulink, .m, .slx, model, algorithm to C, Embedded Coder output, equivalence | `/matlab-to-code` |
 | my firmware, our C/C++ tree, HAL, host build, GoogleTest, Unity, Ceedling, MISRA, run this on our code | `/bring-your-firmware` |
+| React to Angular, React fleet scan, strangler-fig migration, React concept map | `/react-to-angular` |
+| UI iteration, local mockup, UI/UX upgrade, accessibility pass, before/after screenshot | `/ui-iterate` |
 | 80% coverage, net-new coverage, coverage gate, legacy Angular/Node tests, unit / API / smoke / e2e tests, backfill tests, characterize legacy behavior | `/test-backfill` |
 | SonarQube quality gate, new-code issues, scan before commit | `/sonar-gate` |
 | create Jira issues from spec tasks, plan to tracker | `/plan-to-tracker` |

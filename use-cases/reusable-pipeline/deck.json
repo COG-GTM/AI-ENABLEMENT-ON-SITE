@@ -35,7 +35,7 @@
     {"type": "table", "title": "Approaches compared", "columns": ["Approach", "Strength", "Weakness", "Here"], "rows": [
       ["Structured intermediate files", "deterministic, diffable, tool-checkable", "only as good as the scanner; static", "tools/*_fleet_scan.py, prompt_pack.py"],
       ["Reference repository", "shows house style and the proof pattern", "drifts; one example rarely covers an estate", "example-system/src + sim, model/, bench/"],
-      ["Skill / playbook files", "repeatable, reviewable, team-owned text", "needs the agent runtime", "16 skills routed by AGENTS.md"],
+      ["Skill / playbook files", "repeatable, reviewable, team-owned text", "needs the agent runtime", "21 skills routed by AGENTS.md"],
       ["Graph-style controlled flow", "resumable, auditable, bounded per node", "another runtime to own; still needs a model per node", "tools/pipeline_run.py: stages, hashes, journal, resume"]
     ], "note": "Use all four: files as contract, a reference pair for style, skills for the per-unit procedure, the runner for control."},
     {"type": "two-column", "title": "What Devin adds, and where the offline path stops", "left_title": "Devin adds", "left": [

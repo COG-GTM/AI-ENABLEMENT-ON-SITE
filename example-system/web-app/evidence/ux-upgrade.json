@@ -1,0 +1,28 @@
+{
+  "commit_intent": "Angular form validation and focus fixes after UX iteration",
+  "unit": {
+    "command": "npm run test:coverage",
+    "runner": "Angular CLI 22.2.4 with Vitest 5.0.0",
+    "tests_passed": 14,
+    "tests_failed": 0,
+    "line_coverage_percent": 99.37
+  },
+  "shared_e2e_after_ux_upgrade": {
+    "spec": "e2e/tests/request-flow.spec.ts",
+    "react": {
+      "tests_passed": 3,
+      "tests_failed": 0,
+      "axe_violations": 0
+    },
+    "angular": {
+      "tests_passed": 3,
+      "tests_failed": 0,
+      "axe_violations": 0
+    }
+  },
+  "screenshots": [
+    "evidence/angular-form-before-ux.png",
+    "evidence/angular-form.png",
+    "evidence/request-form-mockup.png"
+  ]
+}

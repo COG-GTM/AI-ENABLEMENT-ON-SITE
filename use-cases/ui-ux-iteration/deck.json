@@ -1,0 +1,26 @@
+{
+  "title": "Local UI/UX iteration",
+  "subtitle": "Use a static mockup, preserve behavior, and keep evidence",
+  "footer": "Synthetic React/Angular request fixture; no live URL is shared.",
+  "slides": [
+    {"type": "title"},
+    {"type": "flow", "title": "A local feedback loop", "caption": "Edit locally, inspect, test, and keep downloadable evidence.", "columns": [
+      {"label": "Reference", "nodes": [{"id": "mockup", "label": "Static mockup", "sub": "open from disk", "kind": "input"}]},
+      {"label": "Iteration", "nodes": [{"id": "edit", "label": "Edit component", "sub": "behavior neutral"}]},
+      {"label": "Inspect", "nodes": [{"id": "preview", "label": "Desktop preview", "sub": "availability confirm on build"}]},
+      {"label": "Proof and share", "nodes": [{"id": "axe", "label": "Axe + Playwright", "sub": "same behavior spec", "kind": "gate"}, {"id": "files", "label": "HTML + screenshots", "sub": "downloaded evidence", "kind": "output"}]}
+    ], "edges": [{"from": "mockup", "to": "edit"}, {"from": "edit", "to": "preview"}, {"from": "preview", "to": "axe"}, {"from": "axe", "to": "files"}]},
+    {"type": "stats", "title": "Post-iteration fixture run", "stats": [
+      {"value": "99.37%", "label": "Angular line coverage"},
+      {"value": "14 / 14", "label": "Angular unit tests"},
+      {"value": "3 / 3", "label": "shared e2e tests on each app"},
+      {"value": "0", "label": "axe violations"}
+    ], "note": "Numbers from example-system/web-app/evidence/ux-upgrade.json."},
+    {"type": "bullets", "title": "Keep the handoff honest", "bullets": [
+      "Share downloaded HTML or screenshots, not a live URL",
+      "Keep before/after images beside the run record",
+      "A screenshot shows appearance, not functional parity",
+      "Offline preview availability is confirm on your build"
+    ]}
+  ]
+}

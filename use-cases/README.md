@@ -12,8 +12,10 @@ One folder per migration lane a team would adopt end to end. Each folder has:
 | `matlab-repository/` | hundreds of `.m` files -> interconnections -> repository map -> bounded packs -> one proven function | fixture, scanner, skills, golden stage |
 | `c-cpp-firmware/` | C/C++ tree -> host-testable vs target-only -> HAL seam -> host harness -> behavioural twin | fixture, scanner, skills, golden stage |
 | `reusable-pipeline/` | scan -> pack -> agent -> compare -> report, journaled and resumable; approaches compared; token control | tool, CI example, golden stage |
+| `react-to-angular/` | React inventory -> concept map -> leaf-first Angular migration -> shared test proof | fixture, scanner, skills, golden stage |
+| `ui-ux-iteration/` | offline mockup -> local preview -> axe and Playwright -> screenshot pair | paired fixture, skills, evidence |
 | `other-translations/` | Ada to C++, Fortran modernisation, MATLAB to/from C++ for embedded targets | discussion only: method, no fixture |
 | `advanced-topics/` | model choice and token cost, writing `AGENTS.md`, Windows, remote containers, tool approval status | discussion only |
 
 Read the top-level `README.md` first if this repository is new to you; `WORKFLOWS.md` holds the same lanes as
-prompt-by-prompt tables (workflows 6 to 12).
+prompt-by-prompt tables (workflows 6 to 15).

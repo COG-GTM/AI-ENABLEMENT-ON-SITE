@@ -24,7 +24,8 @@ it on GitHub is fine; running it needs a local copy. Pick one:
 3. **Let Devin do it:** paste the repository URL into Devin Desktop and say `clone this and open it`.
    Works only if the laptop is allowed to reach github.com.
 
-Nothing to install afterwards: Python 3.10+ is the only requirement.
+The standard-library lanes need Python 3.10+. Web lanes additionally need Node.js 24.15+ and npm
+packages from an approved mirror; see [the web fixture setup guide](example-system/web-app/README.md).
 
 ## Start here (2 minutes)
 
@@ -39,11 +40,20 @@ Reference this repo. What can you do here? Run the checks and show me.
 ```
 
 Two minutes later you have a readiness check, a go/no-go analysis with recomputed budgets, and a
-leadership deck open in the preview. Chained prompts like these are **workflows**; the twelve we ship
+leadership deck open in the preview. Chained prompts like these are **workflows**; the fifteen we ship
 are in `WORKFLOWS.md`. Showing this to a room? Follow `WALKTHROUGH.md`. Live in C, MATLAB, or
 LabVIEW all day? Jump to [Your tools](#your-tools-cc-matlabsimulink-labviewteststand). Here to
 migrate a whole estate (thousands of VIs, `.m` files, or C modules)? Start at
 [Migration at scale](#migration-at-scale-use-cases).
+
+### Web / Angular teams start here
+
+For your own team repository, begin with `/react-to-angular` and copy the adoption files from
+`templates/team-repo/`. Try these first three prompts in order:
+
+1. `/react-to-angular Scan example-system/web-app/react-prototype and explain the leaf-first plan.`
+2. `/spec-driven Migrate the request form behavior to Angular using the shared fixture contract.`
+3. `/ui-iterate Apply the v2 request form mockup without changing behavior; keep before/after evidence.`
 
 If you do not write code: the prompts in this file are all you need. Skip "Prove it works" and
 "Where things live"; Devin runs those commands for you.
@@ -74,6 +84,8 @@ plain English; `AGENTS.md` maps phrases like "make me a deck" to the right skill
 | `/test-backfill` | Adds characterization tests to legacy behavior from leaf seams upward, records suspected bugs as tracker items, and gates changed lines on coverage | existing code, test runner, coverage report | characterization tests and `outputs/<coverage-report>.md` |
 | `/sonar-gate` | Reads SonarQube gate status and new-code issues, with an offline practice server; scanner configuration stays read-only | approved SonarQube project, or `integrations/fake_server.py` | `outputs/<sonar-report>.md` |
 | `/plan-to-tracker` | Converts `/spec-driven` tasks to reviewable Jira issue payloads; applies only after explicit opt-in and confirmation | `specs/<nnn>-<slug>/tasks.md` | `outputs/<slug>-jira-payload.json` and optional CSV |
+| `/react-to-angular` | Scans React units and guides a leaf-first, test-first strangler migration to Angular; not a transpiler and does not choose a design system | React source tree, spec, shared fixture tests | `outputs/<tree>-react-*` inventory, graph, backlog, prompt packs |
+| `/ui-iterate` | Iterates a local mockup/component with Desktop preview or CLI Playwright, axe, and before/after evidence | local app and mockup | updated HTML/source and screenshot pair |
 
 Full prompt list, ready to paste:
 
@@ -99,6 +111,11 @@ Full prompt list, ready to paste:
 | MATLAB model to C | `/matlab-to-code example-system/model/moving_avg.m --target c` |
 | Your firmware, host tests | `/bring-your-firmware ../my-firmware` |
 | Mimic on your code | `Mimic the /design-artifacts workflow on my project in ../my-firmware` |
+| React prototype to Angular | `/react-to-angular Scan example-system/web-app/react-prototype and explain the leaf-first plan.` |
+| Local UI/UX iteration | `/ui-iterate Apply the v2 request form mockup and preserve behavior` |
+| Spec tasks to Jira payload | `/plan-to-tracker specs/002-request-form-to-angular/tasks.md --project <KEY>` |
+| Changed-line coverage gate | `python tools/coverage_gate.py --lcov coverage/lcov.info --base origin/<dev-branch> --threshold 80` |
+| SonarQube gate | `/sonar-gate <project key> --branch <branch>` |
 
 ## The workflows
 
@@ -120,6 +137,8 @@ input. Full tables with every prompt are in `WORKFLOWS.md`; here is what each on
 | 11 | C/C++ repository: discovery to host tests and a proven twin | `/repo-discovery`, `/bring-your-firmware`, `tools/prompt_pack.py`, `/tdd`, `/track-and-report` | "Which of our modules can be tested and ported on a laptop, where is the HAL seam, and what must stay on the target?" |
 | 12 | Reusable pipeline, unattended | `tools/pipeline_run.py` (scan, pack, agent, compare, report), `.github/workflows/migration-scan.yml` | "How do we run this across many programs in a job we own, without feeding the whole repo to an agent every step?" |
 | 13 | Team guardrails: plan to tracker, tests, coverage and Sonar gates | `/plan-to-tracker`, `/test-backfill`, `/sonar-gate` | "How do we turn a spec into owned work and gate application changes?" |
+| 14 | React to Angular: strangler migration, leaf-first | `/react-to-angular`, `/spec-driven`, `/plan-to-tracker`, `/tdd`, `/sonar-gate` | "How do we migrate a React prototype to Angular with a shared behavior contract?" |
+| 15 | UI/UX iteration: local preview to shareable evidence | `/ui-iterate` | "How do we iterate a local interface while preserving behavior and keeping evidence?" |
 
 Ask for the end result and Devin runs the whole row: `Swap the IMU for imu-c and brief leadership`.
 One-hour executive briefing of workflows 6 to 9 as flow diagrams: `templates/deck-exec-briefing.json` (rebuild it with `tools/build_deck.py`; speaker notes and timing in `TALK-TRACK.md`).
@@ -136,6 +155,8 @@ so you can read, present, or hand it over. The decks are self-contained HTML; op
 | MATLAB repository: interconnections, repository map, migration without feeding the whole codebase to an agent | `use-cases/matlab-repository/` | workflows 10 and 7 | |
 | C/C++ repository: host-testable vs target-only, HAL seam, behavioural twin | `use-cases/c-cpp-firmware/` | workflows 11 and 8 | C-to-Python *translation* (not offered) |
 | Reusable, low-touch pipeline: bounded context, token control, unattended runs, approaches compared | `use-cases/reusable-pipeline/` | workflow 12 | agent execution inside CI |
+| React prototype to Angular app: scanner, concept map, tests, coverage, shared e2e | `use-cases/react-to-angular/` | workflow 14 | real-application design-system decisions |
+| UI/UX iteration: offline mockup, accessible behavior-neutral update, screenshots | `use-cases/ui-ux-iteration/` | workflow 15 | preview availability in your environment |
 | Other translations: Ada to C++, Fortran modernisation, MATLAB to/from C++ for embedded targets | `use-cases/other-translations/` | none: same method, no fixture | all of it |
 | Advanced topics: model choice and token cost, writing `AGENTS.md`, Windows, remote containers, tool approval status | `use-cases/advanced-topics/` | none | all of it |
 

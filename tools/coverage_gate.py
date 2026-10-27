@@ -128,6 +128,15 @@ def report_path(name: str, prefix: str | None) -> str:
     return value.lstrip("/")
 
 
+def normalize_changed_paths(changed: dict[str, set[int]], prefix: str | None) -> dict[str, set[int]]:
+    if not prefix:
+        return changed
+    normalized: dict[str, set[int]] = {}
+    for name, lines in changed.items():
+        normalized.setdefault(report_path(name, prefix), set()).update(lines)
+    return normalized
+
+
 def read_lcov(path: Path, prefix: str | None) -> dict[str, dict[int, int]]:
     result: dict[str, dict[int, int]] = {}
     source = None
@@ -273,7 +282,7 @@ def load_inputs(args) -> tuple[dict[str, set[int]], dict[str, dict[int, int]]]:
                     f"@@ -0,0 +1,{len(lines)} @@\n"
                     + "".join(f"+{line}\n" for line in lines)
                 )
-    changed = parse_diff(diff)
+    changed = normalize_changed_paths(parse_diff(diff), args.path_prefix)
     if args.lcov:
         report = read_lcov(Path(args.lcov), args.path_prefix)
     elif args.cobertura:
@@ -310,7 +319,10 @@ def main(argv=None) -> int:
     source.add_argument("--diff-file")
     ap.add_argument("--repo", default=".")
     ap.add_argument("--threshold", type=float, default=80.0)
-    ap.add_argument("--path-prefix")
+    ap.add_argument(
+        "--path-prefix",
+        help="path prefix to strip from diff and coverage paths before comparing",
+    )
     ap.add_argument("--out", default="outputs/coverage-gate.md")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--check", action="store_true")
