@@ -9,38 +9,74 @@ import type { Priority, RequestKind } from "./types";
   imports: [ReactiveFormsModule],
   template: `
     <section class="panel">
-      <h2>New service request</h2>
-      @if (summary()) {
-        <div class="error-summary" role="alert" data-testid="validation-summary">
-          <strong>Review the highlighted fields</strong>
-          <ul>@for (message of summary(); track message) { <li>{{ message }}</li> }</ul>
+      <header class="form-header">
+        <div><p class="eyebrow">Equipment services</p><h2>New service request</h2></div>
+        <p>Complete the details to route this work.</p>
+      </header>
+      <div class="request-layout">
+        <div class="request-card">
+          @if (summary().length) {
+            <div class="error-summary" role="alert" aria-labelledby="summary-title" data-testid="validation-summary">
+              <strong id="summary-title">Review the highlighted fields</strong>
+              <ul>
+                @if (showError("title")) { <li><a href="#request-title">Enter a request title.</a></li> }
+                @if (showError("serialNumber")) { <li><a href="#request-serial-number">Enter the equipment serial number.</a></li> }
+                @if (showError("justification")) { <li><a href="#request-justification">Urgent requests need a justification of at least 20 characters.</a></li> }
+              </ul>
+            </div>
+          }
+          @if (created()) { <p role="status" data-testid="form-success">Request created.</p> }
+          <form [formGroup]="form" (ngSubmit)="submit()" data-testid="request-form" novalidate>
+            <div class="form-fields">
+              <div class="field wide">
+                <label for="request-title">Request title</label>
+                <input id="request-title" data-testid="request-title" formControlName="title"
+                  [attr.aria-invalid]="showError('title')"
+                  [attr.aria-describedby]="showError('title') ? 'title-hint title-error' : 'title-hint'" />
+                <p class="hint" id="title-hint">Use a short description of the work.</p>
+                @if (showError("title")) { <p class="field-error" id="title-error">Enter a request title.</p> }
+              </div>
+              <div class="field">
+                <label for="request-type">Request type</label>
+                <select id="request-type" data-testid="request-type" formControlName="type" (change)="updateConditionalValidation()">
+                  <option value="inspection">Inspection</option><option value="repair">Repair</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="request-priority">Priority</label>
+                <select id="request-priority" data-testid="request-priority" formControlName="priority" (change)="updateConditionalValidation()">
+                  <option value="standard">Standard</option><option value="urgent">Urgent</option>
+                </select>
+              </div>
+              @if (form.controls.type.value === "repair") {
+                <div class="field wide">
+                  <label for="request-serial-number">Equipment serial number <span aria-hidden="true">*</span></label>
+                  <input id="request-serial-number" data-testid="request-serial-number" formControlName="serialNumber"
+                    [attr.aria-invalid]="showError('serialNumber')"
+                    [attr.aria-describedby]="showError('serialNumber') ? 'serial-hint serial-error' : 'serial-hint'" />
+                  <p class="hint" id="serial-hint">Enter the serial number shown on the equipment plate.</p>
+                  @if (showError("serialNumber")) { <p class="field-error" id="serial-error">Enter the equipment serial number.</p> }
+                </div>
+              }
+              @if (form.controls.priority.value === "urgent") {
+                <div class="field wide">
+                  <label for="request-justification">Why is this urgent? <span aria-hidden="true">*</span></label>
+                  <textarea id="request-justification" data-testid="request-justification" formControlName="justification"
+                    [attr.aria-invalid]="showError('justification')"
+                    [attr.aria-describedby]="showError('justification') ? 'reason-hint reason-error' : 'reason-hint'"></textarea>
+                  <p class="hint" id="reason-hint">At least 20 characters. This helps the service team prioritize.</p>
+                  @if (showError("justification")) { <p class="field-error" id="reason-error">Urgent requests need a justification of at least 20 characters.</p> }
+                </div>
+              }
+              <div class="wide"><button type="submit" data-testid="request-submit">Create request</button></div>
+            </div>
+          </form>
         </div>
-      }
-      @if (created()) { <p role="status" data-testid="form-success">Request created.</p> }
-      <form [formGroup]="form" (ngSubmit)="submit()" data-testid="request-form" novalidate>
-        <label for="request-title">Request title</label>
-        <input id="request-title" data-testid="request-title" formControlName="title" />
-        @if (showError("title")) { <p class="field-error">Enter a request title.</p> }
-        <label for="request-type">Request type</label>
-        <select id="request-type" data-testid="request-type" formControlName="type" (change)="updateConditionalValidation()">
-          <option value="inspection">Inspection</option><option value="repair">Repair</option>
-        </select>
-        @if (form.controls.type.value === "repair") {
-          <label for="request-serial-number">Equipment serial number</label>
-          <input id="request-serial-number" data-testid="request-serial-number" formControlName="serialNumber" />
-          @if (showError("serialNumber")) { <p class="field-error">Enter the equipment serial number.</p> }
-        }
-        <label for="request-priority">Priority</label>
-        <select id="request-priority" data-testid="request-priority" formControlName="priority" (change)="updateConditionalValidation()">
-          <option value="standard">Standard</option><option value="urgent">Urgent</option>
-        </select>
-        @if (form.controls.priority.value === "urgent") {
-          <label for="request-justification">Urgency justification</label>
-          <textarea id="request-justification" data-testid="request-justification" formControlName="justification"></textarea>
-          @if (showError("justification")) { <p class="field-error">Urgent requests need a justification of at least 20 characters.</p> }
-        }
-        <button type="submit" data-testid="request-submit">Create request</button>
-      </form>
+        <section class="request-card form-aside" aria-labelledby="submission-notes">
+          <h3 id="submission-notes">Before you submit</h3>
+          <ul><li>Repair requests need an equipment serial number.</li><li>Urgent requests need a clear reason of 20 or more characters.</li><li>Your draft stays in this local example.</li></ul>
+        </section>
+      </div>
     </section>
   `
 })
