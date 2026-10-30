@@ -418,6 +418,18 @@ def stage_tests() -> None:
         record("tests " + suite[-2], r.returncode == 0, f"{m.group(1) if m else '?'} tests" + ("" if r.returncode == 0 else r.stderr[-300:]))
 
 
+def stage_team_gates() -> None:
+    commands = (
+        [PY, "tools/coverage_gate.py", "--check"],
+        [PY, "tools/sonar_gate.py", "--check"],
+        [PY, "tools/plan_to_tracker.py", "--check"],
+    )
+    results_for_tools = [run(command) for command in commands]
+    record("team-gates", all(result.returncode == 0 for result in results_for_tools),
+           "coverage, Sonar, and tracker offline checks pass" if all(result.returncode == 0 for result in results_for_tools)
+           else "one or more offline gate checks failed")
+
+
 # --- report -----------------------------------------------------------------------------------
 
 
@@ -439,7 +451,8 @@ def main(argv=None) -> int:
     results.clear()
     OUT.mkdir(parents=True, exist_ok=True)
     stages = [stage_doctor, stage_research, stage_what_if, stage_tracker, stage_trace_matrix, stage_deck, stage_spec_example, stage_mcp,
-              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_c_fleet, stage_pipeline, stage_host_harness]
+              stage_model, stage_bench, stage_real_vi, stage_fleet, stage_m_fleet, stage_c_fleet, stage_pipeline, stage_host_harness,
+              stage_team_gates]
     if not a.skip_tests:
         stages.append(stage_tests)
     for s in stages:

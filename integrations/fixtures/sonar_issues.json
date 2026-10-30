@@ -1,0 +1,41 @@
+{
+  "paging": {
+    "pageIndex": 1,
+    "pageSize": 100,
+    "total": 1
+  },
+  "issues": [
+    {
+      "key": "SYN-ISSUE-1",
+      "rule": "synthetic:credential-handling",
+      "severity": "CRITICAL",
+      "type": "VULNERABILITY",
+      "component": "synthetic-project:src/example.ts",
+      "project": "synthetic-project",
+      "line": 17,
+      "message": "Synthetic critical issue for offline gate practice.",
+      "impacts": [
+        {
+          "softwareQuality": "SECURITY",
+          "severity": "HIGH"
+        }
+      ]
+    },
+    {
+      "key": "SYN-ISSUE-2",
+      "rule": "synthetic:style",
+      "severity": "MAJOR",
+      "type": "CODE_SMELL",
+      "component": "synthetic-project:src/example.ts",
+      "project": "synthetic-project",
+      "line": 22,
+      "message": "Synthetic maintainability issue for offline pagination practice.",
+      "impacts": [
+        {
+          "softwareQuality": "MAINTAINABILITY",
+          "severity": "MEDIUM"
+        }
+      ]
+    }
+  ]
+}

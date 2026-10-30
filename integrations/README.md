@@ -40,8 +40,8 @@ or a file. Set it in the shell for the session: `export JIRA_TOKEN=...` (Windows
 | `cli-recipes.md` | 3 | Read-only `glab`, `gh`, `az devops`, `acli` (Cloud), and `jira-cli` (Data Center) commands and how they log in. |
 | `jira-on-prem.md` | 0-4 | Jira Data Center from zero: which Jira you have, the one picture, what the admin must expose, all six options with a decision tree, the `curl` and `jira-cli` step-by-steps, the self-hosted `COG-GTM/jira-mcp` connector as the worked MCP example, troubleshooting by HTTP status, and what was and was not tested. |
 | `test_rest_client.py` | 2 | Offline tests: every command dry-runs, tokens are redacted, bad input is refused. |
-| `fake_server.py` | 1 | Offline stand-in for the Jira Data Center, GitLab, and Azure DevOps read endpoints on `127.0.0.1`, fed by `fixtures/`. Serves enough of Jira for `jira-cli init` and `issue list` to work. See "Prove it offline". |
-| `fixtures/` | 1 | Twelve synthetic sensor-node issues, once per vendor shape (`jira_issues.json`, `gitlab_issues.json`, `ado_workitems.json`) plus `csv_export.csv`. |
+| `fake_server.py` | 1 | Offline stand-in for Jira Data Center, GitLab, Azure DevOps, and SonarQube read endpoints on `127.0.0.1`, fed by `fixtures/`. Serves enough of Jira for `jira-cli init` and `issue list` to work. See "Prove it offline". |
+| `fixtures/` | 1 | Twelve synthetic Jira issues, vendor-shaped Jira/GitLab/Azure DevOps data, and a SonarQube quality gate with new-code examples (`sonar_status.json`, `sonar_issues.json`), plus `csv_export.csv`. |
 | `../tools/tracker_import.py` | 1-2 | Normalises a vendor export (fake or real) or a CSV into the tracker schema; `../tools/tests/test_integrations.py` drives server and importer. |
 | `mcp-hosting.md` | 4 | Where an MCP server can live (your laptop, shared entry with personal secret, team-hosted, vendor-hosted), what changes between them, and the questions Devin asks before writing config. Start here for anything beyond the reference server. |
 | `mcp_config.example.json` | 4 | One entry per hosting model to copy into `.devin/mcp_config.json`: the local reference server, the self-hosted Jira Data Center connector (Docker), `github-mcp-server`, a team-hosted URL, a disabled vendor-hosted URL (delete what you do not use). |
@@ -73,6 +73,11 @@ curl -sS -H "PRIVATE-TOKEN: $FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/api/v4/
 # Azure DevOps: saved query by id (GET), then the work items it lists
 curl -sS -u ":$FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/sn-org/sensor-node/_apis/wit/wiql/00000000-0000-4000-8000-000000000001?api-version=7.1"
 curl -sS -u ":$FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/sn-org/sensor-node/_apis/wit/workitems?ids=101,102,103&api-version=7.1" > outputs/ado-items.json
+# SonarQube: GET-only examples; this project fails new-code coverage and includes a critical issue
+curl -sS -H "Authorization: Bearer $FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/api/system/status"
+curl -sS -H "Authorization: Bearer $FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/api/qualitygates/project_status?projectKey=synthetic-project"
+curl -sS -H "Authorization: Bearer $FAKE_TRACKER_TOKEN" "http://127.0.0.1:$PORT/api/issues/search?componentKeys=synthetic-project&inNewCodePeriod=true&ps=1&p=1"
+SONAR_URL="http://127.0.0.1:$PORT" SONAR_TOKEN="$FAKE_TRACKER_TOKEN" python tools/sonar_gate.py --project-key synthetic-project --json
 ```
 
 `rest_client.py` works the same way; point its base URL at the fake (plain HTTP is accepted for `127.0.0.1` only):

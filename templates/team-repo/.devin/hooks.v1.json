@@ -1,0 +1,13 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "exec",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "python hooks/block_main.py"
+        }
+      ]
+    }
+  ]
+}
