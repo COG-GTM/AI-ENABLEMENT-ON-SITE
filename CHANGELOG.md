@@ -3,6 +3,27 @@
 All notable changes to this repository are documented in this file. Entries are
 grouped by week and reference the pull request that merged each change.
 
+## Week of 2026-10-23 to 2026-10-30
+
+### Features
+
+- Add three team guardrail skills with offline-first tooling: `/plan-to-tracker` (`tools/plan_to_tracker.py`, converts `/spec-driven` task rows into Jira Data Center v2 issue payloads, dry-run by default with `--apply` plus typed confirmation for writes), `/test-backfill` (characterization tests for legacy code, then `tools/coverage_gate.py` gates changed lines against an LCOV or Cobertura report and a `--threshold`), and `/sonar-gate` (`tools/sonar_gate.py`, a read-only SonarQube quality-gate and new-code-issue reader) ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+- Add `templates/team-repo/`, a copyable Angular application repository starter with `AGENTS.md`, `.devin/rules/` for branching, testing, and Angular style, a `hooks/block_main.py` pre-command guard against protected-branch operations, a `.gitlab-ci.yml` merge-request pipeline, a devcontainer placeholder, and example personal `global-skills/` ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+- Teach `integrations/fake_server.py` to serve SonarQube `api/system/status`, `api/qualitygates/project_status`, and paged `api/issues/search` responses from new `sonar_status.json` and `sonar_issues.json` fixtures, with branch / pull-request parameter validation, so the Sonar gate can be practiced offline ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+
+### Bug Fixes
+
+- Harden the new gates after review: `plan_to_tracker.py` binds tracker state to the Jira payloads it emits and normalizes default Jira ports in `JIRA_URL`; `coverage_gate.py` handles diff paths containing spaces; `sonar_gate.py` passes `WARN` gates unless `--fail-on-warn` is set ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+
+### Improvements
+
+- Add workflow 13 ("Team guardrails: plan to tracker, tests, coverage and Sonar gates") to `WORKFLOWS.md`, routing rows for the three new skills to `AGENTS.md`, `README.md`, and `CONTRIBUTING.md`, and SonarQube Server, SonarScanner CLI, GitLab CI self-managed, and Node.js / npm rows to `integrations/tool-approval-status.md` ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+- `check_repo.py` now runs the `--check` self-tests of `coverage_gate.py`, `sonar_gate.py`, and `plan_to_tracker.py` and raises the skill cap (`MAX_SKILLS`) from 16 to 22; `golden_path.py` gains a `team-gates` stage; `tools/tests/test_team_guardrails.py` adds 499 lines of unit coverage for the new tools ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+
+### Breaking Changes
+
+- None this week.
+
 ## Week of 2026-10-16 to 2026-10-23
 
 No pull requests were merged into `main` this week. The three previous weekly
