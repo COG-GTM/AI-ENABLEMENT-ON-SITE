@@ -3,6 +3,72 @@
 All notable changes to this repository are documented in this file. Entries are
 grouped by week and reference the pull request that merged each change.
 
+## Week of 2026-10-23 to 2026-10-30
+
+### Features
+
+- Add three team guardrail skills with offline-first tooling: `/plan-to-tracker` (`tools/plan_to_tracker.py`, converts `/spec-driven` task rows into Jira Data Center v2 issue payloads, dry-run by default with `--apply` plus typed confirmation for writes), `/test-backfill` (characterization tests for legacy code, then `tools/coverage_gate.py` gates changed lines against an LCOV or Cobertura report and a `--threshold`), and `/sonar-gate` (`tools/sonar_gate.py`, a read-only SonarQube quality-gate and new-code-issue reader) ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+- Add `templates/team-repo/`, a copyable Angular application repository starter with `AGENTS.md`, `templates/team-repo/.devin/rules/` for branching, testing, and Angular style, a `hooks/block_main.py` pre-command guard against protected-branch operations, a `.gitlab-ci.yml` merge-request pipeline, a devcontainer placeholder, and example personal `global-skills/` ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+- Teach `integrations/fake_server.py` to serve SonarQube `api/system/status`, `api/qualitygates/project_status`, and paged `api/issues/search` responses from new `sonar_status.json` and `sonar_issues.json` fixtures, with branch / pull-request parameter validation, so the Sonar gate can be practiced offline ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+
+### Bug Fixes
+
+- Harden the new gates after review: `plan_to_tracker.py` binds tracker state to the Jira payloads it emits and normalizes default Jira ports in `JIRA_URL`; `coverage_gate.py` handles diff paths containing spaces; `sonar_gate.py` passes `WARN` gates unless `--fail-on-warn` is set ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+
+### Improvements
+
+- Add workflow 13 ("Team guardrails: plan to tracker, tests, coverage and Sonar gates") to `WORKFLOWS.md`, routing rows for the three new skills to `AGENTS.md`, `README.md`, and `CONTRIBUTING.md`, and SonarQube Server, SonarScanner CLI, GitLab CI self-managed, and Node.js / npm rows to `integrations/tool-approval-status.md` ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+- `check_repo.py` now runs the `--check` self-tests of `coverage_gate.py`, `sonar_gate.py`, and `plan_to_tracker.py` and raises the skill cap (`MAX_SKILLS`) from 16 to 22; `golden_path.py` gains a `team-gates` stage; `tools/tests/test_team_guardrails.py` adds 499 lines of unit coverage for the new tools ([#26](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/26))
+
+### Breaking Changes
+
+- None this week.
+
+## Week of 2026-10-16 to 2026-10-23
+
+No pull requests were merged into `main` this week. The three previous weekly
+changelog entries ([#22](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/22),
+[#23](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/23), and
+[#24](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/24)) were still open at
+the time of writing.
+
+## Week of 2026-10-09 to 2026-10-16
+
+No pull requests were merged into `main` this week. The two previous weekly
+changelog entries ([#22](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/22)
+and [#23](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/23)) were still
+open at the time of writing.
+
+## Week of 2026-10-02 to 2026-10-09
+
+No pull requests were merged into `main` this week. The previous week's changelog
+entry ([#22](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/22)) was still
+open at the time of writing.
+
+## Week of 2026-09-25 to 2026-10-02
+
+### Features
+
+- Add `/vi-fleet-discovery` and `tools/vi_fleet_scan.py`: a whole-tree LabVIEW inventory (`.vi`, `.lvproj`, TestStand `.seq`) that classifies every VI as port / wrap / retain / unreadable with evidence, scores complexity, merges rescans into a tracker-shaped migration backlog, and ships a `fleet` golden-path stage plus a 42-slide LabVIEW migration walkthrough deck ([#18](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/18))
+- Add `integrations/tool-approval-status.md`: a 66-row FedRAMP Marketplace status table (Authorized / In Process / Not on Marketplace / Not applicable / Unknown) with dated evidence for every tool, service, and vendor product the repository recommends ([#19](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/19))
+- Add a `flow` diagram slide type to `build_deck.py` / `export_pptx.py` (inline SVG and native PPTX shapes from one validated layout) and a 14-slide executive briefing deck with `TALK-TRACK.md` for the LabVIEW, C/C++, MATLAB, and pipeline workflows ([#20](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/20))
+- Add `/repo-discovery` with repository-scale MATLAB (`m_fleet_scan.py`) and C/C++ (`c_fleet_scan.py`) scanners, a `--graph` dependency map for `vi_fleet_scan.py`, bounded per-unit prompt packs (`prompt_pack.py`), a journaled and resumable `scan -> pack -> agent -> compare -> report` pipeline (`pipeline_run.py`, dry run by default), a `migration-scan.yml` CI example, and six `use-cases/<lane>/` folders with READMEs and decks ([#21](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/21))
+
+### Bug Fixes
+
+- `pipeline_run.py` retires results whose prompt pack changed across the whole manifest (archiving evidence and marking the agent unit `stale`) so neither `--limit` nor `--from-stage compare` can reuse or report old proof; MATLAB dynamic-literal edges are only created for a whole-literal name or balanced call, and `leaf_first_order` orders callers of a cycle after it ([#21](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/21))
+
+### Improvements
+
+- Add the weekly changelog for 2026-09-18 to 2026-09-25 ([#17](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/17))
+- `check_repo.py` now runs the demo-fleet scan and `tracker_report.py` before link checks, rebuilds every `use-cases/*/deck.json` and fails on a stale committed `deck.html`, and raises the skill cap (`MAX_SKILLS`) from 15 to 16; `golden_path.py` grows to 22 stages (`fleet`, `m-fleet`, `c-fleet`, `pipeline`, `host-harness`) ([#18](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/18)) ([#21](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/21))
+- Cross-link `/repo-discovery` from `/matlab-to-code`, `/bring-your-firmware`, and `/vi-fleet-discovery`; add workflows 9-12 to `WORKFLOWS.md` and routing rows to `AGENTS.md`, `README.md`, and `CONTRIBUTING.md` ([#18](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/18)) ([#21](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/21))
+- Add a required-controls bullet to `SECURITY.md` and a "Rules in one breath" link in `README.md` pointing at the tool approval status table ([#19](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/19))
+
+### Breaking Changes
+
+- None this week.
+
 ## Week of 2026-09-18 to 2026-09-25
 
 ### Features
