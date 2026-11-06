@@ -3,6 +3,30 @@
 All notable changes to this repository are documented in this file. Entries are
 grouped by week and reference the pull request that merged each change.
 
+## Week of 2026-09-25 to 2026-10-02
+
+### Features
+
+- Add `/vi-fleet-discovery` and `tools/vi_fleet_scan.py`: a whole-tree LabVIEW inventory (`.vi`, `.lvproj`, TestStand `.seq`) that classifies every VI as port / wrap / retain / unreadable with evidence, scores complexity, merges rescans into a tracker-shaped migration backlog, and ships a `fleet` golden-path stage plus a 42-slide LabVIEW migration walkthrough deck ([#18](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/18))
+- Add `integrations/tool-approval-status.md`: a 66-row FedRAMP Marketplace status table (Authorized / In Process / Not on Marketplace / Not applicable / Unknown) with dated evidence for every tool, service, and vendor product the repository recommends ([#19](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/19))
+- Add a `flow` diagram slide type to `build_deck.py` / `export_pptx.py` (inline SVG and native PPTX shapes from one validated layout) and a 14-slide executive briefing deck with `TALK-TRACK.md` for the LabVIEW, C/C++, MATLAB, and pipeline workflows ([#20](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/20))
+- Add `/repo-discovery` with repository-scale MATLAB (`m_fleet_scan.py`) and C/C++ (`c_fleet_scan.py`) scanners, a `--graph` dependency map for `vi_fleet_scan.py`, bounded per-unit prompt packs (`prompt_pack.py`), a journaled and resumable `scan -> pack -> agent -> compare -> report` pipeline (`pipeline_run.py`, dry run by default), a `migration-scan.yml` CI example, and six `use-cases/<lane>/` folders with READMEs and decks ([#21](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/21))
+
+### Bug Fixes
+
+- `pipeline_run.py` retires results whose prompt pack changed across the whole manifest (archiving evidence and marking the agent unit `stale`) so neither `--limit` nor `--from-stage compare` can reuse or report old proof; MATLAB dynamic-literal edges are only created for a whole-literal name or balanced call, and `leaf_first_order` orders callers of a cycle after it ([#21](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/21))
+
+### Improvements
+
+- Add the weekly changelog for 2026-09-18 to 2026-09-25 ([#17](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/17))
+- `check_repo.py` now runs the demo-fleet scan and `tracker_report.py` before link checks, rebuilds every `use-cases/*/deck.json` and fails on a stale committed `deck.html`, and raises the skill cap (`MAX_SKILLS`) from 15 to 16; `golden_path.py` grows to 22 stages (`fleet`, `m-fleet`, `c-fleet`, `pipeline`, `host-harness`) ([#18](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/18)) ([#21](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/21))
+- Cross-link `/repo-discovery` from `/matlab-to-code`, `/bring-your-firmware`, and `/vi-fleet-discovery`; add workflows 9-12 to `WORKFLOWS.md` and routing rows to `AGENTS.md`, `README.md`, and `CONTRIBUTING.md` ([#18](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/18)) ([#21](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/21))
+- Add a required-controls bullet to `SECURITY.md` and a "Rules in one breath" link in `README.md` pointing at the tool approval status table ([#19](https://github.com/COG-GTM/AI-ENABLEMENT-ON-SITE/pull/19))
+
+### Breaking Changes
+
+- None this week.
+
 ## Week of 2026-09-18 to 2026-09-25
 
 ### Features
