@@ -3,6 +3,27 @@
 All notable changes to this repository are documented in this file. Entries are
 grouped by week and reference the pull request that merged each change.
 
+## Week of 2026-10-30 to 2026-11-06
+
+No pull requests were merged this week (2026-10-30 16:00 UTC to
+2026-11-06 16:00 UTC).
+
+### Features
+
+- None this week.
+
+### Bug Fixes
+
+- None this week.
+
+### Improvements
+
+- None this week.
+
+### Breaking Changes
+
+- None this week.
+
 ## Week of 2026-10-23 to 2026-10-30
 
 ### Features
